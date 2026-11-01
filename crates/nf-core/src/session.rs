@@ -1177,12 +1177,21 @@ impl Session {
             Command::DeviceDisconnect => self.disconnect(),
             Command::DeviceDialog { open } => {
                 self.state.device_dialog = open;
-                if open && !self.state.scanners.is_empty() && self.scanning().is_empty() {
-                    let started: Vec<&str> =
-                        self.providers.iter_mut().filter(|p| p.can_scan()).filter_map(|p| p.scan(8.0).ok().map(|()| p.scheme())).collect();
-                    return Ok(json!({ "open": true, "scanning": started }));
+                if open {
+                    let mut started = Vec::new();
+                    let mut errors = Vec::new();
+                    for p in self.providers.iter_mut().filter(|p| p.can_scan()) {
+                        match p.watch() {
+                            Ok(()) => started.push(p.scheme()),
+                            Err(e) => errors.push(format!("{}: {e}", p.scheme())),
+                        }
+                    }
+                    return Ok(json!({ "open": true, "scanning": started, "errors": errors }));
                 }
-                return Ok(json!({ "open": open, "scanning": self.scanning() }));
+                for p in self.providers.iter_mut().filter(|p| p.can_scan()) {
+                    p.stop_scan();
+                }
+                return Ok(json!({ "open": false, "scanning": self.scanning() }));
             }
             Command::DeviceScan { seconds } => {
                 let secs = seconds.unwrap_or(8.0);

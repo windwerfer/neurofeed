@@ -124,7 +124,10 @@ impl Route {
 struct Hub {
     seen: HashMap<String, (Option<String>, Instant)>,
     routes: Vec<Route>,
+    /// Timed discovery deadline. Ignored while `hold` is set.
     discover_until: Option<Instant>,
+    /// Device dialog: keep listening until [`DeviceProvider::stop_scan`].
+    hold: bool,
     running: bool,
     error: Option<String>,
     next_gen: u64,
@@ -132,7 +135,7 @@ struct Hub {
 
 impl Hub {
     fn active(&self, now: Instant) -> bool {
-        !self.routes.is_empty() || self.discover_until.is_some_and(|t| now < t)
+        !self.routes.is_empty() || self.hold || self.discover_until.is_some_and(|t| now < t)
     }
     fn on_message(&mut self, m: &rosc::OscMessage, now: Instant) {
         let Some((id, leaf)) = parse_addr(&m.addr) else { return };
@@ -262,12 +265,39 @@ impl DeviceProvider for CrownProvider {
         self.error()
     }
     fn scan(&mut self, seconds: f64) -> Result<(), String> {
-        lock(&self.hub).discover_until = Some(Instant::now() + Duration::from_secs_f64(seconds.clamp(0.5, 120.0)));
+        {
+            let mut h = lock(&self.hub);
+            // The dialog's watch owns the socket; a timed scan must not cut it short.
+            if !h.hold {
+                h.discover_until = Some(Instant::now() + Duration::from_secs_f64(seconds.clamp(0.5, 120.0)));
+                h.error = None;
+            }
+        }
         self.ensure_thread();
         self.error().map_or(Ok(()), Err)
     }
+    fn watch(&mut self) -> Result<(), String> {
+        {
+            let mut h = lock(&self.hub);
+            h.hold = true;
+            h.discover_until = None;
+            h.error = None;
+        }
+        self.ensure_thread();
+        if let Some(e) = self.error() {
+            lock(&self.hub).hold = false;
+            return Err(e);
+        }
+        Ok(())
+    }
+    fn stop_scan(&mut self) {
+        let mut h = lock(&self.hub);
+        h.hold = false;
+        h.discover_until = None;
+    }
     fn scanning(&self) -> bool {
-        lock(&self.hub).discover_until.is_some_and(|t| Instant::now() < t)
+        let h = lock(&self.hub);
+        h.hold || h.discover_until.is_some_and(|t| Instant::now() < t)
     }
 }
 
@@ -286,6 +316,16 @@ mod tests {
             assert_eq!(f[5][2], smooth(5, 2));
         }
         assert_eq!(d.locked, Some(Layout::ChannelMajor));
+    }
+
+    #[test]
+    fn watch_stays_up_until_stop() {
+        let port = std::net::UdpSocket::bind("127.0.0.1:0").expect("port").local_addr().expect("addr").port();
+        let mut p = CrownProvider::with_port(port);
+        p.watch().expect("watch");
+        assert!(p.scanning(), "watch does not expire on its own");
+        p.stop_scan();
+        assert!(!p.scanning());
     }
 
     #[test]

@@ -26,18 +26,18 @@ cargo run --release -p neurofeed-mcp -- --bridge            # MCP driving the li
 cargo test && cargo clippy --all-targets -- -D warnings
 ```
 
-Real devices (desktop): Settings > Devices > Scan finds a Muse over Bluetooth
-and a Crown streaming OSC to UDP 9000 on this machine (Neurosity app / SDK
-OSC output), then Connect. MCP: `device.scan`, `device.list`, `device.connect`.
-The web build has simulators only.
+Real devices (desktop): the Device dialog scans for a Muse over Bluetooth and
+a Crown streaming OSC to UDP 9000 for as long as it is open (Neurosity app /
+SDK OSC output), then Connect. MCP: `device.dialog`, `device.list`,
+`device.connect`. `device.scan {seconds}` is a timed scan. The web build has
+simulators only.
 
 Agent bridge: with `NF_BRIDGE=1` or Settings > Agents, the app listens on
 127.0.0.1 (random port) and writes the port + a random token to
 `~/.local/share/neurofeed/bridge.json` (0600; macOS `~/Library/Application
 Support/NeuroFeed`, Windows `%APPDATA%\NeuroFeed`, or `NF_BRIDGE_FILE`).
 `neurofeed-mcp --bridge` then drives the running app with the same tools plus
-`screenshot` and `ui_inspect` (widget tree). MCP client config:
-`{"command": "neurofeed-mcp", "args": ["--bridge"]}`.
+`screenshot` and `ui_inspect` (widget tree). Client setup: [docs/mcp.md](docs/mcp.md).
 
 Read [AGENTS.md](AGENTS.md), then [docs/](docs/).
 

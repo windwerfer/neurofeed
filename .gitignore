@@ -56,7 +56,7 @@ android/.kotlin/
 # windows/CMakeLists.txt is committed (MSVC workaround)
 /windows/flutter/
 .zed/
-.local/
+
 
 # feedback_gym: ignore dated run folders; keep .gitkeep via results/.gitignore
 feedback_gym/results/*/
@@ -73,4 +73,4 @@ dist/
 /flatpak/cargo-sources.json
 /.flatpak-repo/
 /flatpak/VERSION
-local/
+.local/feedback_audio/

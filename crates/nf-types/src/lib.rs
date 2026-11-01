@@ -210,6 +210,14 @@ pub trait DeviceProvider: Send {
     fn scan(&mut self, _seconds: f64) -> Result<(), String> {
         Ok(())
     }
+    /// Keep discovering until [`stop_scan`](Self::stop_scan). The Device
+    /// dialog uses this for as long as it is open. Default: one timed scan.
+    fn watch(&mut self) -> Result<(), String> {
+        self.scan(8.0)
+    }
+    /// Stop discovery started by [`scan`](Self::scan) or [`watch`](Self::watch).
+    /// Devices already found stay listed. A connected source keeps its link.
+    fn stop_scan(&mut self) {}
     /// A scan is running.
     fn scanning(&self) -> bool {
         false

@@ -1,5 +1,6 @@
 # Decisions (dated, append-only)
 
+- 2026-10-31: The Device dialog keeps Muse BLE discovery and Crown OSC discovery running until the dialog closes. `device.scan {seconds}` stays a timed scan for agents. On Linux, BlueZ omits `Device1.RSSI` once discovery stops, so the watch reads advertisements while the scan is still on and drops a headset that has not advertised for 4 s.
 - 2026-10-31: Flutter app removed (lib/, rust/, android/, linux/, windows/, test/, pubspec, rust_builder, Flutter release workflows, tools/golden-dart harness). Reference: tag `pre-rust-port`. Golden fixtures stay in `crates/nf-feedback/tests/golden`; regenerating them needs the Dart harness from that tag.
 - 2026-10-29: Flutter dropped; Rust-only, egui on desktop/web/Android. Dart stays as reference until the feedback engine is ported, then is deleted in one commit.
 - 2026-10-29: Android = thin native wrapper (permissions, BLE scan/transport via JNI if needed) hosting the same Rust core; it supplies a `DeviceProvider`, and talks to the core through the same command JSON surface.

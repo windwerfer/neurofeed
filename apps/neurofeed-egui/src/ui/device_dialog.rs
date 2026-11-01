@@ -1,7 +1,7 @@
 //! The one Device dialog, opened from the top bar's device area: the
 //! connected device (battery, per-electrode quality, Disconnect) on top, then
-//! the scan list grouped Muse / Neurosity Crown / Simulated. Scanning starts
-//! when it opens (`device.dialog`) and lives only here.
+//! the scan list grouped Muse / Neurosity Crown / Simulated. Muse BLE and
+//! Crown OSC stay in discovery for as long as this window is open.
 
 use super::{quality, theme};
 use nf_core::{Command, DeviceInfo, DeviceKind, LinkState, Session};
@@ -135,17 +135,20 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
             ui.weak("scanning…");
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let can = session.enabled("device.scan");
-            let r = ui.add_enabled(can.is_ok() && !scanning, egui::Button::new("Rescan"));
-            let r = match &can {
-                Err(why) => r.on_disabled_hover_text(why),
-                Ok(()) => r.on_hover_text("8 s Bluetooth (Muse) + LAN OSC (Crown, UDP 9000)"),
-            };
-            if r.clicked() {
-                out.push(Command::DeviceScan { seconds: None });
-            }
-        });
+        if !scanning {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let can = session.enabled("device.scan");
+                let r = ui.add_enabled(can.is_ok(), egui::Button::new("Scan"));
+                let r = match &can {
+                    Err(why) => r.on_disabled_hover_text(why),
+                    Ok(()) => r.on_hover_text("Keep looking for a Muse (Bluetooth) and a Crown (OSC, UDP 9000)"),
+                };
+                if r.clicked() {
+                    // Already open: `device.dialog` arms watch again after an error.
+                    out.push(Command::DeviceDialog { open: true });
+                }
+            });
+        }
     });
     for e in session.provider_errors() {
         ui.colored_label(ui.visuals().error_fg_color, e);
@@ -176,7 +179,7 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         ui.weak(if state.scanners.is_empty() {
             "Bluetooth scanning isn't available in this build."
         } else {
-            "No headset found. Turn the Muse on and keep it close; for a Crown, enable OSC in the Neurosity app on this network. Then Rescan."
+            "No headset found. Turn the Muse on and keep it close; for a Crown, enable OSC in the Neurosity app on this network."
         });
     }
 }

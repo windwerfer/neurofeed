@@ -35,12 +35,13 @@ pub enum Command {
     DeviceConnect { id: String },
     #[serde(rename = "device.disconnect")]
     DeviceDisconnect,
-    /// Open or close the Device dialog. Opening starts a scan when a real
-    /// provider can scan (errors show in the dialog, not here).
+    /// Open or close the Device dialog. Opening watches Muse BLE and Crown
+    /// OSC until the dialog closes (errors show in the dialog, not here).
     #[serde(rename = "device.dialog")]
     DeviceDialog { open: bool },
-    /// Start background discovery on every scanning provider (BLE Muse,
-    /// Crown OSC); results appear in `device.list` as they arrive.
+    /// Start a timed background discovery on every scanning provider (BLE
+    /// Muse, Crown OSC). The Device dialog does not use this: it watches
+    /// until it closes. Results appear in `device.list` as they arrive.
     #[serde(rename = "device.scan")]
     DeviceScan {
         /// 1..=60 s, default 8.
@@ -683,14 +684,14 @@ pub const SPECS: &[CommandSpec] = &[
     spec("bands.get", "Band powers", "bands", true, "Latest band powers per channel (delta..gamma).", always),
     spec("device.list", "List devices", "device", true, "Connectable devices (simulators and registered providers).", always),
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
-    spec("device.scan", "Scan", "device", false, "Discover real devices (Muse BLE, Crown OSC) in the background.", can_scan),
+    spec("device.scan", "Scan", "device", false, "Timed discovery (Muse BLE, Crown OSC). The Device dialog watches until it closes instead.", can_scan),
     spec("device.disconnect", "Disconnect", "device", false, "Disconnect the current device.", needs_device),
     spec(
         "device.dialog",
         "Device dialog",
         "device",
         false,
-        "Open/close the Device dialog (current device, battery, pad quality, scan list); opening auto-scans.",
+        "Open/close the Device dialog. While it is open, Muse BLE and Crown OSC stay in discovery.",
         always,
     ),
     spec("device.status", "Device status", "device", true, "Connected device and buffered snapshot count.", always),

@@ -50,3 +50,8 @@
   (10 in edf_export, `edf_roundtrip` in nf-format, layers includes the crate). wasm `cargo check` ok.
 - Open: `.gitmodules` still names `third_party/{btleplug,muse-rs,reve-rs,luna-rs,brainflow,neurofeed.wiki}`;
   those gitlinks are not in the index.
+
+## 2026-10-31: Device dialog keeps scanning
+- `device.dialog {open:true}` calls `DeviceProvider::watch` (Muse BLE + Crown OSC) and `{open:false}` calls `stop_scan`. `device.scan {seconds}` is unchanged and timed.
+- Muse watch uses btleplug directly and records a headset only while its RSSI is present (BlueZ clears RSSI when discovery stops). Connect still goes through muse-rs, aimed at that advertised name.
+- Open: Android has no control channel, so this dialog behavior is desktop-only.

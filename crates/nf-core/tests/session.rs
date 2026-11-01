@@ -94,8 +94,12 @@ fn dropped_and_bad_samples_are_flagged_for_the_plots() {
     assert!(sig.last(2, 2560, true).iter().all(|x| x.is_finite()));
 }
 
-/// A provider that can scan and counts how often it was asked to.
-struct Scanner(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+/// A provider that can scan and counts watch / stop.
+struct Scanner {
+    watches: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    stops: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    on: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
 
 impl nf_core::DeviceProvider for Scanner {
     fn scheme(&self) -> &'static str {
@@ -110,9 +114,17 @@ impl nf_core::DeviceProvider for Scanner {
     fn can_scan(&self) -> bool {
         true
     }
-    fn scan(&mut self, _seconds: f64) -> Result<(), String> {
-        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    fn watch(&mut self) -> Result<(), String> {
+        self.watches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.on.store(true, std::sync::atomic::Ordering::Relaxed);
         Ok(())
+    }
+    fn stop_scan(&mut self) {
+        self.stops.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.on.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+    fn scanning(&self) -> bool {
+        self.on.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -125,12 +137,19 @@ fn device_dialog_opens_closes_and_auto_scans() {
     assert!(s.state().device_dialog);
     s.call("device.dialog", json!({ "open": false })).unwrap_or_default();
     assert!(!s.state().device_dialog);
-    let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    s.register_provider(Box::new(Scanner(n.clone())));
+    let watches = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let stops = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let on = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    s.register_provider(Box::new(Scanner { watches: watches.clone(), stops: stops.clone(), on: on.clone() }));
     let r = s.call("device.dialog", json!({ "open": true })).unwrap_or_default();
     assert_eq!(r["scanning"], json!(["fake"]));
-    assert_eq!(n.load(std::sync::atomic::Ordering::Relaxed), 1, "opening starts one scan");
+    assert_eq!(watches.load(std::sync::atomic::Ordering::Relaxed), 1, "opening starts one watch");
+    assert!(on.load(std::sync::atomic::Ordering::Relaxed));
     assert_eq!(s.call("device.status", json!({})).unwrap_or_default()["dialog_open"], json!(true));
+    s.call("device.dialog", json!({ "open": false })).unwrap_or_default();
+    assert_eq!(stops.load(std::sync::atomic::Ordering::Relaxed), 1, "closing stops the watch");
+    assert!(!on.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(!s.state().device_dialog);
 }
 
 #[test]

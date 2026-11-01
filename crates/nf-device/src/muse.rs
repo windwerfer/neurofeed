@@ -9,14 +9,41 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use muse_rs::prelude::{MuseClient, MuseClientConfig, MuseDevice, MuseEvent};
+use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter};
+use btleplug::platform::Manager;
+use muse_rs::prelude::{MuseClient, MuseClientConfig, MuseEvent};
 use tokio::runtime::Runtime;
 
 use crate::{lock, muse_info, Block, DeviceInfo, DeviceProvider, DeviceSource, LinkState, LiveSource, MUSE_CHANNELS};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(18);
+/// Drop a headset that has not advertised for this long while discovery is on.
+const SEEN_TTL: Duration = Duration::from_secs(4);
+const NAME_PREFIX: &str = "Muse";
+
+/// Advertised name of a Muse headset (Muse, MuseS, Muse-2, …).
+fn is_muse_name(name: &str) -> bool {
+    name.starts_with(NAME_PREFIX)
+}
+
+struct Seen {
+    name: String,
+    rssi: i16,
+    at: Instant,
+}
+
+#[derive(Default)]
+struct Shared {
+    found: HashMap<String, Seen>,
+    /// Bumped to cancel the in-flight discovery task.
+    epoch: u64,
+    scanning: bool,
+    /// Device dialog: do not stop when a timed limit elapses.
+    hold: bool,
+    error: Option<String>,
+}
 
 /// Translate one muse-rs event into feed blocks.
 pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
@@ -30,13 +57,6 @@ pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
         MuseEvent::Disconnected => vec![Block::Link(LinkState::Lost { reason: "headset disconnected".into() })],
         _ => Vec::new(),
     }
-}
-
-#[derive(Default)]
-struct Shared {
-    found: HashMap<String, MuseDevice>,
-    scanning: bool,
-    error: Option<String>,
 }
 
 /// Muse provider (`muse:<ble id>`).
@@ -65,6 +85,95 @@ impl MuseProvider {
     pub fn error(&self) -> Option<String> {
         lock(&self.shared).error.clone()
     }
+
+    /// `unlimited` keeps the radio on until [`DeviceProvider::stop_scan`].
+    /// A timed scan does not replace a watch that is already running.
+    fn begin(&mut self, unlimited: bool, seconds: f64) -> Result<(), String> {
+        let rt = self.runtime()?;
+        let epoch = {
+            let mut s = lock(&self.shared);
+            if s.scanning {
+                if unlimited {
+                    s.hold = true;
+                }
+                return Ok(());
+            }
+            s.epoch = s.epoch.wrapping_add(1);
+            s.scanning = true;
+            s.hold = unlimited;
+            s.error = None;
+            s.epoch
+        };
+        let shared = self.shared.clone();
+        let limit = Duration::from_secs_f64(seconds.clamp(1.0, 60.0));
+        rt.spawn(async move {
+            if let Err(e) = discover(&shared, epoch, limit).await {
+                let mut s = lock(&shared);
+                if s.epoch == epoch {
+                    s.error = Some(format!("BLE scan: {e}"));
+                    s.scanning = false;
+                    s.hold = false;
+                }
+            }
+        });
+        Ok(())
+    }
+}
+
+/// Poll BlueZ while `start_scan` is still active so RSSI is present.
+/// BlueZ drops `Device1.RSSI` once discovery stops.
+async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> Result<(), String> {
+    let manager = Manager::new().await.map_err(|e| e.to_string())?;
+    let adapters = manager.adapters().await.map_err(|e| e.to_string())?;
+    let adapter = adapters.into_iter().next().ok_or_else(|| "No Bluetooth adapter found".to_string())?;
+    adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
+    let started = tokio::time::Instant::now();
+    loop {
+        let hold = {
+            let s = lock(shared);
+            if s.epoch != epoch {
+                break;
+            }
+            s.hold
+        };
+        if !hold && started.elapsed() >= limit {
+            break;
+        }
+        harvest(&adapter, shared, epoch).await;
+        tokio::time::sleep(Duration::from_millis(400)).await;
+    }
+    adapter.stop_scan().await.ok();
+    let mut s = lock(shared);
+    if s.epoch == epoch {
+        s.scanning = false;
+        s.hold = false;
+    }
+    Ok(())
+}
+
+/// Record headsets that are advertising right now. Names without RSSI are
+/// cached by BlueZ and are not nearby.
+async fn harvest(adapter: &btleplug::platform::Adapter, shared: &Arc<Mutex<Shared>>, epoch: u64) {
+    let Ok(peripherals) = adapter.peripherals().await else { return };
+    let mut live = HashMap::new();
+    for p in peripherals {
+        let Ok(Some(props)) = p.properties().await else { continue };
+        let Some(name) = props.local_name else { continue };
+        let Some(rssi) = props.rssi else { continue };
+        if !is_muse_name(&name) {
+            continue;
+        }
+        live.insert(p.id().to_string(), (name, rssi));
+    }
+    let mut s = lock(shared);
+    if s.epoch != epoch {
+        return;
+    }
+    let now = Instant::now();
+    for (id, (name, rssi)) in live {
+        s.found.insert(id, Seen { name, rssi, at: now });
+    }
+    s.found.retain(|_, d| now.saturating_duration_since(d.at) <= SEEN_TTL);
 }
 
 impl DeviceProvider for MuseProvider {
@@ -74,7 +183,7 @@ impl DeviceProvider for MuseProvider {
     fn list(&self) -> Vec<DeviceInfo> {
         let s = lock(&self.shared);
         let mut v: Vec<DeviceInfo> =
-            s.found.values().map(|d| DeviceInfo { rssi: d.rssi, ..muse_info(&format!("muse:{}", d.id), &d.name) }).collect();
+            s.found.iter().map(|(id, d)| DeviceInfo { rssi: Some(d.rssi), ..muse_info(&format!("muse:{id}"), &d.name) }).collect();
         v.sort_by(|a, b| a.id.cmp(&b.id));
         v
     }
@@ -88,44 +197,40 @@ impl DeviceProvider for MuseProvider {
         lock(&self.shared).scanning
     }
     fn scan(&mut self, seconds: f64) -> Result<(), String> {
-        let rt = self.runtime()?;
-        {
-            let mut s = lock(&self.shared);
-            if s.scanning {
-                return Ok(());
-            }
-            s.scanning = true;
-            s.error = None;
-        }
-        let shared = self.shared.clone();
-        let secs = seconds.clamp(1.0, 60.0).round() as u64;
-        rt.spawn(async move {
-            let client = MuseClient::new(MuseClientConfig { scan_timeout_secs: secs, enable_ppg: true, ..Default::default() });
-            let r = client.scan_all().await;
-            let mut s = lock(&shared);
+        self.begin(false, seconds)
+    }
+    fn watch(&mut self) -> Result<(), String> {
+        self.begin(true, 8.0)
+    }
+    fn stop_scan(&mut self) {
+        let mut s = lock(&self.shared);
+        if s.scanning || s.hold {
+            s.epoch = s.epoch.wrapping_add(1);
+            s.hold = false;
             s.scanning = false;
-            match r {
-                // Only advertising devices (with RSSI), merged into the cache.
-                Ok(devs) => devs.into_iter().filter(|d| d.rssi.is_some()).for_each(|d| {
-                    s.found.insert(d.id.clone(), d);
-                }),
-                Err(e) => s.error = Some(format!("BLE scan: {e}")),
-            }
-        });
-        Ok(())
+        }
     }
     fn open(&mut self, id: &str) -> Result<Box<dyn DeviceSource>, String> {
         let ble = id.strip_prefix("muse:").unwrap_or(id);
-        let dev = lock(&self.shared).found.get(ble).cloned().ok_or_else(|| format!("`{id}` not found; run device.scan first"))?;
+        let name = lock(&self.shared)
+            .found
+            .get(ble)
+            .map(|d| d.name.clone())
+            .ok_or_else(|| format!("`{id}` not found; open the device window to scan"))?;
+        // Discovery and a connect each need the adapter. Stop ours first; the
+        // connect task waits until that client has called stop_scan.
+        self.stop_scan();
         let rt = self.runtime()?;
-        let (src, feed) = LiveSource::new(muse_info(id, &dev.name));
+        let (src, feed) = LiveSource::new(muse_info(id, &name));
         let stop = Arc::new(AtomicBool::new(false));
         let stop2 = stop.clone();
         let shared = self.shared.clone();
         rt.spawn(async move {
-            let client = MuseClient::new(MuseClientConfig { enable_ppg: true, enable_aux: true, ..Default::default() });
+            let client = MuseClient::new(MuseClientConfig { name_prefix: name, enable_ppg: true, enable_aux: true, scan_timeout_secs: 10 });
             let conn = tokio::time::timeout(CONNECT_TIMEOUT, async {
-                let (rx, handle) = client.connect_to(dev).await?;
+                // Let the watch task drop its BlueZ discovery session.
+                tokio::time::sleep(Duration::from_millis(400)).await;
+                let (rx, handle) = client.connect().await?;
                 handle.start(true, false).await?;
                 anyhow::Ok((rx, handle))
             })
@@ -183,5 +288,12 @@ mod tests {
         let tel = MuseEvent::Telemetry(TelemetryData { sequence_id: 0, battery_level: 81.5, fuel_gauge_voltage: 0.0, temperature: 0 });
         assert_eq!(map_muse_event(tel), vec![Block::Battery(81.5)]);
         assert!(matches!(map_muse_event(MuseEvent::Disconnected).as_slice(), [Block::Link(LinkState::Lost { .. })]));
+    }
+
+    #[test]
+    fn only_muse_names_are_headsets() {
+        assert!(is_muse_name("MuseS-6235"));
+        assert!(is_muse_name("Muse-AB12"));
+        assert!(!is_muse_name("QCY T13"));
     }
 }
