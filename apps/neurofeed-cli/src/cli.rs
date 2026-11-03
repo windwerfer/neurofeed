@@ -109,9 +109,10 @@ async fn main(as_mcp: bool) {
             std::process::exit(1)
         }
     };
+    tokio::spawn(exit_on_signal(server.clone()));
     let sub = rest.remove(0);
     let code = match sub.as_str() {
-        "mcp" => match server.serve(rmcp::transport::stdio()).await {
+        "mcp" => match server.clone().serve(rmcp::transport::stdio()).await {
             Ok(running) => i32::from(running.waiting().await.is_err()),
             Err(e) => {
                 eprintln!("mcp: {e}");
@@ -151,7 +152,35 @@ async fn main(as_mcp: bool) {
         }
         other => usage(&format!("unknown subcommand `{other}`")),
     };
+    shutdown(&server);
     std::process::exit(code)
+}
+
+/// Disconnect the headset and wait (max 10 s) before the process ends, so it
+/// advertises again for the next start (.ai/contracts/device-autoconnect.md).
+fn shutdown(server: &NfMcp) {
+    for e in server.shutdown(nf_core::SHUTDOWN_TIMEOUT_S) {
+        eprintln!("{}", json!({ "warning": format!("shutdown: {e}") }));
+    }
+}
+
+/// SIGINT / SIGTERM: same clean shutdown, then exit 130.
+async fn exit_on_signal(server: NfMcp) {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let Ok(mut term) = signal(SignalKind::terminate()) else { return };
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = term.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    if tokio::signal::ctrl_c().await.is_err() {
+        return;
+    }
+    tokio::task::spawn_blocking(move || shutdown(&server)).await.ok();
+    std::process::exit(130)
 }
 
 fn is_subcommand(s: &str) -> bool {

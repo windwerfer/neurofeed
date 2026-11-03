@@ -249,6 +249,15 @@ impl NfMcp {
     }
 
     /// MCP tool descriptors (bridge tools only in bridge mode).
+    /// App exit: disconnect devices and wait (see [`Session::shutdown`]).
+    /// A remote (bridge) client owns no devices: nothing to do.
+    pub fn shutdown(&self, timeout_s: f64) -> Vec<String> {
+        match &self.backend {
+            Backend::Local { session, .. } => session.lock().unwrap_or_else(std::sync::PoisonError::into_inner).shutdown(timeout_s),
+            Backend::Remote(_) => Vec::new(),
+        }
+    }
+
     pub fn tool_list(&self) -> Vec<Tool> {
         Self::describe(TOOLS.iter().chain(BRIDGE_TOOLS.iter().filter(|_| self.is_remote())))
     }

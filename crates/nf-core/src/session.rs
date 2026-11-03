@@ -20,6 +20,8 @@ use serde_json::json;
 const STEP_S: f64 = 0.1;
 const MAX_ADVANCE_S: f64 = 3600.0;
 const MAX_EVENTS: usize = 1000;
+/// How long the shells wait for devices to disconnect on app exit.
+pub const SHUTDOWN_TIMEOUT_S: f64 = 10.0;
 
 /// Things that happened; drained by UI/MCP.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -458,6 +460,27 @@ impl Session {
             Err(e) => self.emit(Event::StoreError { message: e.to_string() }),
         }
         self.refresh_history();
+    }
+
+    /// App exit (`.ai/contracts/device-autoconnect.md` rule 8): end the
+    /// recording, drop the device (its transport halts and disconnects), stop
+    /// scans and wait for every provider to finish, `timeout_s` in total
+    /// ([`SHUTDOWN_TIMEOUT_S`] in the shells). Not a user Disconnect: the
+    /// remembered device stays the auto-reconnect target. Returns what was
+    /// still open when the time ran out.
+    pub fn shutdown(&mut self, timeout_s: f64) -> Vec<String> {
+        self.disconnect();
+        self.state.auto.stop();
+        self.persist_settings();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(timeout_s.max(0.0));
+        let mut errors = Vec::new();
+        for p in &mut self.providers {
+            let left = deadline.saturating_duration_since(std::time::Instant::now()).as_secs_f64();
+            if let Err(e) = p.shutdown(left) {
+                errors.push(format!("{}: {e}", p.scheme()));
+            }
+        }
+        errors
     }
 
     /// Add a real device provider (desktop BLE, Android JNI transport, ...).

@@ -14,7 +14,7 @@
 
 use std::collections::VecDeque;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub use nf_types::{AccelPacket, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
 
@@ -273,6 +273,73 @@ impl Drop for LiveSource {
         if let Some(f) = self.on_drop.take() {
             f();
         }
+    }
+}
+
+/// Counts live transport tasks (one per opened device) so that
+/// [`DeviceProvider::shutdown`] can wait for their disconnect.
+#[derive(Clone, Default)]
+pub struct Tasks(Arc<(Mutex<usize>, std::sync::Condvar)>);
+
+/// Held by a transport task until its device is disconnected.
+pub struct TaskGuard(Tasks);
+
+impl Tasks {
+    pub fn enter(&self) -> TaskGuard {
+        *lock(&self.0 .0) += 1;
+        TaskGuard(self.clone())
+    }
+
+    pub fn live(&self) -> usize {
+        *lock(&self.0 .0)
+    }
+
+    /// Block until no task is live, at most `timeout`. `true` if idle.
+    pub fn wait_idle(&self, timeout: std::time::Duration) -> bool {
+        let (m, cv) = &*self.0;
+        let g = lock(m);
+        let (g, _) = cv.wait_timeout_while(g, timeout, |n| *n > 0).unwrap_or_else(std::sync::PoisonError::into_inner);
+        *g == 0
+    }
+}
+
+impl Drop for TaskGuard {
+    fn drop(&mut self) {
+        let (m, cv) = &*self.0 .0;
+        let mut n = lock(m);
+        *n = n.saturating_sub(1);
+        cv.notify_all();
+    }
+}
+
+#[cfg(test)]
+mod task_tests {
+    use super::Tasks;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn wait_idle_returns_when_the_last_task_ends() {
+        let t = Tasks::default();
+        assert!(t.wait_idle(Duration::ZERO));
+        let g = t.enter();
+        let h = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            drop(g);
+        });
+        let start = Instant::now();
+        assert!(t.wait_idle(Duration::from_secs(5)));
+        assert!(start.elapsed() < Duration::from_secs(2));
+        h.join().ok();
+    }
+
+    #[test]
+    fn wait_idle_gives_up_at_the_timeout() {
+        let t = Tasks::default();
+        let _g = t.enter();
+        let start = Instant::now();
+        assert!(!t.wait_idle(Duration::from_millis(120)));
+        assert!(start.elapsed() >= Duration::from_millis(120));
+        assert_eq!(t.live(), 1);
     }
 }
 

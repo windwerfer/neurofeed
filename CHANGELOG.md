@@ -29,6 +29,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   only that device; new devices still need Connect. Disconnect pauses this until
   the next connect. `device.status` shows `scan_mode` and `auto_reconnect`.
 
+### Fixed
+- Closing the app (window, Ctrl-C, SIGTERM; CLI exit) now halts streaming and
+  disconnects the Muse, waiting up to 10 s. Before, the headset stayed
+  "connected" and could not be found on the next start.
+- The desktop/Android app no longer connects the simulator at start. It
+  reconnects only the last real device. Set `NF_DEVICE=sim:muse_s` to start
+  with the simulator.
+- A Muse that BlueZ still holds connected from a previous run is
+  disconnected before scanning, so it advertises again.
+
 ### Changed
 - License metadata is Apache-2.0 everywhere (Cargo workspace said MIT by mistake).
   `crates/pure-lsl` is dual `MIT OR Apache-2.0`.

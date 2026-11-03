@@ -8,6 +8,22 @@ use nf_core::{Command, Event, Session};
 const REPAINT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Start parameter: env `NF_<NAME>` (desktop) or URL query `name` (web).
+/// Device to connect at start: `device` param, else the simulator only for
+/// the web demo and screenshot runs. `none` connects nothing.
+fn startup_device() -> Option<String> {
+    let demo = cfg!(target_arch = "wasm32") || param("demo").is_some() || param("view").is_some();
+    param("device").or_else(|| demo.then(|| "sim:muse_s".to_owned())).filter(|d| !d.is_empty() && d != "none")
+}
+
+/// SIGINT / SIGTERM close the window, so `on_exit` disconnects the headset.
+#[cfg(not(target_arch = "wasm32"))]
+fn exit_on_signal(ctx: &egui::Context) {
+    let ctx = ctx.clone();
+    if let Err(e) = ctrlc::set_handler(move || ctx.send_viewport_cmd(egui::ViewportCommand::Close)) {
+        log::warn!("no signal handler: {e}");
+    }
+}
+
 fn param(name: &str) -> Option<String> {
     #[cfg(not(target_arch = "wasm32"))]
     return std::env::var(format!("NF_{}", name.to_uppercase())).ok();
@@ -52,7 +68,15 @@ impl NeuroFeedApp {
         if param("bridge").is_some_and(|v| v != "0") {
             app.set_bridge(&cc.egui_ctx, true);
         }
-        app.run(Command::DeviceConnect { id: "sim:muse_s".into() });
+        // Never auto-connect a simulator on a real build: the remembered device
+        // reconnects on its own (.ai/contracts/device-autoconnect.md rule 9).
+        // Explicit: NF_DEVICE=sim:muse_s (`?device=` on the web). Demo/view
+        // screenshot runs and the web build (no hardware) start the simulator.
+        if let Some(id) = startup_device() {
+            app.run(Command::DeviceConnect { id });
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        exit_on_signal(&cc.egui_ctx);
         // Optional start view / demo (screenshots): NF_VIEW=psd NF_DEMO=history
         // on desktop, `?view=psd&demo=history` on the web.
         app.no_tour = param("demo").is_some() || param("view").is_some();
@@ -183,6 +207,14 @@ impl eframe::App for NeuroFeedApp {
         let ppp = ctx.pixels_per_point().max(0.1);
         let [left, top, right, bottom] = p.safe_insets_px().map(|v| v / ppp);
         raw.safe_area_insets = Some(egui::SafeAreaInsets(egui::epaint::MarginF32 { left, right, top, bottom }));
+    }
+
+    /// Window closed / app exit: stop streaming and wait (max 10 s) until the
+    /// headset is disconnected, so it advertises again for the next start.
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        for e in self.session.shutdown(nf_core::SHUTDOWN_TIMEOUT_S) {
+            log::warn!("shutdown: {e}");
+        }
     }
 
     fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {

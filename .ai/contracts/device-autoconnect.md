@@ -25,6 +25,15 @@ The workflow: a device the user has already connected finds its way back at any 
 5. **The target is the last real device that streamed.** It is set when a non-simulated device's link reaches `streaming`, not when the connect starts, so a failed connect does not replace it. It is persisted as `last_device` in the settings doc and survives a restart: on start, with nothing connected, the search begins at once.
 6. **Simulators are never the target.** Connecting `sim:*` does not change the target, and a simulator is never auto-connected. Simulators are always "visible", so making them a target would connect one on every start. Connecting a simulator while a real headset is remembered is still a user connect: it lifts the suspension of rule 4. While the simulator streams, nothing is searched (a device is connected).
 7. **Crown follows the same rules over OSC.** "Scanning" means listening on UDP 9000 for Crown OSC packets. A burst listens for the burst length. The target Crown is auto-connected once its packets name its device id again. A Crown sending to this machine that is not the target is listed but not connected.
+8. **App exit disconnects and waits.** Closing the window (egui `on_exit`, also after SIGINT/SIGTERM on desktop), the CLI ending, or SIGINT/SIGTERM for the CLI all call `Session::shutdown(SHUTDOWN_TIMEOUT_S = 10)` before the process ends. It:
+   - ends the recording;
+   - drops the source, so the Muse task halts streaming (`h`) and calls `peripheral.disconnect()`, 3 s each;
+   - stops scans;
+   - blocks until every provider reports its links closed (`DeviceProvider::shutdown`), 10 s in total, and logs whatever is still open.
+
+   The tokio runtime lives in the provider, which outlives that wait. Exit is not a user Disconnect: the target stays, and nothing is suspended. Android: the same path runs when eframe gets the activity's destroy. Moving to the background does not disconnect: the recording foreground service keeps the link.
+9. **At start, connect nothing but the remembered device.** The app never auto-connects a simulator. The only exceptions are explicit: `NF_DEVICE=<id>` (`?device=` on the web), the screenshot runs (`NF_DEMO` / `NF_VIEW`), the web build (it has no hardware), and the CLI's `--device` (default `sim:muse_s` for headless automation; `--device none` or `--no-hardware`). With no remembered device, nothing connects, and the status bar offers the Device dialog.
+10. **A Muse left connected is released.** Before each scan, a Muse that BlueZ still reports as connected, with no link of this process, is disconnected. This is a leftover from a crash or kill, and such a headset does not advertise. Matching is by name or service, as in discovery. After that it advertises again, and rules 2 and 3 apply as usual.
 
 ---
 
@@ -65,6 +74,8 @@ Android: the search runs inside `Session::tick`, so it runs only while the app t
 - Reopening a Muse in place (muse-rs rescan by BLE id) after a real drop, during a feedback session.
 - Crown: whether a Crown that stopped streaming starts sending OSC to this host again without the Neurosity app.
 - Battery impact on a phone.
+- That the headset really leaves its "connected" state after exit (`h` + BLE disconnect), and the stale-link release (rule 10) against a real BlueZ.
+- Whether Android delivers the destroy to eframe before the process dies.
 
 ---
 

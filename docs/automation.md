@@ -250,5 +250,14 @@ fault is on the phone (permissions, droidplug), not in the Muse decode.
   scan's peripheral, so connecting rescans for 4 s and picks the selected
   BLE id. Keep the headset on and close by, and make sure nothing else is
   connected to it.
+- The Muse is not found after the app was killed or crashed: the headset can
+  still believe it is connected, so it does not advertise. The next scan
+  disconnects a Muse that BlueZ still holds without a NeuroFeed link. If that
+  does not help, run `bluetoothctl disconnect <addr>`, or power-cycle the
+  headset (hold the button until the lights go off, then turn it on). A normal
+  window close or Ctrl-C disconnects first, waiting at most 10 s.
+- A simulator connected at start: only with `NF_DEVICE=sim:...`, `NF_DEMO`,
+  `NF_VIEW`, the web build, or the CLI's default `--device sim:muse_s`. The
+  desktop app reconnects only the remembered real device.
 - Port 9000 already in use (Crown OSC): another NeuroFeed instance is
   running. Use `--no-hardware`.

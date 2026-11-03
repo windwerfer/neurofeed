@@ -226,6 +226,14 @@ pub trait DeviceProvider: Send {
     fn last_error(&self) -> Option<String> {
         None
     }
+    /// App exit: stop discovery and block until every device this provider
+    /// opened has finished disconnecting, at most `timeout_s`. Call after the
+    /// sources are dropped (dropping one asks its transport to disconnect).
+    /// `Err` names what was still open when the time ran out.
+    fn shutdown(&mut self, _timeout_s: f64) -> Result<(), String> {
+        self.stop_scan();
+        Ok(())
+    }
 }
 
 /// Sends one UDP datagram (streaming out). Shells provide it; the web build

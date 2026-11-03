@@ -50,7 +50,7 @@ pub use nf_types::{
     AiModel, AiModelState, Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket,
 };
 pub use recording::{civil_utc, ExportFormat, RecordingInfo};
-pub use session::{Event, Session, MAX_NOTES};
+pub use session::{Event, Session, MAX_NOTES, SHUTDOWN_TIMEOUT_S};
 pub use signal::{mains_name, MainsMode, Signal};
 pub use state::{AppState, BandHistory, BandScale, View};
 

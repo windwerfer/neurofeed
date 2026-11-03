@@ -70,6 +70,8 @@ struct Shared {
     /// Device dialog: do not stop when a timed limit elapses.
     hold: bool,
     error: Option<String>,
+    /// BLE ids with a link opened by this process.
+    linked: HashSet<String>,
 }
 
 /// Translate one muse-rs event into feed blocks.
@@ -91,6 +93,8 @@ pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
 pub struct MuseProvider {
     rt: OnceLock<Result<Arc<Runtime>, String>>,
     shared: Arc<Mutex<Shared>>,
+    /// One per opened headset until its BLE link is closed (app exit waits).
+    tasks: crate::Tasks,
 }
 
 impl MuseProvider {
@@ -156,6 +160,8 @@ async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> R
     let mut errors = Vec::new();
     for adapter in adapters {
         let label = adapter.adapter_info().await.unwrap_or_else(|_| "adapter".into());
+        let ours = lock(shared).linked.clone();
+        release_stale(&adapter, &ours).await;
         // Devices BlueZ already knows (paired, or seen earlier) before we scan.
         let cached: HashSet<String> = match adapter.peripherals().await {
             Ok(ps) => ps.iter().map(|p| p.id().to_string()).collect(),
@@ -227,6 +233,35 @@ async fn harvest(adapter: &btleplug::platform::Adapter, cached: &HashSet<String>
     }
 }
 
+/// A Muse the OS still holds connected without a link of ours: left over from
+/// a process that exited without disconnecting. It does not advertise, so it
+/// can never be found again until that link is dropped.
+fn is_stale(name: Option<&str>, service: bool, connected: bool, ours: bool) -> bool {
+    connected && !ours && (service || name.is_some_and(is_muse_name))
+}
+
+/// Disconnect stale Muse links (see [`is_stale`]) before scanning.
+async fn release_stale(adapter: &btleplug::platform::Adapter, ours: &HashSet<String>) {
+    let Ok(peripherals) = adapter.peripherals().await else { return };
+    for p in peripherals {
+        let connected = p.is_connected().await.unwrap_or(false);
+        if !connected {
+            continue;
+        }
+        let Ok(Some(props)) = p.properties().await else { continue };
+        let id = p.id().to_string();
+        let service = props.services.iter().any(|u| u.as_u128() == MUSE_SERVICE);
+        if is_stale(props.local_name.as_deref(), service, connected, ours.contains(&id)) {
+            log::info!("BLE {id} ({:?}) is still connected without a NeuroFeed link; disconnecting it", props.local_name);
+            match tokio::time::timeout(Duration::from_secs(3), p.disconnect()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => log::warn!("BLE {id}: stale disconnect: {e}"),
+                Err(_) => log::warn!("BLE {id}: stale disconnect timed out"),
+            }
+        }
+    }
+}
+
 /// Merge one poll into the found list and prune headsets gone quiet.
 fn record(shared: &Arc<Mutex<Shared>>, epoch: u64, live: HashMap<String, (String, Option<i16>)>, now: Instant) {
     let mut s = lock(shared);
@@ -244,7 +279,24 @@ fn record(shared: &Arc<Mutex<Shared>>, epoch: u64, live: HashMap<String, (String
     s.found.retain(|_, d| now.saturating_duration_since(d.at) <= SEEN_TTL);
 }
 
+/// Removes a BLE id from [`Shared::linked`] when its connect task ends.
+struct Unlink(Arc<Mutex<Shared>>, String);
+
+impl Drop for Unlink {
+    fn drop(&mut self) {
+        lock(&self.0).linked.remove(&self.1);
+    }
+}
+
 impl DeviceProvider for MuseProvider {
+    fn shutdown(&mut self, timeout_s: f64) -> Result<(), String> {
+        self.stop_scan();
+        let timeout = Duration::from_secs_f64(timeout_s.clamp(0.0, 60.0));
+        if self.tasks.wait_idle(timeout) {
+            return Ok(());
+        }
+        Err(format!("{} Muse link(s) still closing after {timeout_s:.0} s", self.tasks.live()))
+    }
     fn scheme(&self) -> &'static str {
         "muse"
     }
@@ -294,7 +346,11 @@ impl DeviceProvider for MuseProvider {
         let stop = Arc::new(AtomicBool::new(false));
         let stop2 = stop.clone();
         let shared = self.shared.clone();
+        let guard = self.tasks.enter();
+        lock(&self.shared).linked.insert(ble.to_owned());
         rt.spawn(async move {
+            let _guard = guard; // released after the disconnect below
+            let _linked = Unlink(shared.clone(), ble_id.clone());
             let client = MuseClient::new(MuseClientConfig {
                 name_prefix: connect_prefix(&name),
                 enable_ppg: true,
@@ -346,7 +402,17 @@ impl DeviceProvider for MuseProvider {
                     Err(_) => {} // idle; re-check stop
                 }
             }
-            let _ = handle.disconnect().await;
+            // Halt streaming, then drop the BLE link, so the headset does not
+            // keep believing it is connected (and stops advertising).
+            let step = Duration::from_secs(3);
+            if tokio::time::timeout(step, handle.pause()).await.is_err() {
+                log::warn!("muse: halt timed out");
+            }
+            match tokio::time::timeout(step, handle.disconnect()).await {
+                Ok(Ok(())) => log::debug!("muse: disconnected"),
+                Ok(Err(e)) => log::warn!("muse: disconnect: {e}"),
+                Err(_) => log::warn!("muse: disconnect timed out"),
+            }
         });
         Ok(Box::new(src.on_drop(move || stop.store(true, Ordering::Relaxed))))
     }
@@ -356,6 +422,15 @@ impl DeviceProvider for MuseProvider {
 mod tests {
     use super::*;
     use muse_rs::prelude::{EegReading, ImuData, PpgReading, TelemetryData, XyzSample};
+
+    #[test]
+    fn only_foreign_connected_muses_are_stale() {
+        assert!(is_stale(Some("Muse-1234"), false, true, false));
+        assert!(is_stale(None, true, true, false), "service only");
+        assert!(!is_stale(Some("Muse-1234"), false, true, true), "our own link");
+        assert!(!is_stale(Some("Muse-1234"), false, false, false), "not connected");
+        assert!(!is_stale(Some("JBL Flip"), false, true, false), "not a Muse");
+    }
 
     #[test]
     fn muse_events_map_to_blocks() {
