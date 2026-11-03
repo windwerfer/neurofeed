@@ -6,7 +6,7 @@
 //! its PPG is not decoded yet. AUX inputs arrive as electrodes 4.. (the
 //! session shows / records them only when Settings asks for it).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -19,18 +19,45 @@ use tokio::runtime::Runtime;
 use crate::{lock, muse_info, Block, DeviceInfo, DeviceProvider, DeviceSource, LinkState, LiveSource, MUSE_CHANNELS};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(18);
+/// Length of the rescan before connecting (muse-rs `scan_all` waits it out).
+const CONNECT_SCAN_SECS: u64 = 4;
 /// Drop a headset that has not advertised for this long while discovery is on.
-const SEEN_TTL: Duration = Duration::from_secs(4);
-const NAME_PREFIX: &str = "Muse";
+/// Muses advertise about once a second; BlueZ may coalesce updates, so be generous.
+const SEEN_TTL: Duration = Duration::from_secs(10);
+/// Muse GATT service (0xFE8D), advertised by Muse 2, Muse S and Athena.
+const MUSE_SERVICE: u128 = 0x0000fe8d_0000_1000_8000_00805f9b34fb;
 
-/// Advertised name of a Muse headset (Muse, MuseS, Muse-2, …).
+/// Advertised name of a Muse headset: "Muse-AB12", "MuseS-6235", "Muse 2", ...
+/// (case-insensitive; Athena advertises as a Muse S).
 fn is_muse_name(name: &str) -> bool {
-    name.starts_with(NAME_PREFIX)
+    name.trim_start().to_ascii_lowercase().starts_with("muse")
+}
+
+/// Decide whether one advertisement is a Muse worth listing; returns its
+/// display name. `cached` = BlueZ already knew the device when the scan
+/// started: without RSSI that is a stale cache entry, not a nearby headset.
+fn classify(name: Option<&str>, service: bool, rssi: Option<i16>, cached: bool) -> Option<String> {
+    let named = name.filter(|n| is_muse_name(n));
+    if named.is_none() && !service {
+        return None;
+    }
+    if rssi.is_none() && cached {
+        return None;
+    }
+    // A Muse found by its service before its name arrived: "Muse" is also the
+    // prefix muse-rs matches on connect.
+    Some(named.unwrap_or("Muse").to_owned())
+}
+
+/// muse-rs filters its rescan by a case-sensitive name prefix; widen it to
+/// whatever case the headset used, so the id match below does the choosing.
+fn connect_prefix(name: &str) -> String {
+    name.trim_start().chars().take(4).collect()
 }
 
 struct Seen {
     name: String,
-    rssi: i16,
+    rssi: Option<i16>,
     at: Instant,
 }
 
@@ -120,13 +147,34 @@ impl MuseProvider {
     }
 }
 
-/// Poll BlueZ while `start_scan` is still active so RSSI is present.
-/// BlueZ drops `Device1.RSSI` once discovery stops.
+/// Scan on every adapter that starts, polling while discovery is active
+/// (BlueZ drops `Device1.RSSI` once discovery stops).
 async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> Result<(), String> {
     let manager = Manager::new().await.map_err(|e| e.to_string())?;
     let adapters = manager.adapters().await.map_err(|e| e.to_string())?;
-    let adapter = adapters.into_iter().next().ok_or_else(|| "No Bluetooth adapter found".to_string())?;
-    adapter.start_scan(ScanFilter::default()).await.map_err(|e| e.to_string())?;
+    let mut active = Vec::new();
+    let mut errors = Vec::new();
+    for adapter in adapters {
+        let label = adapter.adapter_info().await.unwrap_or_else(|_| "adapter".into());
+        // Devices BlueZ already knows (paired, or seen earlier) before we scan.
+        let cached: HashSet<String> = match adapter.peripherals().await {
+            Ok(ps) => ps.iter().map(|p| p.id().to_string()).collect(),
+            Err(_) => HashSet::new(),
+        };
+        match adapter.start_scan(ScanFilter::default()).await {
+            Ok(()) => {
+                log::debug!("BLE scan started on {label}");
+                active.push((adapter, cached));
+            }
+            Err(e) => {
+                log::warn!("BLE scan on {label}: {e}");
+                errors.push(format!("{label}: {e}"));
+            }
+        }
+    }
+    if active.is_empty() {
+        return Err(if errors.is_empty() { "No Bluetooth adapter found".into() } else { errors.join("; ") });
+    }
     let started = tokio::time::Instant::now();
     loop {
         let hold = {
@@ -139,10 +187,16 @@ async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> R
         if !hold && started.elapsed() >= limit {
             break;
         }
-        harvest(&adapter, shared, epoch).await;
+        let mut live = HashMap::new();
+        for (adapter, cached) in &active {
+            harvest(adapter, cached, &mut live).await;
+        }
+        record(shared, epoch, live, Instant::now());
         tokio::time::sleep(Duration::from_millis(400)).await;
     }
-    adapter.stop_scan().await.ok();
+    for (adapter, _) in &active {
+        adapter.stop_scan().await.ok();
+    }
     let mut s = lock(shared);
     if s.epoch == epoch {
         s.scanning = false;
@@ -151,26 +205,40 @@ async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> R
     Ok(())
 }
 
-/// Record headsets that are advertising right now. Names without RSSI are
-/// cached by BlueZ and are not nearby.
-async fn harvest(adapter: &btleplug::platform::Adapter, shared: &Arc<Mutex<Shared>>, epoch: u64) {
+/// Collect the Muses one adapter sees right now (id -> name, rssi).
+async fn harvest(adapter: &btleplug::platform::Adapter, cached: &HashSet<String>, live: &mut HashMap<String, (String, Option<i16>)>) {
     let Ok(peripherals) = adapter.peripherals().await else { return };
-    let mut live = HashMap::new();
     for p in peripherals {
         let Ok(Some(props)) = p.properties().await else { continue };
-        let Some(name) = props.local_name else { continue };
-        let Some(rssi) = props.rssi else { continue };
-        if !is_muse_name(&name) {
-            continue;
+        let id = p.id().to_string();
+        let service = props.services.iter().any(|u| u.as_u128() == MUSE_SERVICE);
+        let hit = classify(props.local_name.as_deref(), service, props.rssi, cached.contains(&id));
+        log::debug!(
+            "BLE adv id={id} name={:?} rssi={:?} services={} muse_service={service} cached={} -> {}",
+            props.local_name,
+            props.rssi,
+            props.services.len(),
+            cached.contains(&id),
+            if hit.is_some() { "listed" } else { "ignored" }
+        );
+        if let Some(name) = hit {
+            live.insert(id, (name, props.rssi));
         }
-        live.insert(p.id().to_string(), (name, rssi));
     }
+}
+
+/// Merge one poll into the found list and prune headsets gone quiet.
+fn record(shared: &Arc<Mutex<Shared>>, epoch: u64, live: HashMap<String, (String, Option<i16>)>, now: Instant) {
     let mut s = lock(shared);
     if s.epoch != epoch {
         return;
     }
-    let now = Instant::now();
     for (id, (name, rssi)) in live {
+        // Keep a real name once known; a later name-less poll must not reset it.
+        let name = match s.found.get(&id) {
+            Some(old) if name == "Muse" => old.name.clone(),
+            _ => name,
+        };
         s.found.insert(id, Seen { name, rssi, at: now });
     }
     s.found.retain(|_, d| now.saturating_duration_since(d.at) <= SEEN_TTL);
@@ -183,7 +251,7 @@ impl DeviceProvider for MuseProvider {
     fn list(&self) -> Vec<DeviceInfo> {
         let s = lock(&self.shared);
         let mut v: Vec<DeviceInfo> =
-            s.found.iter().map(|(id, d)| DeviceInfo { rssi: Some(d.rssi), ..muse_info(&format!("muse:{id}"), &d.name) }).collect();
+            s.found.iter().map(|(id, d)| DeviceInfo { rssi: d.rssi, ..muse_info(&format!("muse:{id}"), &d.name) }).collect();
         v.sort_by(|a, b| a.id.cmp(&b.id));
         v
     }
@@ -221,16 +289,30 @@ impl DeviceProvider for MuseProvider {
         // connect task waits until that client has called stop_scan.
         self.stop_scan();
         let rt = self.runtime()?;
+        let ble_id = ble.to_owned();
         let (src, feed) = LiveSource::new(muse_info(id, &name));
         let stop = Arc::new(AtomicBool::new(false));
         let stop2 = stop.clone();
         let shared = self.shared.clone();
         rt.spawn(async move {
-            let client = MuseClient::new(MuseClientConfig { name_prefix: name, enable_ppg: true, enable_aux: true, scan_timeout_secs: 10 });
+            let client = MuseClient::new(MuseClientConfig {
+                name_prefix: connect_prefix(&name),
+                enable_ppg: true,
+                enable_aux: true,
+                scan_timeout_secs: CONNECT_SCAN_SECS,
+            });
             let conn = tokio::time::timeout(CONNECT_TIMEOUT, async {
                 // Let the watch task drop its BlueZ discovery session.
                 tokio::time::sleep(Duration::from_millis(400)).await;
-                let (rx, handle) = client.connect().await?;
+                // muse-rs cannot adopt our btleplug peripheral, so rescan briefly
+                // and pick the *selected* headset by its BLE id (not the first
+                // one whose name matches).
+                let devices = client.scan_all().await?;
+                log::debug!("connect {ble_id}: rescan saw {:?}", devices.iter().map(|d| &d.id).collect::<Vec<_>>());
+                let dev = devices.into_iter().find(|d| d.id == ble_id).ok_or_else(|| {
+                    anyhow::anyhow!("{ble_id} not seen in a {CONNECT_SCAN_SECS} s rescan (out of range, or connected elsewhere?)")
+                })?;
+                let (rx, handle) = client.connect_to(dev).await?;
                 handle.start(true, false).await?;
                 anyhow::Ok((rx, handle))
             })
@@ -243,6 +325,7 @@ impl DeviceProvider for MuseProvider {
                     return;
                 }
                 Err(_) => {
+                    lock(&shared).error = Some(format!("connect: timed out after {} s", CONNECT_TIMEOUT.as_secs()));
                     feed.link(LinkState::Lost { reason: "connect timed out".into() });
                     return;
                 }
@@ -292,8 +375,36 @@ mod tests {
 
     #[test]
     fn only_muse_names_are_headsets() {
-        assert!(is_muse_name("MuseS-6235"));
-        assert!(is_muse_name("Muse-AB12"));
+        for n in ["MuseS-6235", "Muse-AB12", "Muse 2", "muse-s", "MUSE-AB12"] {
+            assert!(is_muse_name(n), "{n}");
+        }
         assert!(!is_muse_name("QCY T13"));
+        assert_eq!(connect_prefix("MuseS-6235"), "Muse");
+        assert_eq!(connect_prefix("MUSE-AB12"), "MUSE");
+    }
+
+    #[test]
+    fn classify_keeps_late_names_and_missing_rssi() {
+        assert_eq!(classify(Some("MuseS-6235"), false, None, false).as_deref(), Some("MuseS-6235"), "no RSSI is fine");
+        assert_eq!(classify(None, true, Some(-60), false).as_deref(), Some("Muse"), "service before name");
+        assert_eq!(classify(Some("QCY T13"), false, Some(-40), false), None);
+        assert_eq!(classify(Some("Muse-AB12"), false, None, true), None, "stale BlueZ cache");
+        assert_eq!(classify(Some("Muse-AB12"), false, Some(-70), true).as_deref(), Some("Muse-AB12"), "cached but advertising");
+    }
+
+    #[test]
+    fn record_keeps_names_and_prunes_after_ttl() {
+        let shared = Arc::new(Mutex::new(Shared::default()));
+        let t0 = Instant::now();
+        let poll = |name: &str, rssi| HashMap::from([("AA".to_owned(), (name.to_owned(), rssi))]);
+        record(&shared, 0, poll("MuseS-1", Some(-50)), t0);
+        record(&shared, 0, poll("Muse", None), t0 + Duration::from_secs(1));
+        assert_eq!(lock(&shared).found["AA"].name, "MuseS-1");
+        record(&shared, 0, HashMap::new(), t0 + Duration::from_secs(9));
+        assert!(lock(&shared).found.contains_key("AA"), "within TTL");
+        record(&shared, 0, HashMap::new(), t0 + Duration::from_secs(12));
+        assert!(lock(&shared).found.is_empty());
+        record(&shared, 7, poll("MuseS-1", None), t0);
+        assert!(lock(&shared).found.is_empty(), "stale epoch ignored");
     }
 }

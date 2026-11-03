@@ -214,7 +214,7 @@ fn signal_bars(ui: &mut egui::Ui, rssi: Option<i16>) {
         let r = egui::Rect::from_min_max(egui::pos2(x, rect.bottom() - h), egui::pos2(x + 3.0, rect.bottom()));
         ui.painter().rect_filled(r, 0.5, if i < lit { on } else { off });
     }
-    resp.on_hover_text(rssi.map_or("network device (no RSSI)".to_owned(), |r| format!("{r} dBm")));
+    resp.on_hover_text(rssi.map_or("no RSSI (network device, or not reported yet)".to_owned(), |r| format!("{r} dBm")));
 }
 
 #[cfg(test)]
