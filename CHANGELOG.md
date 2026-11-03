@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the next connect. `device.status` shows `scan_mode` and `auto_reconnect`.
 
 ### Fixed
+- Muse battery now comes from the headset status JSON (`bp`), refreshed with an `s` request every 60 s; implausible telemetry battery (Muse S classic showed 1 %) is ignored.
+- `device.connect muse:<id>` works right after `device.scan` without a `device.list` in between.
 - Closing the app (window, Ctrl-C, SIGTERM; CLI exit) now halts streaming and
   disconnects the Muse, waiting up to 10 s. Before, the headset stayed
   "connected" and could not be found on the next start.

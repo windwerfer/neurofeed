@@ -82,10 +82,46 @@ pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
         }
         MuseEvent::Ppg(r) if r.ppg_channel < 3 => vec![Block::Ppg(r.ppg_channel as u16, r.samples.iter().map(|&x| x as f32).collect())],
         MuseEvent::Accelerometer(imu) => vec![Block::Accel(imu.samples.iter().map(|s| [s.x, s.y, s.z]).collect())],
-        MuseEvent::Telemetry(t) => vec![Block::Battery(t.battery_level)],
         MuseEvent::Disconnected => vec![Block::Link(LinkState::Lost { reason: "headset disconnected".into() })],
         _ => Vec::new(),
     }
+}
+
+/// How often the open task asks for a status (`s`) so `bp` stays fresh.
+const STATUS_EVERY: Duration = Duration::from_secs(60);
+
+/// Picks the battery reading for one connection. The Control JSON `bp` field
+/// is authoritative; telemetry is only used while no `bp` was seen and its
+/// fuel gauge is plausible (muse-rs decodes Muse S classic telemetry wrongly:
+/// raw 417/512 = 0.81 "percent" with a 91619 mV gauge).
+#[derive(Default)]
+struct BatterySource {
+    control_seen: bool,
+}
+
+impl BatterySource {
+    fn pick(&mut self, ev: &MuseEvent) -> Option<f32> {
+        match ev {
+            MuseEvent::Control(c) => {
+                let bp = c.fields.get("bp").and_then(|v| v.as_f64()).filter(|b| (0.0..=100.0).contains(b))?;
+                self.control_seen = true;
+                Some(bp as f32)
+            }
+            MuseEvent::Telemetry(t)
+                if !self.control_seen && (3000.0..=4500.0).contains(&t.fuel_gauge_voltage) && (0.0..=100.0).contains(&t.battery_level) =>
+            {
+                Some(t.battery_level)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Name for a connect: the scanned name, else the generic `Muse` prefix so a
+/// `device.connect` right after `device.scan` still works (the connect task
+/// rescans by BLE id anyway).
+fn connect_name(found: Option<&str>) -> String {
+    found.map_or_else(|| "Muse".to_owned(), str::to_owned)
 }
 
 /// Muse provider (`muse:<ble id>`).
@@ -332,11 +368,10 @@ impl DeviceProvider for MuseProvider {
     }
     fn open(&mut self, id: &str) -> Result<Box<dyn DeviceSource>, String> {
         let ble = id.strip_prefix("muse:").unwrap_or(id);
-        let name = lock(&self.shared)
-            .found
-            .get(ble)
-            .map(|d| d.name.clone())
-            .ok_or_else(|| format!("`{id}` not found; open the device window to scan"))?;
+        if ble.is_empty() {
+            return Err(format!("`{id}`: missing BLE id"));
+        }
+        let name = connect_name(lock(&self.shared).found.get(ble).map(|d| d.name.as_str()));
         // Discovery and a connect each need the adapter. Stop ours first; the
         // connect task waits until that client has called stop_scan.
         self.stop_scan();
@@ -386,10 +421,19 @@ impl DeviceProvider for MuseProvider {
                     return;
                 }
             };
+            let mut battery = BatterySource::default();
+            let mut last_status = tokio::time::Instant::now();
             'run: while !stop2.load(Ordering::Relaxed) {
+                if last_status.elapsed() >= STATUS_EVERY {
+                    last_status = tokio::time::Instant::now();
+                    if let Err(e) = handle.send_command("s").await {
+                        log::debug!("muse: status request: {e}");
+                    }
+                }
                 match tokio::time::timeout(Duration::from_millis(250), rx.recv()).await {
                     Ok(Some(ev)) => {
-                        for b in map_muse_event(ev) {
+                        let pct = battery.pick(&ev);
+                        for b in pct.map(Block::Battery).into_iter().chain(map_muse_event(ev)) {
                             if !feed.send(b) {
                                 break 'run;
                             }
@@ -423,6 +467,34 @@ mod tests {
     use super::*;
     use muse_rs::prelude::{EegReading, ImuData, PpgReading, TelemetryData, XyzSample};
 
+    fn control(raw: &str) -> MuseEvent {
+        let fields = serde_json::from_str::<serde_json::Value>(raw).unwrap().as_object().unwrap().clone();
+        MuseEvent::Control(muse_rs::types::ControlResponse { raw: raw.into(), fields })
+    }
+
+    #[test]
+    fn control_bp_wins_and_garbage_telemetry_is_ignored() {
+        // Real MuseS-6235 (classic firmware): bp 64 (Mind Monitor ~65 %).
+        let json = r#"{"hn":"MuseS-6235","bp":64,"ps":80}"#;
+        let tel =
+            || MuseEvent::Telemetry(TelemetryData { sequence_id: 0, battery_level: 0.8145, fuel_gauge_voltage: 91619.0, temperature: 0 });
+        let mut b = BatterySource::default();
+        assert_eq!(b.pick(&tel()), None, "implausible gauge before bp");
+        assert_eq!(b.pick(&control(json)), Some(64.0));
+        assert_eq!(b.pick(&tel()), None);
+        assert_eq!(b.pick(&control(r#"{"rc":0}"#)), None, "no bp, no reading");
+        let ok = || MuseEvent::Telemetry(TelemetryData { sequence_id: 1, battery_level: 70.0, fuel_gauge_voltage: 3900.0, temperature: 0 });
+        assert_eq!(b.pick(&ok()), None, "bp seen: telemetry never wins");
+        assert_eq!(BatterySource::default().pick(&ok()), Some(70.0), "plausible telemetry without bp");
+    }
+
+    #[test]
+    fn connect_without_list_uses_generic_name() {
+        assert_eq!(connect_name(None), "Muse");
+        assert_eq!(connect_prefix(&connect_name(None)), "Muse");
+        assert_eq!(connect_name(Some("MuseS-6235")), "MuseS-6235");
+    }
+
     #[test]
     fn only_foreign_connected_muses_are_stale() {
         assert!(is_stale(Some("Muse-1234"), false, true, false));
@@ -444,7 +516,7 @@ mod tests {
         let acc = MuseEvent::Accelerometer(ImuData { sequence_id: 0, samples: [xyz; 3] });
         assert_eq!(map_muse_event(acc), vec![Block::Accel(vec![[0.0, 0.1, 1.0]; 3])]);
         let tel = MuseEvent::Telemetry(TelemetryData { sequence_id: 0, battery_level: 81.5, fuel_gauge_voltage: 0.0, temperature: 0 });
-        assert_eq!(map_muse_event(tel), vec![Block::Battery(81.5)]);
+        assert!(map_muse_event(tel).is_empty(), "battery goes through BatterySource");
         assert!(matches!(map_muse_event(MuseEvent::Disconnected).as_slice(), [Block::Link(LinkState::Lost { .. })]));
     }
 

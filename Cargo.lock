@@ -3050,6 +3050,7 @@ dependencies = [
  "nf-types",
  "pure-lsl",
  "rosc",
+ "serde_json",
  "tokio",
 ]
 
