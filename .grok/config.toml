@@ -1,4 +1,4 @@
 [mcp_servers.neurofeed]
 command = "cargo"
-args = ["run", "-q", "--release", "-p", "neurofeed-mcp", "--", "--bridge"]
+args = ["run", "-q", "--release", "-p", "neurofeed-cli", "--bin", "neurofeed-cli", "--", "--bridge", "mcp"]
 startup_timeout_sec = 180

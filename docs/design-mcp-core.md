@@ -1,66 +1,39 @@
 # Design: NeuroFeed Rust core + MCP + simulators
 
-Status: Phases 1-3 implemented (2026-10-29), see `log/devlog.md`. Revised after
+Status: implemented; progress is in `log/devlog.md`. Revised after
 `lessons-from-photocraft-solidcraft.md`. Modeled on PhotoCraft (`crates/engine` =
 Session + command registry, `crates/automation` = rmcp MCP server with a
 headless mode and a bridge mode to the running app, `apps/*` thin shells).
 
-## 1. Assessment of today's repo
+## 1. Why a Rust core
 
-| Area | Where it lives | Size |
-|---|---|---|
-| BLE: Muse (muse-rs fork + btleplug), Crown (OSC/UDP `rosc`) | Rust `rust/src/api/muse.rs`, `neurosity_osc.rs` | ~3.7k LOC |
-| Device simulator | Rust `api/simulator.rs` (emits same events as real device) | ~0.5k |
-| DSP / features / filters / band math | Rust `api/features.rs`, `eeg_conditioning.rs`, `analysis/*` | several k |
-| Session file format, EDF export, capture spine | Rust `session_format.rs`, `edf_export`, `spine/` | ~3k |
-| AI (REVE, CBraMod) | Rust `analysis/` | |
-| Feedback engine, protocols, calibration, reward/guard lanes | **Dart** `lib/src/feedback` | ~19.6k |
-| Monitor state (bands, raw, PSD buffers) | **Dart** `lib/src/monitor` | ~13.1k |
-| History/SQLite store, PDF/import/export | **Dart** `feedback/session_*`, `history` | ~3k |
-| Views/UI | Dart `views`, `charts` | ~9k |
-| Agent control | Dart `lib/src/agent` (JSON TCP server, ~30 fields: view, sidebar, connect, protocol, threshold, override, phase…) | ~0.5k |
-
-Rust total ~20.7k LOC; Dart ~56.7k. Rust is wired to Flutter via
-flutter_rust_bridge 2.11 (`frb_generated.rs`).
-
-**Verdict: feasible, medium-hard.** The hard, platform-bound parts (BLE, DSP,
-file format, simulator) are already Rust. What is missing is the *application
-logic* layer: feedback engine, monitor state, history store are Dart and must
-be ported (~35k Dart LOC, likely ~12–15k Rust). The existing Dart agent server
-gives a ready-made inventory of the commands MCP must cover.
-
-Risks:
-- **Behavioural drift** while porting the feedback engine (thresholds,
-  calibration, guard lanes). Mitigate: golden tests from recorded sessions run
-  against both Dart and Rust before switching.
-- **Flutter is dropped** (decision 2026-10-29). No flutter_rust_bridge
-  adapter: new crates copy only the useful Rust (device, DSP, sim, format)
-  out of `rust/`. Dart stays as a reference until the feedback engine is
-  ported, then is deleted in one commit.
-- **BLE on mobile**: btleplug on Android needs JNI glue (already present);
-  iOS untested. Keep BLE in its own crate behind `DeviceSource`, never in core.
-- **WASM**: core must stay `no tokio/threads/fs` (time injected, I/O via
-  traits) to run in the egui web build. MCP server, BLE, SQLite: native only.
-  Web BLE (WebBluetooth) would be a separate later `DeviceSource`.
-- AI models (rlx/reve) are heavy; keep them feature-gated out of core.
+The Flutter app had its platform parts (BLE, DSP, file format, simulator) in
+Rust but its application logic (feedback engine, monitor state, history) in
+Dart, with a small JSON TCP agent server on the side. Flutter was dropped
+(decision 2026-10-29). The logic now lives in `nf-core`, which has no tokio, threads or
+fs, so the same Session runs in the egui desktop app, the web build, the
+Android library and the headless automation binary. That is what makes one
+command registry, and one set of tests, cover every shell.
 
 ## 2. Crate layout
+
+The main crates (full map: `docs/architecture.md`).
 
 ```text
 crates/
   nf-types     L0  ids, units, stream descriptors, DTOs (serde + schemars)       [done: bands, DeviceInfo, traits]
-  nf-dsp       L1  biquads/EegFilter, FFT, PSD, band powers, line-noise ratio     [done phase 2; quality, mains detector, features todo]
-  nf-sim       L1  deterministic seeded raw 256 Hz simulators (Muse 4ch, Crown 8ch) [done phase 2; PPG/IMU, scenarios todo]
+  nf-dsp       L1  biquads/EegFilter, FFT, PSD, band powers, line-noise ratio     [done]
+  nf-sim       L1  deterministic seeded raw 256 Hz simulators (Muse 4ch, Crown 8ch) [done]
   nf-format    L1  NFEDBIN records/body, NFED6 container, EDF+ (ruzstd, wasm-ok)  [done phase 2]
   nf-core      L2  Session + command registry + event log; no egui/tokio; wasm     [done]
-  nf-device    L3  btleplug Muse, Crown OSC (native); DeviceProvider impls          [phase 6]
-  nf-store     L3  history behind HistoryStore trait (SQLite native)               [phase 5]
-  nf-mcp       L4  rmcp server, headless now, bridge later; native only            [done]
+  nf-device    L3  btleplug Muse, Crown OSC (native); DeviceProvider impls          [done]
+  nf-store     L3  history behind HistoryStore trait (SQLite native)               [done]
+  nf-mcp       L4  NfMcp dispatcher + rmcp server, headless and bridge; native only  [done]
 apps/
-  neurofeed-egui   desktop + web (trunk); later also the Android library          [done]
-  neurofeed-mcp    stdio MCP binary (--manual-clock, --device)                    [done]
-  android/         thin native wrapper (later, see section 7)
-xtask/             ci | layers | wasm (to add; layers is a test in nf-core today)
+  neurofeed-egui   desktop + web (trunk)                                          [done]
+  neurofeed-cli    run/batch/serve/mcp over a headless Session or the app bridge  [done]
+  neurofeed-android  Android cdylib + Gradle shell (section 7)                     [done]
+(CI gate: scripts and .github/workflows; layers is a test in nf-core)
 ```
 Lints: `unsafe_code = forbid`; `unwrap/expect/panic/todo/unimplemented/unreachable = deny`
 (tests allowed via `clippy.toml`). Only the Android JNI glue may use `unsafe`.
@@ -94,64 +67,55 @@ pub fn input_schema(id: &str) -> Option<Value>;               // schemars, JSON 
 - Next: output schemas (`schemars` on reply types), `undoable` flag, label/
   shortcut for UI menus, `catch_unwind` in the app shell too.
 
-Current commands: `app.status`, `view.list`, `view.set`, `sidebar.set`,
-`stream.pause`, `stream.resume`, `scale.set`, `bands.get`, `device.list`,
-`device.connect`, `device.disconnect`, `device.status`, `sim.configure`,
-`clock.advance`, `events.drain`.
+The live catalog is `command_list` (or `neurofeed-cli list`); it is not
+repeated here.
 
-## 4. MCP surface (implemented: generic + typed, not one tool per command)
+## 4. Automation surface (generic + typed, not one tool per command)
 
-"Add a command, not a tool, unless the tool is about the session itself."
+Usage, tool table, client configs and verified examples: [automation.md](automation.md).
+This section is only the why.
 
-| Tool | Purpose |
-|---|---|
-| `command_list {group?}` | id, label, group, read_only, enabled, disabled_reason |
-| `command_describe {id}` | metadata + params JSON Schema |
-| `command_run {id, params?}` | run any command; failure = `isError` result, state unchanged |
-| `command_batch {steps:[{id,params}]}` | pre-validated, atomic, rollback; error names failing step, applied / not run |
-| `status` | `app.status` incl. `revision` |
-| `bands_get {scale?}` | latest band powers |
-| `device_list` | connectable devices |
-| `clock_advance {seconds}` | deterministic time (headless) |
-
-Conventions: titles + all four annotation hints; `additionalProperties:false`,
-unknown args -> JSON-RPC -32602; execution errors -> `isError: true`; panics
-caught per call, session survives. Clock: `--manual-clock` (tests) or wall
-clock since start.
-Later: `screenshot`, `ui_inspect`/`ui_set` (bridge mode to the running app
-over loopback TCP + token file), `recording_export`, `crash_reports`,
-`skill_reference`, resources (`neurofeed://status`, `neurofeed://commands`),
-progress for long runs.
+- "Add a command, not a tool, unless the tool is about the session itself."
+  Tools are the four generic ones (`command_list`, `command_describe`,
+  `command_run`, `command_batch`), a few session shortcuts, and bridge-only
+  `screenshot` / `ui_inspect`. A new feature is a command and automatically
+  reaches the UI, the CLI, JSON lines and MCP.
+- One dispatcher (`NfMcp::call`) serves MCP, `neurofeed-cli run|batch|serve`
+  and the bridge. The bridge forwards tool calls to the app, which runs the
+  same dispatch on its UI thread, so headless and live behave the same.
+- Errors split by who is wrong: a malformed *tool call* (unknown tool or
+  argument) is a protocol error (-32602); a *command* that fails is an
+  `isError` result the model can read and act on, with state unchanged.
+- Time is injected (`--manual-clock` + `clock_advance`, or the wall clock),
+  so agent tests are deterministic.
+- Bridge: loopback TCP, a per-launch random token in a 0600 file, off by
+  default. No MCP on web or Android.
+- Not done yet: output schemas in `command_describe`, a file allow-list for
+  `path` arguments (today `recording_export` / `screenshot` write wherever
+  the caller points), a widget-setting tool (ui_set), resources, progress/cancel for long jobs.
 
 ## 5. Simulator design (nf-sim)
 
 - Implements `DeviceSource` (raw `EegPacket`s, 12 samples at 256 Hz, µV),
-  opened through a `DeviceProvider` (`sim:muse`, `sim:crown`), exactly like
+  opened through a `DeviceProvider` (`sim:muse_s`, `sim:muse2`, `sim:athena`, `sim:crown`), exactly like
   real devices. Core conditions (nf-dsp `EegFilter`: 0.5 Hz HP + 50/60 Hz
   notches) and computes bands every 0.1 s over a 1 s window.
 - Done (phase 2): 10 Hz alpha with slow swell (edge pads full, inner 55 %),
   1/f background (sines every 1.5 Hz, `6/sqrt(f)` µV), seeded noise,
   optional mains hum and DC offset;
   `sim.configure {seed, alpha_uv, noise_uv, mains_uv, mains_hz, dc_uv}`.
-- Todo: PPG/IMU streams; scripted scenarios (eyes closed, focus, blinks, jaw,
-  electrode pop, contact loss, battery, dropouts); `Replay` source for NFED6
-  recordings (golden tests vs the Dart engine).
+- Faults are timed and scripted through commands, not simulator flags:
+  `sim.fault.add {kind: disconnect|movement|blink|clench|noise|spikes|glitch|out_of_range}`,
+  so tests drive artifacts the same way an agent would. Open: a `Replay`
+  source for NFED6 recordings.
 - Data, not assumptions: channels, rates, streams, montage, units come from
   the descriptor; nothing below the device layer branches on `DeviceKind`.
 
-## 6. Migration phases
+## 6. Migration
 
-| # | Phase | Output | Effort |
-|---|---|---|---|
-| 0 | Prototype | egui shell, mock bands | done |
-| 1 | Core + MCP + sim skeleton | this commit: Session, 15 commands, 8 MCP tools, 19 tests, egui on core | done |
-| 1b | Gate | `cargo xtask ci` (fmt, clippy -D, layers, wasm, test), output schemas | 0.5 d |
-| 2 | Copy DSP/format/raw simulator from `rust/` into nf-dsp/nf-format/nf-sim | Bands from real DSP on simulated raw | done |
-| 3 | Monitor state in core | Raw EEG, PSD, Spectrogram, Histogram views, mains/quality/features | done (HR/SpO2 open) |
-| 4 | Feedback engine + protocols + calibration (golden tests vs Dart replay) | Feedback view + tools; **then delete Dart in one commit** | 2-4 wk |
-| 5 | History store + export | History view | 1 wk |
-| 6 | nf-device (btleplug Muse, Crown OSC), bridge-mode MCP, screenshot | real hardware on desktop | 1 wk |
-| 7 | Android wrapper | APK hosting the egui app | 1-2 wk |
+Phases 0-6 (core, DSP/format/sim, monitor state, feedback engine, history,
+devices + bridge) have landed; the Dart code is gone. Progress and open items
+are in `log/devlog.md`, not here.
 
 ## 7. Android wrapper
 

@@ -2944,6 +2944,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "neurofeed-cli"
+version = "0.1.0"
+dependencies = [
+ "nf-ai",
+ "nf-core",
+ "nf-device",
+ "nf-mcp",
+ "nf-store",
+ "rmcp",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "neurofeed-egui"
 version = "0.1.0"
 dependencies = [
@@ -2966,20 +2980,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
-]
-
-[[package]]
-name = "neurofeed-mcp"
-version = "0.1.0"
-dependencies = [
- "nf-ai",
- "nf-core",
- "nf-device",
- "nf-mcp",
- "nf-store",
- "rmcp",
- "serde_json",
- "tokio",
 ]
 
 [[package]]

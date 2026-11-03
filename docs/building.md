@@ -7,7 +7,7 @@ Linux desktop needs the usual X11/Wayland + OpenGL libraries.
 | Task | Command |
 |---|---|
 | Desktop run | `cargo run --release -p neurofeed-egui` |
-| MCP server (stdio) | `cargo run -p neurofeed-mcp -- [--manual-clock] [--device sim:crown]` |
+| Automation (CLI, JSON lines, MCP stdio) | `cargo run -p neurofeed-cli --bin neurofeed-cli -- [--manual-clock] [--device sim:crown] run status` (or `serve`, `mcp`); see `docs/automation.md` |
 | Web dev server | `cd apps/neurofeed-egui && trunk serve --release` → http://127.0.0.1:8080 |
 | Web static build | `cd apps/neurofeed-egui && trunk build --release` → `dist/` |
 | Tests | `cargo test` |

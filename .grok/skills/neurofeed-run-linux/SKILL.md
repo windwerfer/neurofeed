@@ -7,6 +7,6 @@ description: >
 
 The debug HTTP agent and `flutter run -d linux` are gone. The app is the Rust
 egui binary. Call the `neurofeed-mcp` tools. See the `neurofeed-mcp` skill
-and `docs/mcp.md`.
+and `docs/automation.md`.
 
 Do not kill Pulse, Wayland, or adb. Do not invent a virtual display.

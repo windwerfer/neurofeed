@@ -1,4 +1,4 @@
-//! Desktop only: answers `neurofeed-mcp --bridge` requests on the UI thread.
+//! Desktop only: answers `neurofeed-cli --bridge` requests on the UI thread.
 //! Session tools go through `nf_mcp::run_tool` (same dispatcher as the stdio
 //! server); `screenshot` grabs the real window, `ui_inspect` re-runs the UI
 //! once off-screen with AccessKit on and returns the widget tree.
@@ -27,7 +27,7 @@ impl Bridge {
     pub fn start(ctx: &egui::Context) -> std::io::Result<Self> {
         let c = ctx.clone();
         let server = BridgeServer::start(nf_mcp::bridge::default_info_path(), Arc::new(move || c.request_repaint()))?;
-        log::info!("MCP bridge on {} (neurofeed-mcp --bridge)", server.info().addr);
+        log::info!("MCP bridge on {} (neurofeed-cli --bridge)", server.info().addr);
         Ok(Self { server, shots: Vec::new(), shot: Shot::default() })
     }
 

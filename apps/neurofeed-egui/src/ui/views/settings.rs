@@ -372,7 +372,7 @@ fn agents(ui: &mut egui::Ui, shell: &mut crate::ui::Shell) {
                 shell.set_bridge = Some(on);
             }
             match bridge {
-                Some(addr) => ui.weak(format!("Listening on {addr} (local only, token in bridge.json). Run: neurofeed-mcp --bridge")),
+                Some(addr) => ui.weak(format!("Listening on {addr} (local only, token in bridge.json). Run: neurofeed-cli --bridge mcp")),
                 None => ui.weak("Off. Also enabled by starting with NF_BRIDGE=1."),
             };
         }

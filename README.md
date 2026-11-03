@@ -20,9 +20,9 @@ Desktop start view: `NF_VIEW=psd cargo run -p neurofeed-egui`.
 #   --no-default-features), D-Bus = Bluetooth (BlueZ) for the Muse
 cargo run --release -p neurofeed-egui                       # desktop (repo root)
 cd apps/neurofeed-egui && trunk serve --release             # web, http://127.0.0.1:8080
-cargo run --release -p neurofeed-mcp -- --device sim:muse_s # MCP over stdio (headless)
+cargo run --release -p neurofeed-cli --bin neurofeed-cli -- run status  # one command, headless
 NF_BRIDGE=1 cargo run --release -p neurofeed-egui           # desktop + agent bridge, then:
-cargo run --release -p neurofeed-mcp -- --bridge            # MCP driving the live app
+target/release/neurofeed-cli --bridge mcp                   # MCP driving the live app
 cargo test && cargo clippy --all-targets -- -D warnings
 ```
 
@@ -32,12 +32,12 @@ SDK OSC output), then Connect. MCP: `device.dialog`, `device.list`,
 `device.connect`. `device.scan {seconds}` is a timed scan. The web build has
 simulators only.
 
-Agent bridge: with `NF_BRIDGE=1` or Settings > Agents, the app listens on
+Agent bridge: with `NF_BRIDGE=1` or Settings > About > Agents, the app listens on
 127.0.0.1 (random port) and writes the port + a random token to
 `~/.local/share/neurofeed/bridge.json` (0600; macOS `~/Library/Application
 Support/NeuroFeed`, Windows `%APPDATA%\NeuroFeed`, or `NF_BRIDGE_FILE`).
-`neurofeed-mcp --bridge` then drives the running app with the same tools plus
-`screenshot` and `ui_inspect` (widget tree). Client setup: [docs/mcp.md](docs/mcp.md).
+`neurofeed-cli --bridge` then drives the running app with the same tools plus
+`screenshot` and `ui_inspect` (widget tree). CLI, JSON lines, MCP and client setup: [docs/automation.md](docs/automation.md).
 
 Read [AGENTS.md](AGENTS.md), then [docs/](docs/).
 

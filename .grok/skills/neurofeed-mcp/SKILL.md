@@ -1,14 +1,14 @@
 ---
 name: neurofeed-mcp
 description: >
-  Drive NeuroFeed by calling the neurofeed-mcp server's tools. Use when
+  Drive NeuroFeed by calling the neurofeed MCP server's tools (neurofeed-cli mcp). Use when
   testing the running Linux app, a headless session, a BLE or Crown scan,
   connect, feedback, or any command.
 ---
 
-`neurofeed-mcp` is a stdio MCP server. Call its tools. The shared client
-snippet is `.ai/mcp.json`; how each host loads it is `docs/mcp.md`. Grok
-reads `.grok/config.toml`.
+`neurofeed-cli mcp` (alias `neurofeed-mcp`) is a stdio MCP server. Call its
+tools. Client setup, the CLI (`run`, `batch`, `serve`) and examples are in
+`docs/automation.md`. Grok reads `.grok/config.toml`.
 
 - **`--bridge`** (the registered server) drives the running desktop app.
   Start the app with `NF_BRIDGE=1` when `~/.local/share/neurofeed/bridge.json`

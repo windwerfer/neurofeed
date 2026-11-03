@@ -1,8 +1,1 @@
-{
-  "mcpServers": {
-    "neurofeed": {
-      "command": "cargo",
-      "args": ["run", "-q", "--release", "-p", "neurofeed-mcp", "--", "--bridge"]
-    }
-  }
-}
+{"mcpServers":{"neurofeed":{"command":"cargo","args":["run","-q","--release","-p","neurofeed-cli","--bin","neurofeed-cli","--","--bridge","mcp"]}}}

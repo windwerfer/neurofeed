@@ -6,7 +6,7 @@
 //!
 //! Without the `server` feature (no rmcp/tokio) it is just the tool
 //! dispatcher plus the [`bridge`], which the desktop app embeds so
-//! `neurofeed-mcp --bridge` can drive the live app.
+//! `neurofeed-cli --bridge` can drive the live app.
 #![forbid(unsafe_code)]
 
 pub mod bridge;
@@ -29,7 +29,7 @@ use std::time::Instant;
 #[cfg(feature = "server")]
 const INSTRUCTIONS: &str = "NeuroFeed EEG neurofeedback app. Everything the app can do is a command: discover with command_list, \
 read the typed params schema with command_describe, run with command_run, or several atomically with command_batch (rolls back on failure). \
-Shortcuts: status (includes `revision`, bumped on every change), bands_get, device_list, clock_advance. Simulators: sim:muse, sim:crown. \
+Shortcuts: status (includes `revision`, bumped on every change), bands_get, device_list, clock_advance. Simulators: sim:muse_s, sim:muse2, sim:athena, sim:crown. \
 With --manual-clock, time only moves via clock_advance (deterministic).";
 
 /// How session time advances between tool calls.
@@ -155,7 +155,7 @@ const TOOLS: &[ToolDef] = &[
         schema: || {
             schema(
                 json!({
-                    "format": { "enum": ["nfed6", "raw_body", "edf"] },
+                    "format": { "enum": ["nfed6", "raw_body", "edf", "pdf"] },
                     "start": { "type": "array", "items": { "type": "integer" }, "minItems": 6, "maxItems": 6 },
                     "path": { "type": "string" },
                 }),

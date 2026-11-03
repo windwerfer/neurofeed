@@ -7,7 +7,7 @@ do/don't, then this folder for maps.
 
 | File | Contents |
 |------|----------|
-| [mcp.json](mcp.json) | Shared MCP client snippet for `neurofeed-mcp --bridge`. Hosts load their own path; see [../docs/mcp.md](../docs/mcp.md). |
+| [mcp.json](mcp.json) | Shared MCP client snippet for `neurofeed-cli --bridge mcp` (cargo run). Hosts load their own path (Cursor: `../.cursor/mcp.json`); see [../docs/automation.md](../docs/automation.md). |
 | [contracts/](contracts/) | **Frozen contracts** (pipeline, data-plane, fileformat v6). What must stay true. |
 | [active-task.md](active-task.md) | Current development focus |
 | [audio-engine.md](audio-engine.md) | **Implemented** SoLoud engine hardening (lifetime, loads, leftover muffle) |

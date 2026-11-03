@@ -4,7 +4,7 @@
 
 Cargo workspace at the repo root: `crates/nf-types` (L0), `crates/nf-dsp`,
 `crates/nf-format`, `crates/nf-sim` (L1), `crates/nf-core` (L2),
-`crates/nf-mcp` (L4), `apps/neurofeed-egui`, `apps/neurofeed-mcp`. Only the
+`crates/nf-mcp` (L4), `apps/neurofeed-egui`, `apps/neurofeed-cli`. Only the
 Bands view is functional, fed by raw-sample simulators through nf-dsp.
 Plan and phases: `design-mcp-core.md`. This section overrides anything below.
 

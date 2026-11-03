@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - One Rust/egui codebase for desktop, web (WASM) and Android (APK built in CI).
 - MCP agent interface, so AI agents can drive and inspect the app.
+- `neurofeed-cli` (formerly `neurofeed-mcp`): `run`, `batch`, `serve` (JSON lines) and `mcp`
+  over a headless session or the running app; see docs/automation.md.
 - Device simulators with fault injection for testing without hardware.
 - Feedback engine and AI models.
 - Session import/export.

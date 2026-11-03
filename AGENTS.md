@@ -29,7 +29,8 @@ Do not add Flutter, Tauri, Electron or a webview UI. Read this file, then
 | Read | Why |
 |---|---|
 | `docs/architecture.md` | Crate map, layers, the core/UI seam. Its dated "Current state" section overrides the plan below it. |
-| `docs/design-mcp-core.md` | Command model, MCP surface, simulators, migration phases |
+| `docs/automation.md` | `neurofeed-cli` (run, batch, serve, mcp), MCP client setup, the bridge, tools, workflows |
+| `docs/design-mcp-core.md` | Why the command model and automation surface look as they do; simulators |
 | `docs/decisions.md` | Dated decisions and frozen contracts. Do not reopen them without a new entry. |
 | `docs/building.md` | Toolchain, desktop/web builds, the CI gate |
 | `docs/ui-structure.md` | Views, panels, theme, how to add a view |
@@ -49,7 +50,7 @@ crates/
   nf-mcp              L4  MCP server over nf-core (native only)
 apps/
   neurofeed-egui      desktop + web UI (eframe; trunk for web); control channel on desktop
-  neurofeed-mcp       headless MCP binary (in-process Session + simulator), or a bridge to the app
+  neurofeed-cli       automation binary: run, batch, serve (JSON lines), mcp; headless Session or bridge to the app (alias neurofeed-mcp = mcp)
 xtask/                cargo xtask ci | layers | wasm   (to add)
 ```
 
@@ -136,7 +137,7 @@ must produce an error the user or agent can act on, never a panic.
    **(ours)** Names carry units: `_ms`, `_s`, `_hz`, `_uv`. Timestamps say
    whether they are epoch ms or seconds from the start of the recording.
 4. **The UI is thin and data-driven.** UI state is serde data in the app's
-   state module, so `ui_inspect`/`ui_set` can read and drive it. Views
+   state module, so `ui_inspect` can read it and commands can drive it. Views
    read `&Session` state and emit commands; they never mutate the core
    directly. State machines live in `nf-core`, including Follow/Inspect,
    recording, calibration and feedback phases.
@@ -196,40 +197,44 @@ must produce an error the user or agent can act on, never a panic.
 - Pin git deps to a `rev`, and add the repo to `[sources] allow-git` in `deny.toml`.
 - Run `cargo deny check` before committing (it is part of the gates).
 
-## 4. MCP and the control channel
+## 4. MCP, CLI and the control channel
+
+Usage and client setup: `docs/automation.md`.
 
 - **Add a command, not a tool.** Tools are:
-  - the generic `command_list`, `command_describe` (input and output JSON
-    Schema), `command_run` and `command_batch`;
+  - the generic `command_list`, `command_describe` (metadata and the input
+    JSON Schema), `command_run` and `command_batch`;
   - a few session tools: `status` (includes `revision`), `bands_get`,
-    `screenshot`, `clock_advance`, `device_list`, `recording_export`;
-  - in bridge mode, `ui_inspect`/`ui_set`.
+    `clock_advance`, `device_list`, `recording_export`;
+  - in bridge mode only, `screenshot` and `ui_inspect`.
 
-  A new tool needs a reason that is about the session itself.
+  A new tool needs a reason that is about the session itself. Every path
+  (`neurofeed-cli run|batch|serve|mcp`, the bridge) goes through
+  `NfMcp::call`. Do not add a second dispatcher.
 - Tool names use underscores; command ids are dotted.
 - Every tool has a `title` and honest annotations (read-only,
   destructive, idempotent, open-world).
-- Arguments are `additionalProperties: false`. Unknown or invalid
-  arguments get `-32602`, and the error lists the valid ones. Domain
-  failures are `isError: true` with an actionable message.
+- Arguments are `additionalProperties: false`. An unknown tool or argument
+  gets `-32602`. Domain failures (including a bad command id or bad params)
+  are `isError: true` with an actionable message.
 - `command_batch` pre-validates every step and rolls back on failure. The
   reply names the failing step and lists what was applied and what was
   not run.
-- Replies stay small by default (compact mode, no unfiltered dumps), and
-  screenshots are downscaled. Long jobs report progress and can be
-  cancelled.
+- Keep replies small (no unfiltered dumps).
 - Two modes:
   - **headless**: an in-process Session plus a simulator, the default for
     tests;
   - **bridge**: loopback TCP JSON lines to the running app, with a
     per-launch token read from a file.
 
-  Never paste the token anywhere. There is no MCP on web.
-- Files: tools reach only the app folder, scratch and `--allow-path`
-  folders. Paths are resolved before they are compared.
-- Keep `docs/mcp.md` and any bundled agent skills in step with the
-  commands. A test fails when a doc names a tool or command that no
-  longer exists (to add).
+  Never paste the token anywhere. There is no control channel on web or
+  Android.
+- Not implemented yet (do not document them as existing): output schemas,
+  a widget-setting tool (ui_set), a path allow-list for `path` arguments, progress and cancel for
+  long jobs.
+- Keep `docs/automation.md` and any bundled agent skills in step with the
+  commands. `apps/neurofeed-cli/tests/cli.rs` fails when one of those docs
+  names a tool or command that does not exist.
 
 ## 5. egui pitfalls
 

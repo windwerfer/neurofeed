@@ -1,4 +1,4 @@
-//! Bridge: lets `neurofeed-mcp --bridge` drive the *running* desktop app.
+//! Bridge: lets `neurofeed-cli --bridge` drive the *running* desktop app.
 //!
 //! The app binds `127.0.0.1:<random port>` and writes `{addr, token, pid}`
 //! to a discovery file readable only by the user (0600). A client must send
