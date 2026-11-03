@@ -148,9 +148,7 @@ client at the **built binary**. The first `cargo run --release` compile takes
 minutes and usually exceeds a client's startup timeout. Use `cargo run` only
 when you are changing the server itself.
 
-Cursor uses the committed [`.cursor/mcp.json`](../.cursor/mcp.json), which
-holds a `neurofeed` server (live app) and a `neurofeed-headless` server (the
-`cargo run` variant):
+Cursor reads `.cursor/mcp.json` (not committed; create it locally):
 
 ```json
 { "mcpServers": { "neurofeed": {
@@ -228,6 +226,20 @@ fault is on the phone (permissions, droidplug), not in the Muse decode.
   UDP 9000.
 - No Muse found on Linux: check that BlueZ is running, that `rfkill` does not
   block it, and that `bluetoothctl scan on` sees the headset. Then try
-  `device.scan` followed by `device_list`.
+  `device.scan` followed by `device_list`. The scan runs on every adapter.
+  It lists a device when its name starts with "Muse" (any case) or when it
+  advertises the Muse service 0xFE8D (shown as "Muse" until the name
+  arrives). RSSI is optional. A device BlueZ had cached before the scan
+  started, and that reports no RSSI, is treated as not nearby. A headset
+  drops off the list 10 s after its last advertisement. A Muse that is
+  connected (to the phone, say) does not advertise.
+- See every advertisement: start the desktop app with `RUST_LOG=nf_device=debug`. Each poll
+  logs `BLE adv id=... name=... rssi=... muse_service=... -> listed|ignored`.
+  Adapter, scan and connect failures appear in `device.status` under
+  `provider_errors`.
+- Connect fails with "not seen in a 4 s rescan": muse-rs cannot reuse the
+  scan's peripheral, so connecting rescans for 4 s and picks the selected
+  BLE id. Keep the headset on and close by, and make sure nothing else is
+  connected to it.
 - Port 9000 already in use (Crown OSC): another NeuroFeed instance is
   running. Use `--no-hardware`.
