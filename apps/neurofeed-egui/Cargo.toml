@@ -24,9 +24,9 @@ default = ["native-audio"]
 native-audio = ["dep:cpal"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-nf-device.workspace = true
+nf-device = { workspace = true, features = ["ble", "osc", "lsl"] }
 nf-ai.workspace = true
-nf-mcp = { workspace = true, default-features = false }
+nf-mcp.workspace = true # dispatcher + bridge, no stdio server
 png = "0.18"
 cpal = { version = "0.18", optional = true }
 nf-store = { workspace = true, features = ["sqlite"] }

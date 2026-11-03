@@ -18,9 +18,9 @@ nf-format = { path = "crates/nf-format" }
 nf-sim = { path = "crates/nf-sim" }
 nf-feedback = { path = "crates/nf-feedback" }
 nf-core = { path = "crates/nf-core" }
-nf-mcp = { path = "crates/nf-mcp" }
+nf-mcp = { path = "crates/nf-mcp", default-features = false }
 nf-store = { path = "crates/nf-store" }
-nf-device = { path = "crates/nf-device" }
+nf-device = { path = "crates/nf-device", default-features = false }
 nf-import = { path = "crates/nf-import" }
 nf-ai = { path = "crates/nf-ai" }
 nf-audio = { path = "crates/nf-audio", default-features = false }

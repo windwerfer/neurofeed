@@ -10,15 +10,15 @@ publish.workspace = true
 name = "neurofeed-cli"
 path = "src/main.rs"
 
-# Compatibility name: same binary, defaults to the `mcp` subcommand.
+# Compatibility name: same CLI, defaults to the `mcp` subcommand.
 [[bin]]
 name = "neurofeed-mcp"
-path = "src/main.rs"
+path = "src/bin/neurofeed-mcp.rs"
 
 [dependencies]
 nf-core.workspace = true
-nf-mcp.workspace = true
-nf-device.workspace = true
+nf-mcp = { workspace = true, features = ["server"] }
+nf-device = { workspace = true, features = ["ble", "osc", "lsl"] }
 nf-ai.workspace = true
 nf-store = { workspace = true, features = ["sqlite"] }
 rmcp = { version = "3.8", default-features = false, features = ["server", "transport-io"] }
