@@ -161,6 +161,8 @@ pub struct Persisted {
     pub streaming: crate::streaming::StreamSettings,
     #[serde(default)]
     pub ai: crate::ai::AiSettings,
+    /// Auto-reconnect target: the last real device that streamed.
+    pub last_device: Option<String>,
 }
 
 impl Default for Persisted {
@@ -182,6 +184,7 @@ impl Persisted {
             guard: s.feedback.guard,
             streaming: crate::streaming::StreamSettings { enabled: false, ..s.streaming.settings.clone() },
             ai: s.ai.settings.clone(),
+            last_device: s.auto.target.clone(),
         }
     }
 
@@ -195,6 +198,7 @@ impl Persisted {
         s.feedback.guard = self.guard;
         s.streaming.settings = crate::streaming::StreamSettings { enabled: s.streaming.settings.enabled, ..self.streaming };
         s.ai.settings = self.ai;
+        s.auto.target = self.last_device;
     }
 }
 

@@ -15,6 +15,7 @@ Athena optics stays there: [../TODO/athena-optics-contract.md](../TODO/athena-op
 | [fileformat_v6.md](fileformat_v6.md) | **Implemented / LOCKED** | `.neurofeed` v6 (NFED6): unified recording+feedback metadata, container layout, computed Trust extras. Human spec: [../../README_feedback_format.md](../../README_feedback_format.md) |
 | [app-folder.md](app-folder.md) | **Implemented** | App folder, cache, AI models, export, and the save-folder move. |
 | [feedback-disconnect.md](feedback-disconnect.md) | **Frozen** | Feedback link loss pauses the session and its audio. The same device continues it. A disconnect does not end the session. Code still auto-ends; that end is retired by this contract. |
+| [device-autoconnect.md](device-autoconnect.md) | **Implemented** | Device dialog scans while open; background burst search reconnects only the last real device; new devices need the user; user Disconnect suspends until the next connect or restart |
 
 Archived (historical v5 / NFED5):
 [../archive/session-format-contract-v5.md](../archive/session-format-contract-v5.md).

@@ -9,7 +9,7 @@ use crate::signal::{mains_name, Signal, SPEC_HOP_S};
 use crate::state::{AppState, BandScale, View};
 use crate::{CoreError, Reply};
 use nf_sim::SimProvider;
-use nf_types::{AccelPacket, Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
+use nf_types::{AccelPacket, Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
 
 /// One poll of the device: EEG, optical, accelerometer.
 type Polled = (Vec<EegPacket>, Vec<PpgPacket>, Vec<AccelPacket>);
@@ -37,6 +37,11 @@ pub enum Event {
     },
     Disconnected {
         id: String,
+    },
+    /// Background reconnect tried the remembered device (`error` if opening failed).
+    AutoReconnect {
+        id: String,
+        error: Option<String>,
     },
     Paused {
         paused: bool,
@@ -623,6 +628,7 @@ impl Session {
                 self.checkpoint();
             }
         }
+        self.auto_reconnect(now);
         self.ai_tick();
         self.feedback_tick(now);
     }
@@ -1173,8 +1179,15 @@ impl Session {
                 self.state.band_scale = scale;
                 self.emit(Event::ScaleChanged { scale });
             }
-            Command::DeviceConnect { id } => self.connect(&id)?,
-            Command::DeviceDisconnect => self.disconnect(),
+            Command::DeviceConnect { id } => {
+                self.connect(&id)?;
+                self.state.auto.suspended = false;
+            }
+            Command::DeviceDisconnect => {
+                self.disconnect();
+                self.state.auto.suspended = true;
+                self.state.auto.stop();
+            }
             Command::DeviceDialog { open } => {
                 self.state.device_dialog = open;
                 if open {
@@ -1191,6 +1204,7 @@ impl Session {
                 for p in self.providers.iter_mut().filter(|p| p.can_scan()) {
                     p.stop_scan();
                 }
+                self.state.auto.burst_now();
                 return Ok(json!({ "open": false, "scanning": self.scanning() }));
             }
             Command::DeviceScan { seconds } => {
@@ -1456,6 +1470,84 @@ impl Session {
         Ok(())
     }
 
+    /// `dialog` (Device dialog watch), `background` (auto-reconnect search),
+    /// `timed` (`device.scan`) or `idle`.
+    fn scan_mode(&self) -> &'static str {
+        if self.state.device_dialog {
+            "dialog"
+        } else if self.state.auto.searching_since.is_some() {
+            "background"
+        } else if self.scanning().is_empty() {
+            "idle"
+        } else {
+            "timed"
+        }
+    }
+
+    /// The device to look for: the remembered one, while nothing is connected
+    /// or while that same device's link is lost, unless the user disconnected.
+    fn reconnect_target(&self) -> Option<String> {
+        let a = &self.state.auto;
+        let target = a.target.as_ref().filter(|_| !a.suspended)?;
+        match (&self.state.device, &self.state.link) {
+            (None, _) => Some(target.clone()),
+            (Some(d), Some(LinkState::Lost { .. })) if &d.id == target => Some(target.clone()),
+            _ => None,
+        }
+    }
+
+    /// Contract `.ai/contracts/device-autoconnect.md`: remember the streaming
+    /// device, keep the dialog's watch up, and while the remembered device is
+    /// gone, scan in bursts and reconnect it (never any other device).
+    fn auto_reconnect(&mut self, now: f64) {
+        let connecting = matches!(self.state.link, Some(LinkState::Connecting));
+        if let (Some(d), Some(LinkState::Streaming)) = (&self.state.device, &self.state.link) {
+            if !d.simulated && self.state.auto.target.as_deref() != Some(d.id.as_str()) {
+                self.state.auto.target = Some(d.id.clone());
+                self.persist_settings();
+            }
+        }
+        if self.state.device_dialog && !connecting && self.state.auto.take_rearm(now) {
+            for p in self.providers.iter_mut().filter(|p| p.can_scan() && !p.scanning()) {
+                p.watch().ok(); // errors show in provider_errors
+            }
+        }
+        if connecting {
+            return;
+        }
+        let Some(id) = self.reconnect_target() else {
+            self.state.auto.stop();
+            return;
+        };
+        self.state.auto.search(now);
+        if self.device_list().iter().any(|d| d.id == id) {
+            if self.state.auto.take_attempt(now) {
+                let error = self.reconnect(&id).err().map(|e| e.to_string());
+                self.emit(Event::AutoReconnect { id, error });
+            }
+            return;
+        }
+        if !self.state.device_dialog && self.state.auto.take_burst(now) {
+            let scheme = crate::autoconnect::scheme(&id);
+            for p in self.providers.iter_mut().filter(|p| p.can_scan() && p.scheme() == scheme) {
+                p.scan(crate::autoconnect::BURST_S).ok();
+            }
+        }
+    }
+
+    /// Reopen the same device in place (keeps the recording and feedback
+    /// session, which wait for this id), or connect it from scratch.
+    fn reconnect(&mut self, id: &str) -> Result<(), CoreError> {
+        if self.state.device.as_ref().is_some_and(|d| d.id == id) {
+            let src = self.open(id)?;
+            self.state.link = Some(src.link());
+            self.source = Some(src);
+            self.state.revision += 1;
+            return Ok(());
+        }
+        self.connect(id)
+    }
+
     fn disconnect(&mut self) {
         self.stop_recording("device disconnected");
         self.source = None;
@@ -1560,6 +1652,14 @@ impl Session {
                 "battery": s.battery,
                 "streaming": s.streaming.running(),
                 "dialog_open": s.device_dialog,
+                "scan_mode": self.scan_mode(),
+                "auto_reconnect": {
+                    "target": s.auto.target,
+                    "suspended": s.auto.suspended,
+                    "searching": s.auto.searching_since.is_some(),
+                    "attempts": s.auto.attempts,
+                    "next_scan_in_s": s.auto.next_scan_in(s.time),
+                },
                 "snapshots": s.bands.len(),
                 "paused": s.paused,
             }),

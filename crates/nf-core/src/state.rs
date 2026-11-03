@@ -163,6 +163,8 @@ pub struct AppState {
     pub battery: Option<f32>,
     /// The Device dialog (current device + scan list) is open.
     pub device_dialog: bool,
+    /// Background reconnect to the last device (`.ai/contracts/device-autoconnect.md`).
+    pub auto: crate::autoconnect::AutoReconnect,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -192,6 +194,7 @@ impl Default for AppState {
             link: None,
             battery: None,
             device_dialog: false,
+            auto: crate::autoconnect::AutoReconnect::default(),
             history_location: "memory".into(),
             recovery: None,
             faults: Vec::new(),

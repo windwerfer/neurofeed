@@ -694,7 +694,7 @@ pub const SPECS: &[CommandSpec] = &[
         "Open/close the Device dialog. While it is open, Muse BLE and Crown OSC stay in discovery.",
         always,
     ),
-    spec("device.status", "Device status", "device", true, "Connected device and buffered snapshot count.", always),
+    spec("device.status", "Device status", "device", true, "Connected device, link, scan_mode, auto_reconnect target and buffered snapshot count.", always),
     spec(
         "sim.configure",
         "Configure simulator",

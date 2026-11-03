@@ -138,6 +138,15 @@ Crown OSC until `{"open":false}`), or `device.scan {"seconds":8}`. Then use
 call `device.connect {"id":"muse:..."}`. Scan failures appear in
 `device.status` under `provider_errors`.
 
+The last real device that streamed is remembered (`settings.get` →
+`last_device`). While nothing is connected, the app scans in short bursts
+(6 s every 30 s, every 2 min after 5 min) and reconnects that device only.
+Other devices always need `device.connect`. `device.disconnect` turns this
+off until the next connect or app start. `device.status` shows `scan_mode`
+(`dialog`, `background`, `timed`, `idle`) and `auto_reconnect`
+(`target`, `suspended`, `searching`, `attempts`, `next_scan_in_s`). Contract:
+[.ai/contracts/device-autoconnect.md](../.ai/contracts/device-autoconnect.md).
+
 A `screenshot` `path` is written by the CLI process, not by the app. The
 screenshot times out after 5 s, and any other bridge reply after 30 s.
 

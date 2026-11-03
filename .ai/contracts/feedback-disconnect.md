@@ -26,7 +26,7 @@ Bad signal is unchanged: all gate pads critical for 10 s still enters `interrupt
 
 The 30 s silence timer that emits `Disconnected` stays. This contract changes what the session does with that event.
 
-`allowAutoReconnect == false` (manual **Disconnect**) must not end the session. This contract does not require an automatic scan after that tap. A later connect of the latched id still continues the session.
+`allowAutoReconnect == false` (manual **Disconnect**) must not end the session. This contract does not require an automatic scan after that tap ([device-autoconnect.md](device-autoconnect.md): a user Disconnect suspends auto-reconnect). A later connect of the latched id still continues the session.
 
 ---
 

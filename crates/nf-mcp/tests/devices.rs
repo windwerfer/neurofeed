@@ -122,6 +122,9 @@ fn push_transport_streams_like_a_muse_and_reports_drop() {
     assert_eq!(st["link"]["state"], "streaming");
     let raw = ok(&s, "raw.get", json!({ "seconds": 2.0, "filtered": false }));
     assert_eq!(raw["channels"][0]["samples"].as_array().unwrap().len(), 512);
+    // Headset gone (no longer announced); while it is listed, auto-reconnect
+    // would reopen it at once (.ai/contracts/device-autoconnect.md).
+    handle.forget("android:AA");
     feed.link(LinkState::Lost { reason: "BLE link lost".into() });
     ok(&s, "clock.advance", json!({ "seconds": 0.1 }));
     assert_eq!(ok(&s, "device.status", Value::Null)["link"], json!({ "state": "lost", "reason": "BLE link lost" }));

@@ -150,6 +150,12 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
             });
         }
     });
+    let auto = &state.auto;
+    if let (Some(t), Some(_)) = (&auto.target, auto.searching_since) {
+        ui.weak(format!("Waiting for {t} to come back (reconnects on its own)."));
+    } else if let (Some(t), true) = (&auto.target, auto.suspended) {
+        ui.weak(format!("Auto-reconnect to {t} is off until you connect a device."));
+    }
     for e in session.provider_errors() {
         ui.colored_label(ui.visuals().error_fg_color, e);
     }

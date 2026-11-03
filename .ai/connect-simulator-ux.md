@@ -5,6 +5,9 @@
 **Branch:** `feat/connect-simulator-ux`  
 **Handoff (landed):** [archive/handoff-connect-simulator-ux.md](archive/handoff-connect-simulator-ux.md)
 
+When the app scans and what it connects on its own (dialog watch, background
+reconnect of the last device): [contracts/device-autoconnect.md](contracts/device-autoconnect.md).
+
 Do not mix with Crown OSC connect, unlocking Crown sessions, or pipeline-contract
 Key Decisions. Session-charts work is done on `main`.
 

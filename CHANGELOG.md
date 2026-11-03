@@ -24,6 +24,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   scripts under `scripts/`.
 - Build version from the git tag (`scripts/version.sh`; override with
   `NEUROFEED_VERSION` or `--version`), shown in About, sessions and MCP.
+- Auto-reconnect: the last real device that streamed is remembered across
+  restarts. While nothing is connected, the app scans in bursts and reconnects
+  only that device; new devices still need Connect. Disconnect pauses this until
+  the next connect. `device.status` shows `scan_mode` and `auto_reconnect`.
 
 ### Changed
 - License metadata is Apache-2.0 everywhere (Cargo workspace said MIT by mistake).
