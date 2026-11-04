@@ -1,17 +1,42 @@
-# NeuroFeed (Rust)
+# NeuroFeed
 
-Rust-only rewrite of NeuroFeed: a headless core (`nf-core`), an MCP server
-exposing every command (`nf-mcp`), signal processing (`nf-dsp`), recording
+****
+*
+*  the app is porting from Flutter + Rust to pure Rust at the moment, the whole UI is just preliminary at the moment.
+*  it will take me a while to bring it back to how it behaved, so no new releases for a while.
+*  
+*  the reason is, that i saw the software design of PhotoCraft and see now that mixing Flutter and Rust is possible but makes 
+*  the development process for AI agents unnesseccarily complicated. Its an experiment so far, but it seems very potent.
+*
+****
+
+EEG brainwave viewer and feedback. At the moment we support Muse 2, Muse S, Muse Athena
+and the Neurosity Crown as input devices. 
+
+- Bands Monitor
+- Raw EEG
+- Historgram
+- Spectogram
+- Feedback System is beeing worked on (using freely available, labeled EEG data, we try to find
+  feedback presets that helps train you mind)
+- Record your Brainwaves and export them to EDF+ or CSV
+- Import from EDF data or MindMonitors CVS
+
+This is a pure Rust implementation, making it natively on Windows, Linux, Mac and Android, or on every system with
+chrome support through WEB Assembly.
+
+The Project is structurally heavily inspired by PhotoCraft's approach to make AI agents able to use the programm through 
+a headless core (`nf-core`), an MCP server and exposing every command (`nf-mcp`) through cli. Signal processing (`nf-dsp`), recording
 formats NFED6/EDF+ (`nf-format`), deterministic raw-sample device simulators
 (`nf-sim`), and an egui/eframe UI for desktop and web (Android later).
 
-Status: Phase 3 + PPG. Functional views: **Bands, Raw EEG, PSD, Spectrogram,
-Histogram, HR+SpO2** (simulators `sim:muse_s`, `sim:muse2`, `sim:athena` (no PPG), `sim:crown`;
-`sim:muse` is an alias of `sim:muse_s`), plus record/stop and an auto/50/60/off
-notch with per-pad quality in the top bar. Everything is also reachable via
-MCP (`raw.get`, `psd.get`, `spectrogram.get`, `histogram.get`,
-`signal.status`, `features.get`, `hr.get`, `spo2.get`, `ppg.get`, `mains.set`, `recording.*`).
-Desktop start view: `NF_VIEW=psd cargo run -p neurofeed-egui`.
+
+# how to run
+
+Check out the release page if you just want to use it. If you want to help with improving or want to compile it yourself, i recommend using
+the development container. you only need rust installed for the desktop version, for android builds you need the whole android toolchain (scripts for
+easy setup are in the .devcontainer subfolder). I use Zed as my editing IDE and podman, so expect small glitches with VS Code and docker. 
+
 
 ```sh
 # prerequisites: rustup target add wasm32-unknown-unknown; cargo install trunk
