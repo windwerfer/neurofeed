@@ -21,9 +21,28 @@ static PAUSED: AtomicBool = AtomicBool::new(false);
 /// System-bar insets in px (left, top, right, bottom), stored as f32 bits.
 static INSETS: [AtomicU32; 4] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
 
+/// Logcat (tag `neurofeed`) plus a panic hook that logs the panic message,
+/// location, thread and a backtrace before the process dies; without it a Rust
+/// panic only shows up as a bare SIGABRT. Idempotent: called from `nativeInit`
+/// (Java main thread, before `android_main`) and from `android_main`.
+fn init_logging() {
+    static HOOK: std::sync::Once = std::sync::Once::new();
+    android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("neurofeed"));
+    HOOK.call_once(|| {
+        let prev = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let thread = std::thread::current();
+            let name = thread.name().unwrap_or("<unnamed>");
+            let bt = std::backtrace::Backtrace::force_capture();
+            log::error!("PANIC on thread '{name}': {info}\n{bt}");
+            prev(info);
+        }));
+    });
+}
+
 #[no_mangle]
 fn android_main(app: AndroidApp) {
-    android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("neurofeed"));
+    init_logging();
     // App-private storage: the desktop code resolves its data dir from these.
     if let Some(dir) = app.internal_data_path() {
         std::env::set_var("HOME", &dir);
@@ -114,6 +133,7 @@ fn guard(env: *mut jni::sys::JNIEnv, name: &str, f: impl FnOnce(&mut Env) -> jni
 
 #[no_mangle]
 pub extern "system" fn Java_org_neurofeed_android_MainActivity_nativeInit(env: *mut jni::sys::JNIEnv, _c: JClass, _ctx: JObject) {
+    init_logging();
     guard(env, "btleplug init", |env| {
         match btleplug::platform::init(env) {
             Ok(()) => log::info!("btleplug initialized"),
