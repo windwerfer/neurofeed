@@ -204,8 +204,7 @@ impl eframe::App for NeuroFeedApp {
     /// Keep the UI out from under the status / navigation bars (Android).
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
         let Some(p) = crate::platform::get() else { return };
-        let ppp = ctx.pixels_per_point().max(0.1);
-        let [left, top, right, bottom] = p.safe_insets_px().map(|v| v / ppp);
+        let [left, top, right, bottom] = crate::platform::insets_pt(p.safe_insets_px(), ctx.pixels_per_point(), p.min_top_inset_pt());
         raw.safe_area_insets = Some(egui::SafeAreaInsets(egui::epaint::MarginF32 { left, right, top, bottom }));
     }
 

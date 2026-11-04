@@ -114,11 +114,59 @@ impl Platform for Hooks {
     fn keep_screen_on(&self, on: bool) {
         call_void!("keepScreenOn", "(Z)V", &[JValue::Bool(on)]);
     }
+    fn min_top_inset_pt(&self) -> f32 {
+        FALLBACK_TOP_PT
+    }
     fn take_paused(&self) -> bool {
         PAUSED.swap(false, Ordering::Relaxed)
     }
     fn safe_insets_px(&self) -> [f32; 4] {
+        poll_insets();
         INSETS.each_ref().map(|a| f32::from_bits(a.load(Ordering::Relaxed)))
+    }
+}
+
+/// Status bar height used when Android reports no insets at all.
+const FALLBACK_TOP_PT: f32 = 28.0;
+
+/// Re-read the insets from the decor view (at most every 500 ms): covers a
+/// missed / consumed `OnApplyWindowInsetsListener` and rotation changes.
+fn poll_insets() {
+    static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+    {
+        let Ok(mut last) = LAST.lock() else { return };
+        if last.is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(500)) {
+            return;
+        }
+        *last = Some(std::time::Instant::now());
+    }
+    let r = with_activity(|env, a| {
+        let win = env.call_method(a, jni::jni_str!("getWindow"), jni::jni_sig!("()Landroid/view/Window;"), &[])?.l()?;
+        let decor = env.call_method(&win, jni::jni_str!("getDecorView"), jni::jni_sig!("()Landroid/view/View;"), &[])?.l()?;
+        let ins =
+            env.call_method(&decor, jni::jni_str!("getRootWindowInsets"), jni::jni_sig!("()Landroid/view/WindowInsets;"), &[])?.l()?;
+        if ins.is_null() {
+            return Ok(None);
+        }
+        let mut v = [0; 4];
+        for (slot, m) in v.iter_mut().zip([
+            jni::jni_str!("getSystemWindowInsetLeft"),
+            jni::jni_str!("getSystemWindowInsetTop"),
+            jni::jni_str!("getSystemWindowInsetRight"),
+            jni::jni_str!("getSystemWindowInsetBottom"),
+        ]) {
+            *slot = env.call_method(&ins, m, jni::jni_sig!("()I"), &[])?.i()?;
+        }
+        Ok(Some(v))
+    });
+    match r {
+        Ok(Some(v)) if v.iter().any(|&x| x > 0) => {
+            for (a, x) in INSETS.iter().zip(v) {
+                a.store((x.max(0) as f32).to_bits(), Ordering::Relaxed);
+            }
+        }
+        Ok(_) => {}
+        Err(e) => log::debug!("insets poll: {e}"),
     }
 }
 
