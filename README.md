@@ -1,14 +1,22 @@
 # NeuroFeed
 
-****
-*
-*  the app is porting from Flutter + Rust to pure Rust at the moment, the whole UI is just preliminary at the moment.
-*  it will take me a while to bring it back to how it behaved, so no new releases for a while.
-*  
-*  the reason is, that i saw the software design of PhotoCraft and see now that mixing Flutter and Rust is possible but makes 
-*  the development process for AI agents unnesseccarily complicated. Its an experiment so far, but it seems very potent.
-*
-****
+<p align="center">
+  <a href="https://getartcraft.com/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/neurofeed_icon.png">
+      <img alt="NeuroFeed" src="assets/neurofeed_icon.png" width="200">
+    </picture>
+  </a>
+</p>
+
+## Notice
+
+the app is porting from Flutter + Rust to pure Rust at the moment, the whole UI is just preliminary at the moment.
+it will take me a while to bring it back to how it behaved. If you would like to try the old more polished UI, use [release 0.60.0](https://github.com/windwerfer/neurofeed/releases/tag/0.60.0).
+  
+(Why? mixing Flutter and Rust is possible but makes the development process unnecessarily complicated. I saw the software design of PhotoCraft, and there way to build for AI coding is just superior. Its an experiment so far, but it seems like a viable path.)
+
+# About the App
 
 EEG brainwave viewer and feedback. At the moment we support Muse 2, Muse S, Muse Athena
 and the Neurosity Crown as input devices. 
