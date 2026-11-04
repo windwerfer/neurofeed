@@ -8,7 +8,8 @@ const BINS: usize = 64;
 const HALF_RANGE_UV: f64 = 100.0;
 
 pub fn show(ui: &mut egui::Ui, session: &Session) {
-    let Some((dev, sig)) = plot::header(ui, session, "Histogram", "conditioned amplitude, last 2 s, 64 bins over ±100 µV") else {
+    let Some((dev, sig)) = plot::header(ui, session, &t!("histogram-histogram"), "conditioned amplitude, last 2 s, 64 bins over ±100 µV")
+    else {
         return;
     };
     let n = (2.0 * sig.rate) as usize;

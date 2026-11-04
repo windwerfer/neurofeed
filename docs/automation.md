@@ -155,7 +155,10 @@ screenshot times out after 5 s, and any other bridge reply after 30 s.
 `settings.set {"layout":"compact"}` forces the phone layout (compact top bar,
 bottom navigation, full-screen Device sheet) on any window; `"regular"`
 forces sidebar + top bar; `"auto"` (default) switches below 600 px width.
-Combine with `screenshot` to capture either mode. Contract:
+Combine with `screenshot` to capture either mode.
+`settings.set {"language":"de"}` switches the UI to German (`"en"`, or
+`"auto"` = system locale, the default); tool and CLI output stay English.
+Contract: [.ai/contracts/i18n.md](../.ai/contracts/i18n.md). Contract:
 [.ai/contracts/ui-layout.md](../.ai/contracts/ui-layout.md).
 
 ## MCP clients

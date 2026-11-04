@@ -15,10 +15,10 @@ pub(super) fn notes(ui: &mut egui::Ui, session: &Session, id: u64, out: &mut Vec
     let key = Id::unique(("notes", id));
     let mut d: Draft = ui.data(|x| x.get_temp(key)).unwrap_or_default();
     let mut text = d.0.clone().unwrap_or_else(|| saved.clone());
-    ui.label(RichText::new("Notes").strong());
+    ui.label(RichText::new(t!("meta-notes")).strong());
     let r = ui.add(
         egui::TextEdit::multiline(&mut text)
-            .hint_text("How did it feel? Sleep, caffeine, posture, distractions…")
+            .hint_text(t!("meta-how-did-it-feel-sleep"))
             .desired_rows(3)
             .desired_width(ui.available_width().min(820.0))
             .char_limit(nf_core::MAX_NOTES),
@@ -29,11 +29,11 @@ pub(super) fn notes(ui: &mut egui::Ui, session: &Session, id: u64, out: &mut Vec
     let dirty = d.0.as_ref().is_some_and(|t| *t != saved);
     ui.horizontal(|ui| {
         let enabled = session.enabled("history.notes");
-        if ui.add_enabled(dirty && enabled.is_ok(), egui::Button::new("Save notes")).clicked() {
+        if ui.add_enabled(dirty && enabled.is_ok(), egui::Button::new(t!("meta-save-notes"))).clicked() {
             out.push(Command::HistoryNotes { id, notes: text.clone() });
             d.0 = None;
         }
-        if ui.add_enabled(dirty, egui::Button::new("Revert")).clicked() {
+        if ui.add_enabled(dirty, egui::Button::new(t!("meta-revert"))).clicked() {
             d.0 = None;
         }
         if dirty {
@@ -64,25 +64,25 @@ fn s(v: &Value) -> String {
 /// Collapsible "Recording context" from `SessionMeta::context`.
 pub(super) fn context(ui: &mut egui::Ui, ctx: Option<&Value>) {
     let Some(c) = ctx else {
-        ui.weak("No recording context (recorded before v4 or imported).");
+        ui.weak(t!("meta-no-recording-context-recorded-before"));
         return;
     };
-    egui::CollapsingHeader::new("Recording context").default_open(false).show(ui, |ui| {
+    egui::CollapsingHeader::new(t!("meta-recording-context")).default_open(false).show(ui, |ui| {
         egui::Grid::new("ctx").num_columns(2).spacing([16.0, 4.0]).show(ui, |ui| {
             let p = &c["protocol"];
             if !p.is_null() {
-                row(ui, "Protocol", format!("{} ({})", s(&p["title"]), s(&p["id"])));
-                row(ui, "Reward feature", s(&p["feature"]));
-                row(ui, "Planned minutes", s(&c["minutes"]));
-                row(ui, "Threshold percentile", s(&c["percentile"]));
-                row(ui, "Drowsiness guard", s(&c["guard"]));
+                row(ui, &t!("meta-protocol"), format!("{} ({})", s(&p["title"]), s(&p["id"])));
+                row(ui, &t!("meta-reward-feature"), s(&p["feature"]));
+                row(ui, &t!("meta-planned-minutes"), s(&c["minutes"]));
+                row(ui, &t!("meta-threshold-percentile"), s(&c["percentile"]));
+                row(ui, &t!("meta-drowsiness-guard"), s(&c["guard"]));
             }
             let sub = c["settings"]["subject"].as_str().unwrap_or_default();
-            row(ui, "Subject", if sub.is_empty() { "anonymous".into() } else { sub.to_owned() });
-            row(ui, "Mains notch", s(&c["mains"]));
+            row(ui, &t!("meta-subject"), if sub.is_empty() { "anonymous".into() } else { sub.to_owned() });
+            row(ui, &t!("meta-mains-notch"), s(&c["mains"]));
             let a = &c["audio"];
-            row(ui, "Sound", format!("{} · background {} · master {}", s(&a["reward"]), s(&a["background"]), s(&a["master"])));
-            row(ui, "App version", s(&c["app_version"]));
+            row(ui, &t!("meta-sound"), format!("{} · background {} · master {}", s(&a["reward"]), s(&a["background"]), s(&a["master"])));
+            row(ui, &t!("meta-app-version"), s(&c["app_version"]));
         });
     });
 }

@@ -53,7 +53,7 @@ fn success(m: &SessionMeta) -> Option<f64> {
 
 fn title(m: &SessionMeta, custom: &[nf_core::nf_feedback::Protocol]) -> String {
     m.protocol.clone().map_or_else(
-        || if m.import.is_some() { "Imported recording".into() } else { "Recording".into() },
+        || if m.import.is_some() { t!("history-imported-recording") } else { t!("history-recording") },
         |p| nf_core::protocols::find(custom, &p).map_or(p, |x| x.title),
     )
 }
@@ -63,14 +63,14 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let mut st: Ui = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     let state = session.state();
     ui.add_space(6.0);
-    ui.heading(RichText::new("History").size(24.0));
+    ui.heading(RichText::new(t!("history-history")).size(24.0));
     ui.horizontal(|ui| {
         ui.weak(format!("{} saved session(s) · {}", state.history.len(), state.history_location));
         super::import::show(ui, session, out);
     });
     ui.add_space(10.0);
     if state.history.is_empty() {
-        ui.label("No sessions yet. Every training is saved here when it ends.");
+        ui.label(t!("history-no-sessions-yet-every-training"));
     }
     if st.selected.is_some_and(|s| !state.history.iter().any(|m| m.id == s)) {
         st.selected = None;
@@ -94,7 +94,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
                     );
                     ui.horizontal(|ui| {
                         let mut p = st.picked.contains(&m.id);
-                        if ui.checkbox(&mut p, "").on_hover_text("Select for bulk export").changed() {
+                        if ui.checkbox(&mut p, "").on_hover_text(t!("history-select-for-bulk-export")).changed() {
                             if p {
                                 st.picked.insert(m.id)
                             } else {
@@ -145,9 +145,11 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
     super::meta::notes(ui, session, m.id, out);
     ui.add_space(10.0);
     ui.horizontal(|ui| {
-        for (fmt, name) in
-            [(ExportFormat::Nfed6, "Export .neurofeed"), (ExportFormat::Edf, "Export EDF"), (ExportFormat::Pdf, "Export PDF")]
-        {
+        for (fmt, name) in [
+            (ExportFormat::Nfed6, t!("history-export-neurofeed")),
+            (ExportFormat::Edf, t!("history-export-edf")),
+            (ExportFormat::Pdf, t!("history-export-pdf")),
+        ] {
             let r = ui.add_enabled(cfg!(not(target_arch = "wasm32")), egui::Button::new(name));
             let r = r.on_disabled_hover_text("export from the web build is not available yet");
             if r.clicked() {
@@ -155,25 +157,26 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
             }
         }
         let open = session.enabled("history.open");
-        let r = ui.add_enabled(open.is_ok(), egui::Button::new("Open in graphs"));
-        let r = r.on_hover_text("Replay this session as the live device in Bands, Raw EEG, Spectrogram, …");
+        let r = ui.add_enabled(open.is_ok(), egui::Button::new(t!("history-open-in-graphs")));
+        let r = r.on_hover_text(t!("history-replay-this-session-as-the"));
         if r.clicked() {
             out.push(Command::HistoryOpen { id: m.id });
             out.push(Command::ViewSet { view: nf_core::View::RawEeg });
         }
         ui.add_space(20.0);
         if st.confirm == Some(m.id) {
-            ui.label(RichText::new("Delete this session permanently?").color(BAD));
-            if ui.add(egui::Button::new(RichText::new("Delete").color(Color32::WHITE)).fill(BAD.gamma_multiply(0.8))).clicked() {
+            ui.label(RichText::new(t!("history-delete-this-session-permanently")).color(BAD));
+            if ui.add(egui::Button::new(RichText::new(t!("history-delete")).color(Color32::WHITE)).fill(BAD.gamma_multiply(0.8))).clicked()
+            {
                 out.push(Command::HistoryDelete { id: m.id, confirm: true });
                 st.confirm = None;
             }
-            if ui.button("Cancel").clicked() {
+            if ui.button(t!("history-cancel")).clicked() {
                 st.confirm = None;
             }
         } else {
             let en = session.enabled("history.delete");
-            let r = ui.add_enabled(en.is_ok(), egui::Button::new(RichText::new("Delete…").color(BAD)));
+            let r = ui.add_enabled(en.is_ok(), egui::Button::new(RichText::new(t!("history-delete-2")).color(BAD)));
             if r.clicked() {
                 st.confirm = Some(m.id);
             }
@@ -192,7 +195,7 @@ fn bulk_bar(ui: &mut egui::Ui, session: &Session, st: &mut Ui) {
     }
     ui.horizontal(|ui| {
         let n = st.picked.len();
-        if ui.small_button(if n == all.len() { "Select none" } else { "Select all" }).clicked() {
+        if ui.small_button(if n == all.len() { t!("history-select-none") } else { t!("history-select-all") }).clicked() {
             st.picked = if n == all.len() { Default::default() } else { all.iter().copied().collect() };
         }
         ui.weak(format!("{n} selected"));

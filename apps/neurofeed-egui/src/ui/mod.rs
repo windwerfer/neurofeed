@@ -29,6 +29,24 @@ pub struct Shell {
     pub store_note: Option<String>,
 }
 
+/// Translated navigation label of a view.
+pub fn view_label(view: nf_core::View) -> String {
+    use nf_core::View as V;
+    match view {
+        V::Feedback => t!("view-feedback"),
+        V::History => t!("view-history"),
+        V::Bands => t!("view-bands"),
+        V::RawEeg => t!("view-raw-eeg"),
+        V::Histogram => t!("view-histogram"),
+        V::Spectrogram => t!("view-spectrogram"),
+        V::Psd => t!("view-psd"),
+        V::HeartRate => t!("view-heart-rate"),
+        V::Movement => t!("view-movement"),
+        V::Streaming => t!("view-streaming"),
+        V::Settings => t!("view-settings"),
+    }
+}
+
 /// Draw one frame and return the commands the user triggered.
 pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>) -> Vec<Command> {
     show_with(root, session, error, &mut Shell::default())
@@ -40,6 +58,7 @@ pub fn show_with(root: &mut egui::Ui, session: &Session, error: Option<&str>, sh
     let state = session.state();
     let mut out = Vec::new();
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(views::MARKS_ID), state.settings.gesture_markers));
+    crate::i18n::set(state.settings.language);
     let width = root.available_width();
     let lay = layout::pick(state.settings.layout, width);
     layout::store(ctx, lay);
@@ -78,10 +97,10 @@ fn recovery(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
                 ))
                 .color(egui::Color32::WHITE),
             );
-            if ui.button("Recover").clicked() {
+            if ui.button(t!("mod-recover")).clicked() {
                 out.push(Command::RecoveryRestore);
             }
-            if ui.button("Discard").clicked() {
+            if ui.button(t!("mod-discard")).clicked() {
                 out.push(Command::RecoveryDiscard);
             }
         });

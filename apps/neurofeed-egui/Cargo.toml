@@ -17,6 +17,9 @@ nf-store.workspace = true
 serde_json.workspace = true
 web-time = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "wasmbind", "std"] }
+fluent-bundle = "0.16.0"
+unic-langid = "0.9.6"
+sys-locale = "0.3.2"
 
 [features]
 default = ["native-audio"]

@@ -10,7 +10,7 @@ const WINDOWS: [f64; 4] = [2.0, 4.0, 8.0, 10.0];
 const BUFFER_S: f64 = 10.0;
 
 pub fn show(ui: &mut egui::Ui, session: &Session) {
-    let Some((dev, sig)) = plot::header(ui, session, "Raw EEG", "conditioned (0.5 Hz high-pass + notch), ±60 µV") else {
+    let Some((dev, sig)) = plot::header(ui, session, &t!("raw-raw-eeg"), "conditioned (0.5 Hz high-pass + notch), ±60 µV") else {
         return;
     };
     let now = session.state().time;

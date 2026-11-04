@@ -29,9 +29,9 @@ pub fn show(root: &mut egui::Ui, state: &AppState, narrow: bool, out: &mut Vec<C
             if view == View::Settings {
                 ui.separator();
             }
-            let text = if narrow { icon(view) } else { view.label() };
+            let text = if narrow { icon(view).to_owned() } else { super::view_label(view) };
             let button = egui::Button::selectable(state.view == view, text);
-            if ui.add_sized([ui.available_width(), 28.0], button).on_hover_text(view.label()).clicked() {
+            if ui.add_sized([ui.available_width(), 28.0], button).on_hover_text(super::view_label(view)).clicked() {
                 out.push(Command::ViewSet { view });
             }
         }

@@ -70,9 +70,9 @@ pub fn show(ctx: &egui::Context, session: &Session, out: &mut Vec<Command>) {
             ui.set_width(380.0_f32.min(ctx.content_rect().width() - 32.0));
         }
         ui.horizontal(|ui| {
-            ui.heading("Device");
+            ui.heading(t!("device-dialog-device"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Close").clicked() {
+                if ui.button(t!("device-dialog-close")).clicked() {
                     out.push(Command::DeviceDialog { open: false });
                 }
             });
@@ -89,7 +89,7 @@ pub fn show(ctx: &egui::Context, session: &Session, out: &mut Vec<Command>) {
 fn current(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
     let Some(d) = &state.device else {
-        ui.weak("Not connected.");
+        ui.weak(t!("device-dialog-not-connected"));
         return;
     };
     egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -97,7 +97,7 @@ fn current(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         ui.horizontal(|ui| {
             ui.strong(label(d));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Disconnect").clicked() {
+                if ui.button(t!("device-dialog-disconnect")).clicked() {
                     out.push(Command::DeviceDisconnect);
                 }
             });
@@ -116,11 +116,11 @@ fn current(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         }
         ui.label(match state.battery {
             Some(b) => format!("Battery {b:.0}%"),
-            None => "Battery —".to_owned(),
+            None => t!("device-dialog-battery").to_owned(),
         });
         let q = scores(session);
         ui.horizontal(|ui| {
-            ui.label("Signal");
+            ui.label(t!("device-dialog-signal"));
             quality::row(ui, &q, d.channels.len(), shown_aux(session, d));
         });
         egui::Grid::new("pad-quality").num_columns(4).spacing([14.0, 2.0]).show(ui, |ui| {
@@ -144,7 +144,7 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
     let scanning = !session.scanning().is_empty();
     ui.horizontal(|ui| {
-        ui.strong("Nearby devices");
+        ui.strong(t!("device-dialog-nearby-devices"));
         if scanning {
             ui.spinner();
             ui.weak("scanning…");
@@ -153,10 +153,10 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         if !scanning {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let can = session.enabled("device.scan");
-                let r = ui.add_enabled(can.is_ok(), egui::Button::new("Scan"));
+                let r = ui.add_enabled(can.is_ok(), egui::Button::new(t!("device-dialog-scan")));
                 let r = match &can {
                     Err(why) => r.on_disabled_hover_text(why),
-                    Ok(()) => r.on_hover_text("Keep looking for a Muse (Bluetooth) and a Crown (OSC, UDP 9000)"),
+                    Ok(()) => r.on_hover_text(t!("device-dialog-keep-looking-for-a-muse")),
                 };
                 if r.clicked() {
                     // Already open: `device.dialog` arms watch again after an error.
@@ -198,9 +198,9 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     if !real && !scanning {
         ui.add_space(4.0);
         ui.weak(if state.scanners.is_empty() {
-            "Bluetooth scanning isn't available in this build."
+            t!("device-dialog-bluetooth-scanning-isn-t-available")
         } else {
-            "No headset found. Turn the Muse on and keep it close; for a Crown, enable OSC in the Neurosity app on this network."
+            t!("device-dialog-no-headset-found-turn-the")
         });
     }
 }
@@ -212,7 +212,7 @@ fn row(ui: &mut egui::Ui, d: &DeviceInfo, current: bool, connected: bool, out: &
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if current {
                 ui.weak("connected");
-            } else if ui.button(if connected { "Switch" } else { "Connect" }).clicked() {
+            } else if ui.button(if connected { t!("device-dialog-switch") } else { t!("device-dialog-connect") }).clicked() {
                 out.push(Command::DeviceConnect { id: d.id.clone() });
                 out.push(Command::DeviceDialog { open: false });
             }

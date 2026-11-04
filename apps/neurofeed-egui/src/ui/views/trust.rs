@@ -65,14 +65,14 @@ pub fn totals(ui: &mut egui::Ui, t: &Trust, big: bool) {
             });
             ui.add_space(if big { 26.0 } else { 14.0 });
         };
-        stat("In zone", pct(x.pct_in_zone), "share of clean training seconds above the threshold");
-        stat("Clean", pct(clean), "training seconds without artifacts and with a verdict");
-        stat("Held back", pct(x.pct_held_back), "above target but not rewarded (band ceiling, guard, no baseline)");
+        stat(&t!("trust-in-zone"), pct(x.pct_in_zone), "share of clean training seconds above the threshold");
+        stat(&t!("trust-clean"), pct(clean), "training seconds without artifacts and with a verdict");
+        stat(&t!("trust-held-back"), pct(x.pct_held_back), "above target but not rewarded (band ceiling, guard, no baseline)");
         if x.pct_warning.is_some() {
-            stat("Guard warning", pct(x.pct_warning), "clean guarded seconds with the drowsiness warning on");
+            stat(&t!("trust-guard-warning"), pct(x.pct_warning), "clean guarded seconds with the drowsiness warning on");
         }
-        stat("Trained", mmss(x.training_s), "calibration and pauses excluded");
-        stat("Rewards", x.reward_chimes.to_string(), "reward chimes");
+        stat(&t!("trust-trained"), mmss(x.training_s), "calibration and pauses excluded");
+        stat(&t!("trust-rewards"), x.reward_chimes.to_string(), "reward chimes");
     });
 }
 
@@ -80,11 +80,11 @@ pub fn totals(ui: &mut egui::Ui, t: &Trust, big: bool) {
 pub fn pane(ui: &mut egui::Ui, t: &Trust, plot: &mut Plot, height: f32, big_totals: bool) {
     totals(ui, t, big_totals);
     ui.horizontal(|ui| {
-        ui.selectable_value(plot, Plot::Percentile, "Percentile");
-        ui.selectable_value(plot, Plot::Value, "Value");
+        ui.selectable_value(plot, Plot::Percentile, t!("trust-percentile"));
+        ui.selectable_value(plot, Plot::Value, t!("trust-value"));
     });
     if t.rows.is_empty() {
-        ui.weak("No feedback seconds yet.");
+        ui.weak(t!("trust-no-feedback-seconds-yet"));
         return;
     }
     let w = ui.available_width();

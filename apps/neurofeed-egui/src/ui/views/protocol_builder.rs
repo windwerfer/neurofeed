@@ -59,7 +59,7 @@ pub fn launcher(ui: &mut egui::Ui, session: &Session) {
     let t = session.trainer();
     let en = session.enabled("protocol.save");
     ui.horizontal(|ui| {
-        let r = ui.add_enabled(en.is_ok(), egui::Button::new("New protocol…"));
+        let r = ui.add_enabled(en.is_ok(), egui::Button::new(t!("protocol-builder-new-protocol")));
         let r = r.on_hover_text(format!("Start from {} in the Protocol Builder", t.protocol.title));
         if r.clicked() {
             open(ui.ctx(), session, &t.protocol.id, true);
@@ -81,7 +81,7 @@ pub fn window(ctx: &egui::Context, session: &Session, out: &mut Vec<Command>) {
     let Some(mut e) = ctx.data(|d| d.get_temp::<Option<Edit>>(state_id())).flatten() else { return };
     let mut open = true;
     let mut close = false;
-    let title = if e.replace { "Protocol Builder — edit" } else { "Protocol Builder — new" };
+    let title = if e.replace { t!("protocol-builder-protocol-builder-edit") } else { t!("protocol-builder-protocol-builder-new") };
     egui::Window::new(title).open(&mut open).collapsible(false).default_width(760.0).resizable(true).show(ctx, |ui| {
         let problems = protocols::validate(&e.draft, &session.state().custom_protocols, e.replace);
         if crate::ui::layout::current(ui.ctx()).is_compact() {
@@ -114,16 +114,16 @@ fn section(ui: &mut egui::Ui, title: &str) {
 
 fn form(ui: &mut egui::Ui, e: &mut Edit, problems: &[Problem]) {
     let d = &mut e.draft;
-    section(ui, "Identity");
+    section(ui, &t!("protocol-builder-identity"));
     egui::Grid::new("pb_identity").num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
-        ui.label("Title");
+        ui.label(t!("protocol-builder-title"));
         ui.add(egui::TextEdit::singleline(&mut d.title).char_limit(protocols::TITLE_MAX + 10).desired_width(260.0));
         ui.end_row();
-        ui.label("Id");
+        ui.label(t!("protocol-builder-id"));
         ui.add_enabled(!e.replace, egui::TextEdit::singleline(&mut d.id).desired_width(260.0))
-            .on_hover_text("Lowercase letters, digits and dashes; fixed once saved");
+            .on_hover_text(t!("protocol-builder-lowercase-letters-digits-and-dashes"));
         ui.end_row();
-        ui.label("Summary");
+        ui.label(t!("protocol-builder-summary"));
         ui.add(egui::TextEdit::multiline(&mut d.summary).desired_rows(2).desired_width(260.0));
         ui.end_row();
     });
@@ -132,17 +132,17 @@ fn form(ui: &mut egui::Ui, e: &mut Edit, problems: &[Problem]) {
     }
     training(ui, d, problems);
     ceilings(ui, d, problems);
-    section(ui, "Drowsiness guard");
-    ui.checkbox(&mut d.guard, "Offer the band-math guard (delta, p75 of calibration)")
-        .on_hover_text("Only offers it: the guard stays off until switched on before a session");
-    ui.add_enabled(d.guard, egui::Checkbox::new(&mut d.muffle_reward, "Mute reward while the guard warns"));
+    section(ui, &t!("protocol-builder-drowsiness-guard"));
+    ui.checkbox(&mut d.guard, t!("protocol-builder-offer-the-band-math-guard"))
+        .on_hover_text(t!("protocol-builder-only-offers-it-the-guard"));
+    ui.add_enabled(d.guard, egui::Checkbox::new(&mut d.muffle_reward, t!("protocol-builder-mute-reward-while-the-guard")));
     field_problems(ui, problems, "muffle_reward");
 }
 
 fn training(ui: &mut egui::Ui, d: &mut ProtocolDraft, problems: &[Problem]) {
-    section(ui, "Training");
+    section(ui, &t!("protocol-builder-training"));
     egui::Grid::new("pb_training").num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
-        ui.label("Reward");
+        ui.label(t!("protocol-builder-reward"));
         let current = FEATURES.iter().find(|(f, _)| *f == d.feature).map_or("", |(_, l)| l);
         egui::ComboBox::from_id_salt("pb_feature").selected_text(current).width(220.0).show_ui(ui, |ui| {
             for (f, l) in FEATURES {
@@ -150,13 +150,13 @@ fn training(ui: &mut egui::Ui, d: &mut ProtocolDraft, problems: &[Problem]) {
             }
         });
         ui.end_row();
-        ui.label("Eyes");
+        ui.label(t!("protocol-builder-eyes"));
         ui.horizontal(|ui| {
             ui.radio_value(&mut d.eyes, EyesArg::Closed, "closed");
             ui.radio_value(&mut d.eyes, EyesArg::Open, "open");
         });
         ui.end_row();
-        ui.label("Length");
+        ui.label(t!("protocol-builder-length"));
         let (lo, hi) = nf_core::feedback::MINUTES;
         ui.add(egui::DragValue::new(&mut d.minutes).range(lo..=hi).suffix(" min"));
         ui.end_row();
@@ -165,18 +165,18 @@ fn training(ui: &mut egui::Ui, d: &mut ProtocolDraft, problems: &[Problem]) {
 }
 
 fn ceilings(ui: &mut egui::Ui, d: &mut ProtocolDraft, problems: &[Problem]) {
-    section(ui, "Reward ceilings");
-    ui.weak("No reward while a band's relative power is above its ceiling.");
+    section(ui, &t!("protocol-builder-reward-ceilings"));
+    ui.weak(t!("protocol-builder-no-reward-while-a-band"));
     let mut remove = None;
     for (i, x) in d.inhibit.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             egui::ComboBox::from_id_salt(("pb_band", i)).selected_text(band_name(x.band)).width(90.0).show_ui(ui, |ui| {
-                ui.selectable_value(&mut x.band, CeilingBand::Beta, "Beta");
-                ui.selectable_value(&mut x.band, CeilingBand::Delta, "Delta");
+                ui.selectable_value(&mut x.band, CeilingBand::Beta, t!("protocol-builder-beta"));
+                ui.selectable_value(&mut x.band, CeilingBand::Delta, t!("protocol-builder-delta"));
             });
             ui.label("above");
             ui.add(egui::Slider::new(&mut x.max, 0.05..=0.95).fixed_decimals(2));
-            if ui.small_button("Remove").clicked() {
+            if ui.small_button(t!("protocol-builder-remove")).clicked() {
                 remove = Some(i);
             }
         });
@@ -186,7 +186,7 @@ fn ceilings(ui: &mut egui::Ui, d: &mut ProtocolDraft, problems: &[Problem]) {
     }
     let free = [CeilingBand::Beta, CeilingBand::Delta].into_iter().find(|b| !d.inhibit.iter().any(|x| x.band == *b));
     if let Some(band) = free {
-        if ui.horizontal(|ui| ui.small_button("Add ceiling").clicked()).inner {
+        if ui.horizontal(|ui| ui.small_button(t!("protocol-builder-add-ceiling")).clicked()).inner {
             d.inhibit.push(InhibitDraft { band, max: if band == CeilingBand::Delta { 0.4 } else { 0.3 } });
         }
     }
@@ -201,15 +201,15 @@ fn band_name(b: CeilingBand) -> &'static str {
 }
 
 fn preview(ui: &mut egui::Ui, e: &Edit, problems: &[Problem]) {
-    ui.label(RichText::new("Card preview").strong());
+    ui.label(RichText::new(t!("protocol-builder-card-preview")).strong());
     let p = protocols::to_protocol(&e.draft);
     super::feedback::card(ui, &p, true, ui.available_width().min(320.0));
     ui.add_space(8.0);
     let rows = [
-        ("Reward", FEATURES.iter().find(|(f, _)| *f == e.draft.feature).map_or("", |(_, l)| l).to_owned()),
-        ("Threshold", "percentile of your calibration, adapted while you train".to_owned()),
+        (t!("protocol-builder-reward"), FEATURES.iter().find(|(f, _)| *f == e.draft.feature).map_or("", |(_, l)| l).to_owned()),
+        (t!("protocol-builder-threshold"), "percentile of your calibration, adapted while you train".to_owned()),
         (
-            "Ceilings",
+            t!("protocol-builder-ceilings"),
             if e.draft.inhibit.is_empty() {
                 "none".to_owned()
             } else {
@@ -217,7 +217,7 @@ fn preview(ui: &mut egui::Ui, e: &Edit, problems: &[Problem]) {
             },
         ),
         (
-            "Guard",
+            t!("protocol-builder-guard"),
             match (e.draft.guard, e.draft.muffle_reward) {
                 (false, _) => "none".to_owned(),
                 (true, false) => "offered (warns only)".to_owned(),
@@ -247,7 +247,7 @@ fn footer(ui: &mut egui::Ui, session: &Session, e: &mut Edit, problems: &[Proble
     ui.horizontal(|ui| {
         let en = session.enabled("protocol.save");
         let ok = en.is_ok() && problems.is_empty();
-        let label = if e.replace { "Save changes" } else { "Save protocol" };
+        let label = if e.replace { t!("protocol-builder-save-changes") } else { t!("protocol-builder-save-protocol") };
         let r = ui.add_enabled(ok, egui::Button::new(RichText::new(label).strong()));
         let r = match (&en, problems.first()) {
             (Err(why), _) => r.on_disabled_hover_text(why),
@@ -260,7 +260,7 @@ fn footer(ui: &mut egui::Ui, session: &Session, e: &mut Edit, problems: &[Proble
             out.push(Command::ProtocolSet { id, minutes: None });
             close = true;
         }
-        if ui.button("Cancel").clicked() {
+        if ui.button(t!("protocol-builder-cancel")).clicked() {
             close = true;
         }
         if e.replace {
@@ -273,16 +273,16 @@ fn footer(ui: &mut egui::Ui, session: &Session, e: &mut Edit, problems: &[Proble
 fn delete(ui: &mut egui::Ui, session: &Session, e: &mut Edit, out: &mut Vec<Command>) -> bool {
     let en = session.enabled("protocol.delete");
     if e.confirm_delete {
-        if ui.button(RichText::new("Delete for good").color(BAD)).clicked() {
+        if ui.button(RichText::new(t!("protocol-builder-delete-for-good")).color(BAD)).clicked() {
             out.push(Command::ProtocolDelete { id: e.draft.id.clone(), confirm: true });
             return true;
         }
-        if ui.button("Keep").clicked() {
+        if ui.button(t!("protocol-builder-keep")).clicked() {
             e.confirm_delete = false;
         }
-        ui.weak("Saved sessions keep their protocol id.");
+        ui.weak(t!("protocol-builder-saved-sessions-keep-their-protocol"));
     } else {
-        let r = ui.add_enabled(en.is_ok(), egui::Button::new("Delete…"));
+        let r = ui.add_enabled(en.is_ok(), egui::Button::new(t!("protocol-builder-delete")));
         if let Err(why) = &en {
             r.on_disabled_hover_text(why);
         } else if r.clicked() {

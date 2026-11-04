@@ -41,7 +41,7 @@ fn send(out: &mut Vec<Command>, p: AudioPatch) {
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let a = session.state().audio;
     ui.scope(|ui| {
-        ui.weak("Changes apply live, also during a session.");
+        ui.weak(t!("sound-changes-apply-live-also-during"));
         reward_row(ui, a, out);
         choice_rows(ui, a, out);
         volumes(ui, a, out);
@@ -53,7 +53,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
 
 fn reward_row(ui: &mut egui::Ui, a: AudioSettings, out: &mut Vec<Command>) {
     ui.horizontal_wrapped(|ui| {
-        ui.label("Reward:");
+        ui.label(t!("sound-reward"));
         for (r, label, about) in REWARDS {
             if ui.selectable_label(a.reward == r, label).on_hover_text(about).clicked() {
                 send(out, AudioPatch { reward_output: Some(r), ..Default::default() });
@@ -67,7 +67,7 @@ fn reward_row(ui: &mut egui::Ui, a: AudioSettings, out: &mut Vec<Command>) {
 
 fn choice_rows(ui: &mut egui::Ui, a: AudioSettings, out: &mut Vec<Command>) {
     ui.horizontal_wrapped(|ui| {
-        ui.label("Background:");
+        ui.label(t!("sound-background"));
         for (b, label) in BACKGROUNDS {
             if ui.selectable_label(a.background == b, label).clicked() {
                 send(out, AudioPatch { background: Some(b), ..Default::default() });
@@ -75,7 +75,7 @@ fn choice_rows(ui: &mut egui::Ui, a: AudioSettings, out: &mut Vec<Command>) {
         }
     });
     ui.horizontal_wrapped(|ui| {
-        ui.label("Guard warning:");
+        ui.label(t!("sound-guard-warning"));
         for (g, label) in GUARDS {
             if ui.selectable_label(a.guard == g, label).clicked() {
                 send(out, AudioPatch { guard_sound: Some(g), ..Default::default() });
@@ -83,7 +83,7 @@ fn choice_rows(ui: &mut egui::Ui, a: AudioSettings, out: &mut Vec<Command>) {
         }
     });
     if a.reward == RewardOutput::Binaural || a.background == Background::Binaural {
-        egui::ComboBox::from_label("Binaural preset").selected_text(a.binaural.label()).show_ui(ui, |ui| {
+        egui::ComboBox::from_label(t!("sound-binaural-preset")).selected_text(a.binaural.label()).show_ui(ui, |ui| {
             for p in BinauralPreset::ALL {
                 let (label, about, ..) = p.spec();
                 if ui.selectable_label(a.binaural == p, label).on_hover_text(about).clicked() {
@@ -99,7 +99,7 @@ type VolumeRow = (&'static str, &'static str, f64, fn(f64) -> AudioPatch);
 
 fn volumes(ui: &mut egui::Ui, a: AudioSettings, out: &mut Vec<Command>) {
     let mut muted = a.muted;
-    if ui.checkbox(&mut muted, "Mute all").changed() {
+    if ui.checkbox(&mut muted, t!("sound-mute-all")).changed() {
         send(out, AudioPatch { muted: Some(muted), ..Default::default() });
     }
     let rows: [VolumeRow; 4] = [
@@ -127,18 +127,18 @@ fn volumes(ui: &mut egui::Ui, a: AudioSettings, out: &mut Vec<Command>) {
 
 fn music(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     if cfg!(target_arch = "wasm32") {
-        ui.weak("Music needs the desktop app (local folder).");
+        ui.weak(t!("sound-music-needs-the-desktop-app"));
         return;
     }
     let cur = session.state().music_dir.clone().unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.label("Music folder:");
+        ui.label(t!("sound-music-folder"));
         DRAFT.with(|d| {
             let mut d = d.borrow_mut();
             let text = d.1.get_or_insert_with(|| cur.clone());
             let r = ui.add(egui::TextEdit::singleline(text).hint_text("/path/to/music (.ogg .mp3 .flac .wav)").desired_width(320.0));
             let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            if (ui.add_enabled(*text != cur, egui::Button::new("Load")).clicked() || enter) && *text != cur {
+            if (ui.add_enabled(*text != cur, egui::Button::new(t!("sound-load"))).clicked() || enter) && *text != cur {
                 send(out, AudioPatch { music_dir: Some(text.clone()), ..Default::default() });
             }
         });
@@ -165,7 +165,7 @@ pub fn guard_row(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     ui.horizontal(|ui| {
         let mut on = t.guard;
         let enabled = session.enabled("guard.set");
-        let r = ui.add_enabled(enabled.is_ok(), egui::Checkbox::new(&mut on, "Band-math drowsiness guard"));
+        let r = ui.add_enabled(enabled.is_ok(), egui::Checkbox::new(&mut on, t!("sound-band-math-drowsiness-guard")));
         if r.changed() {
             out.push(Command::GuardSet { enabled: on });
         }

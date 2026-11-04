@@ -38,15 +38,15 @@ fn gaps(times: impl Iterator<Item = f64>, t0: f64, t1: f64, newest: f64, now: f6
 
 pub fn show(ui: &mut egui::Ui, session: &Session) {
     ui.horizontal(|ui| {
-        ui.heading("Movement");
+        ui.heading(t!("movement-movement"));
         ui.weak("accelerometer, g (x, y, z) and |a| − 1 g");
     });
     ui.separator();
     let Some(side) = session.side().filter(|s| !s.accel.is_empty()) else {
         ui.label(if session.live_signal().is_some() {
-            "This device sends no accelerometer data."
+            t!("movement-this-device-sends-no-accelerometer")
         } else {
-            "No device connected. Use Connect device in the top bar."
+            t!("movement-no-device-connected-use-connect")
         });
         return;
     };
