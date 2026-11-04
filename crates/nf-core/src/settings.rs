@@ -30,6 +30,16 @@ pub enum LayoutMode {
     Regular,
 }
 
+/// UI language: `auto` follows the system locale (English fallback).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Language {
+    #[default]
+    Auto,
+    En,
+    De,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct UserSettings {
@@ -57,6 +67,8 @@ pub struct UserSettings {
     pub crown_quality: QualitySource,
     /// UI layout (`auto` | `compact` | `regular`).
     pub layout: LayoutMode,
+    /// UI language (`auto` | `en` | `de`).
+    pub language: Language,
 }
 
 /// Where Crown pad signal quality comes from (applies from the next second).
@@ -83,6 +95,7 @@ impl Default for UserSettings {
             record_aux: true,
             crown_quality: QualitySource::Crown,
             layout: LayoutMode::Auto,
+            language: Language::Auto,
         }
     }
 }
@@ -114,6 +127,8 @@ pub struct SettingsPatch {
     pub crown_quality: Option<QualitySource>,
     #[serde(default)]
     pub layout: Option<LayoutMode>,
+    #[serde(default)]
+    pub language: Option<Language>,
 }
 
 /// Apply `p` to `s`, validating first (nothing changes on error).
@@ -156,6 +171,9 @@ pub fn apply(s: &mut UserSettings, p: &SettingsPatch) -> Result<(), String> {
     }
     if let Some(v) = p.always_staged {
         s.always_staged = v;
+    }
+    if let Some(v) = p.language {
+        s.language = v;
     }
     if let Some(v) = p.layout {
         s.layout = v;

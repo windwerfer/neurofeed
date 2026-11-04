@@ -9,12 +9,12 @@ const DB_RANGE: (f32, f32) = (-20.0, 25.0);
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
     ui.horizontal(|ui| {
-        ui.heading("Spectrogram");
+        ui.heading(t!("spectrogram-spectrogram"));
         ui.weak("1 s Hamming windows every 0.25 s, 0–50 Hz, dB re µV²/Hz");
     });
     let Some((dev, sig)) = session.live_signal() else {
         ui.separator();
-        ui.label("No device connected. Use Connect device in the top bar.");
+        ui.label(t!("spectrogram-no-device-connected-use-connect"));
         return;
     };
     ui.horizontal(|ui| {

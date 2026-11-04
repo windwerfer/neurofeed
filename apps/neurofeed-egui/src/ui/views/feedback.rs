@@ -110,7 +110,7 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     } else {
         format!("Calibration takes about {} seconds.", nf_core::nf_feedback::BASELINE_VALID_S)
     };
-    header(ui, "Choose a protocol", &format!("Pick what to train, then start. {cal}"));
+    header(ui, &t!("feedback-choose-a-protocol"), &format!("Pick what to train, then start. {cal}"));
     if let Some(m) = &t.message {
         chip(ui, m, FAIR);
         ui.add_space(8.0);
@@ -136,7 +136,7 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     ui.add_space(14.0);
     super::sound::guard_row(ui, session, out);
     ui.horizontal(|ui| {
-        ui.label("Length:");
+        ui.label(t!("feedback-length"));
         for m in MINUTES {
             if ui.selectable_label(t.minutes == m, format!("{m} min")).clicked() {
                 out.push(Command::ProtocolSet { id: t.protocol.id.clone(), minutes: Some(m) });
@@ -221,17 +221,17 @@ fn head(ui: &mut egui::Ui, session: &Session, pads: &[PadFit]) {
 }
 
 fn fit_check(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
-    header(ui, "Fit check", "Put the headband on. The sensors used for training should turn green.");
+    header(ui, &t!("feedback-fit-check"), &t!("feedback-put-the-headband-on-the"));
     ui.horizontal(|ui| {
         head(ui, session, &t.pads);
         ui.vertical(|ui| {
             ui.add_space(20.0);
             if t.fit_ready() {
-                chip(ui, "Good fit, ready to calibrate", GOOD);
+                chip(ui, &t!("feedback-good-fit-ready-to-calibrate"), GOOD);
             } else if t.pads.iter().all(|p| p.good) && !t.pads.is_empty() {
                 chip(ui, &format!("Hold still… {}/{FIT_GREEN_S} s", t.green_for), GOOD);
             } else {
-                chip(ui, "Adjust the headband", FAIR);
+                chip(ui, &t!("feedback-adjust-the-headband"), FAIR);
             }
             ui.add_space(10.0);
             for p in t.pads.iter().filter(|p| !p.good) {
@@ -244,13 +244,29 @@ fn fit_check(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
             ui.add_space(16.0);
             ui.horizontal(|ui| {
                 ui.add_enabled_ui(t.fit_ready(), |ui| {
-                    action(ui, session, "calibration.start", "Calibrate", true, Command::CalibrationStart { anyway: false }, out);
+                    action(
+                        ui,
+                        session,
+                        "calibration.start",
+                        &t!("feedback-calibrate"),
+                        true,
+                        Command::CalibrationStart { anyway: false },
+                        out,
+                    );
                 });
-                action(ui, session, "calibration.start", "Start anyway", false, Command::CalibrationStart { anyway: true }, out);
-                action(ui, session, "calibration.reuse", "Reuse last baseline", false, Command::CalibrationReuse, out);
+                action(
+                    ui,
+                    session,
+                    "calibration.start",
+                    &t!("feedback-start-anyway"),
+                    false,
+                    Command::CalibrationStart { anyway: true },
+                    out,
+                );
+                action(ui, session, "calibration.reuse", &t!("feedback-reuse-last-baseline"), false, Command::CalibrationReuse, out);
             });
             ui.add_space(8.0);
-            action(ui, session, "feedback.stop", "Cancel", false, Command::FeedbackStop, out);
+            action(ui, session, "feedback.stop", &t!("feedback-cancel"), false, Command::FeedbackStop, out);
         });
     });
 }
@@ -259,13 +275,13 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
     let Some(c) = &t.calibration else { return };
     use nf_core::nf_feedback::CalStage;
     let instruction = match (c.staged, c.stage, t.protocol.eyes) {
-        (true, CalStage::Artifacts, _) => "Step 1/3: sit still, eyes open, while the signal settles.",
-        (true, CalStage::EyesOpen, _) => "Step 2/3: eyes open, look at a calm point — this is your 'awake' reference.",
-        (true, CalStage::EyesClosed, _) => "Step 3/3: close your eyes and relax — this sets your drowsiness baseline.",
-        (false, _, Eyes::Closed) => "Close your eyes, relax and sit still.",
-        (false, _, Eyes::Open) => "Keep your eyes open on a calm point and sit still.",
+        (true, CalStage::Artifacts, _) => t!("feedback-step-1-3-sit-still"),
+        (true, CalStage::EyesOpen, _) => t!("feedback-step-2-3-eyes-open"),
+        (true, CalStage::EyesClosed, _) => t!("feedback-step-3-3-close-your"),
+        (false, _, Eyes::Closed) => t!("feedback-close-your-eyes-relax-and"),
+        (false, _, Eyes::Open) => t!("feedback-keep-your-eyes-open-on"),
     };
-    header(ui, "Calibrating", instruction);
+    header(ui, &t!("feedback-calibrating"), &instruction);
     ui.add(
         egui::ProgressBar::new(c.valid_s as f32 / c.needed_s.max(1) as f32)
             .desired_width(520.0)
@@ -276,21 +292,21 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
     if c.awake_missing {
         egui::Frame::group(ui.style()).stroke(Stroke::new(1.5_f32, BAD)).inner_margin(10.0).show(ui, |ui| {
             ui.set_max_width(520.0);
-            ui.label(RichText::new("No awake reference").strong().color(BAD));
-            ui.label("The AI model gave no score during the eyes-open step, so Sleep Guard cannot learn your drowsiness baseline and these seconds do not count.");
-            ui.weak("Cancel, check the model is Ready (Settings → AI), then calibrate again.");
+            ui.label(RichText::new(t!("feedback-no-awake-reference")).strong().color(BAD));
+            ui.label(t!("feedback-the-ai-model-gave-no"));
+            ui.weak(t!("feedback-cancel-check-the-model-is"));
         });
     } else {
         match &c.waiting {
             Some(w) => chip(ui, &format!("Paused: {w}"), FAIR),
-            None => chip(ui, "Collecting", GOOD),
+            None => chip(ui, &t!("feedback-collecting"), GOOD),
         }
     }
     ui.add_space(16.0);
     ui.horizontal(|ui| {
-        action(ui, session, "calibration.skip", "Start now", false, Command::CalibrationSkip, out);
-        action(ui, session, "calibration.reuse", "Reuse last baseline", false, Command::CalibrationReuse, out);
-        action(ui, session, "feedback.stop", "Cancel", false, Command::FeedbackStop, out);
+        action(ui, session, "calibration.skip", &t!("feedback-start-now"), false, Command::CalibrationSkip, out);
+        action(ui, session, "calibration.reuse", &t!("feedback-reuse-last-baseline"), false, Command::CalibrationReuse, out);
+        action(ui, session, "feedback.stop", &t!("feedback-cancel"), false, Command::FeedbackStop, out);
     });
 }
 
@@ -331,14 +347,14 @@ fn status(t: &Trainer) -> (String, Color32) {
     let rec = last.and_then(|r| r.record.as_ref());
     let held = rec.and_then(|r| r.held_back.as_ref()).and_then(|h| h.first());
     match t.phase {
-        Phase::Paused { reason: PauseReason::User } => ("Paused".to_owned(), FAIR),
-        Phase::Paused { reason: PauseReason::BadSignal } => ("Paused: waiting for good signal".to_owned(), FAIR),
-        Phase::Paused { reason: PauseReason::Disconnected } => ("Paused: device disconnected".to_owned(), BAD),
-        _ if last.is_some_and(|r| r.in_target) => ("In target".to_owned(), GOOD),
+        Phase::Paused { reason: PauseReason::User } => (t!("feedback-paused").to_owned(), FAIR),
+        Phase::Paused { reason: PauseReason::BadSignal } => (t!("feedback-paused-waiting-for-good-signal").to_owned(), FAIR),
+        Phase::Paused { reason: PauseReason::Disconnected } => (t!("feedback-paused-device-disconnected").to_owned(), BAD),
+        _ if last.is_some_and(|r| r.in_target) => (t!("feedback-in-target").to_owned(), GOOD),
         _ if held.is_some() => {
             (format!("Held back ({})", format!("{:?}", held.copied().unwrap_or(HeldBack::NoThreshold)).to_lowercase()), FAIR)
         }
-        _ => ("Training".to_owned(), CALM),
+        _ => (t!("feedback-training").to_owned(), CALM),
     }
 }
 
@@ -350,8 +366,8 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
         let frac = t.played_s as f32 / t.total_s().max(1) as f32;
         ui.add(egui::ProgressBar::new(frac).desired_width(160.0).desired_height(6.0));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.toggle_value(&mut d.show_nerd, "Nerd").on_hover_text("The numbers behind the reward decision");
-            ui.toggle_value(&mut d.show_trust, "Trust").on_hover_text("Live trust trace: what each second really was");
+            ui.toggle_value(&mut d.show_nerd, t!("feedback-nerd")).on_hover_text(t!("feedback-the-numbers-behind-the-reward"));
+            ui.toggle_value(&mut d.show_trust, t!("feedback-trust")).on_hover_text(t!("feedback-live-trust-trace-what-each"));
         });
     });
     if session.state().settings.debug {
@@ -420,7 +436,7 @@ fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
         chip(ui, &status, color);
         if rec.and_then(|r| r.warn) == Some(true) {
             ui.add_space(4.0);
-            chip(ui, "Drowsiness warning", FAIR);
+            chip(ui, &t!("feedback-drowsiness-warning"), FAIR);
         }
         ui.add_space(6.0);
         let why = last.and_then(|r| (!r.counted).then(|| r.reason.clone()).flatten());
@@ -429,18 +445,18 @@ fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 200.0).max(0.0) / 2.0);
             if matches!(t.phase, Phase::Paused { .. }) {
-                action(ui, session, "feedback.resume", "Resume", false, Command::FeedbackResume, out);
+                action(ui, session, "feedback.resume", &t!("feedback-resume"), false, Command::FeedbackResume, out);
             } else {
-                action(ui, session, "feedback.pause", "Pause", false, Command::FeedbackPause, out);
+                action(ui, session, "feedback.pause", &t!("feedback-pause"), false, Command::FeedbackPause, out);
             }
-            action(ui, session, "feedback.stop", "End session", false, Command::FeedbackStop, out);
+            action(ui, session, "feedback.stop", &t!("feedback-end-session"), false, Command::FeedbackStop, out);
         });
     });
 }
 
 fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let Some(s) = &t.summary else { return };
-    header(ui, "Session complete", &format!("{} · ended: {}", t.protocol.title, s.ended_by));
+    header(ui, &t!("feedback-session-complete"), &format!("{} · ended: {}", t.protocol.title, s.ended_by));
     let mut d: Dash = ui.data(|x| x.get_temp(dash_id())).unwrap_or_default();
     let trust = live_trust(t, &mut d);
     ui.allocate_ui(Vec2::new(ui.available_width().min(900.0), 360.0), |ui| super::trust::pane(ui, &trust, &mut d.plot, 200.0, true));
@@ -461,17 +477,25 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
     }
     ui.add_space(14.0);
     ui.horizontal(|ui| {
-        action(ui, session, "feedback.start", "Train again", true, Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None }, out);
+        action(
+            ui,
+            session,
+            "feedback.start",
+            &t!("feedback-train-again"),
+            true,
+            Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None },
+            out,
+        );
         action(
             ui,
             session,
             "protocol.set",
-            "Choose protocol",
+            &t!("feedback-choose-protocol"),
             false,
             Command::ProtocolSet { id: t.protocol.id.clone(), minutes: None },
             out,
         );
-        action(ui, session, "view.set", "Open History", false, Command::ViewSet { view: nf_core::View::History }, out);
+        action(ui, session, "view.set", &t!("feedback-open-history"), false, Command::ViewSet { view: nf_core::View::History }, out);
     });
 }
 
@@ -484,9 +508,9 @@ fn feature_override(ui: &mut egui::Ui, t: &Trainer, out: &mut Vec<Command>) {
         _ => (1.0, 0.3),
     };
     ui.horizontal(|ui| {
-        ui.weak("Debug");
+        ui.weak(t!("feedback-debug"));
         let mut on = t.feature_override.is_some();
-        if ui.checkbox(&mut on, "Override feature").changed() {
+        if ui.checkbox(&mut on, t!("feedback-override-feature")).changed() {
             out.push(Command::FeedbackOverride { value: on.then_some(init) });
         }
         if let Some(mut v) = t.feature_override {

@@ -6,52 +6,13 @@ use egui::{Align2, Color32, Id, RichText, Vec2};
 use nf_core::settings::SettingsPatch;
 use nf_core::Command;
 
-const PAGES: [(&str, &str, &[&str]); 5] = [
-    (
-        "Welcome to NeuroFeed",
-        "Neurofeedback shows your brain activity back to you, second by second, so you can learn to steer it.",
-        &[
-            "Pick a protocol (what to train), sit still, and follow the sound and the circle.",
-            "Sessions are short: 5–20 minutes. Regular practice matters more than length.",
-            "Not a medical device. It does not diagnose or treat anything.",
-        ],
-    ),
-    (
-        "Fit the headband",
-        "Good contact is everything. The fit check waits until all pads read clean.",
-        &[
-            "Forehead pads sit flat, just above the eyebrows; ear pads touch skin behind the ears.",
-            "Move hair aside and wipe the skin; a little water helps dry skin.",
-            "Relax your jaw and face: clenching and blinking show up as noise.",
-        ],
-    ),
-    (
-        "Calibration",
-        "Each session starts by measuring your own baseline, so the threshold fits you today.",
-        &[
-            "Follow the spoken instructions (eyes open or closed) for about a minute.",
-            "Dirty seconds (blinks, movement, bad pads) are left out of the baseline.",
-            "You can reuse the last baseline for the same device and protocol.",
-        ],
-    ),
-    (
-        "Training and trust",
-        "During training you are rewarded when the feature is above your threshold percentile.",
-        &[
-            "The trust pane shows what every second really was: in zone, below, held back or dirty.",
-            "Held-back seconds are not rewarded even if they look good: the signal was not trustworthy.",
-            "The threshold adapts slowly so you stay at about the reward rate you chose.",
-        ],
-    ),
-    (
-        "Your data stays here",
-        "Recordings, notes and settings are stored only on this device.",
-        &[
-            "Add a pseudonymous subject id in Settings → General if you want to tell sessions apart.",
-            "Export a session from History (.neurofeed or EDF) to share or analyse it.",
-            "AI agents can only control the app if you switch on the bridge in Settings → About.",
-        ],
-    ),
+/// Fluent keys: (title, lead, points).
+const PAGES: [(&str, &str, [&str; 3]); 5] = [
+    ("onboarding-p1-title", "onboarding-p1-lead", ["onboarding-p1-point1", "onboarding-p1-point2", "onboarding-p1-point3"]),
+    ("onboarding-p2-title", "onboarding-p2-lead", ["onboarding-p2-point1", "onboarding-p2-point2", "onboarding-p2-point3"]),
+    ("onboarding-p3-title", "onboarding-p3-lead", ["onboarding-p3-point1", "onboarding-p3-point2", "onboarding-p3-point3"]),
+    ("onboarding-p4-title", "onboarding-p4-lead", ["onboarding-p4-point1", "onboarding-p4-point2", "onboarding-p4-point3"]),
+    ("onboarding-p5-title", "onboarding-p5-lead", ["onboarding-p5-point1", "onboarding-p5-point2", "onboarding-p5-point3"]),
 ];
 
 pub fn show(ctx: &egui::Context, out: &mut Vec<Command>) {
@@ -77,15 +38,15 @@ pub fn show(ctx: &egui::Context, out: &mut Vec<Command>) {
         })
         .show(ctx, |ui| {
             ui.add_space(6.0);
-            ui.weak(format!("{} of {}", page + 1, PAGES.len()));
-            ui.label(RichText::new(title).size(24.0).strong());
+            ui.weak(t!("onboarding-page-of", page = page + 1, total = PAGES.len()));
+            ui.label(RichText::new(crate::i18n::tr(title, &[])).size(24.0).strong());
             ui.add_space(4.0);
-            ui.label(RichText::new(lead).size(15.0));
+            ui.label(RichText::new(crate::i18n::tr(lead, &[])).size(15.0));
             ui.add_space(10.0);
             for p in points {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("•").color(Color32::from_rgb(0x66, 0xBB, 0x6A)));
-                    ui.label(*p);
+                    ui.label(crate::i18n::tr(p, &[]));
                 });
             }
             ui.add_space(ui.available_height().max(0.0) - 40.0);
@@ -94,8 +55,8 @@ pub fn show(ctx: &egui::Context, out: &mut Vec<Command>) {
                 dots(ui, page);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let last = page + 1 == PAGES.len();
-                    let next =
-                        egui::Button::new(RichText::new(if last { "Start" } else { "Next" }).strong()).min_size(Vec2::new(90.0, 30.0));
+                    let next = egui::Button::new(RichText::new(if last { t!("onboarding-start") } else { t!("onboarding-next") }).strong())
+                        .min_size(Vec2::new(90.0, 30.0));
                     if ui.add(next).clicked() {
                         if last {
                             finish(out);
@@ -104,10 +65,10 @@ pub fn show(ctx: &egui::Context, out: &mut Vec<Command>) {
                             page += 1;
                         }
                     }
-                    if page > 0 && ui.button("Back").clicked() {
+                    if page > 0 && ui.button(t!("onboarding-back")).clicked() {
                         page -= 1;
                     }
-                    if !last && ui.button("Skip tour").clicked() {
+                    if !last && ui.button(t!("onboarding-skip-tour")).clicked() {
                         finish(out);
                     }
                 });

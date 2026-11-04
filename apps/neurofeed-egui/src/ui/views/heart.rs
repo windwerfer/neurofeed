@@ -12,22 +12,18 @@ const SPO2_COLOR: Color32 = Color32::from_rgb(0x4F, 0xC3, 0xF7);
 
 pub fn show(ui: &mut egui::Ui, session: &Session) {
     ui.horizontal(|ui| {
-        ui.heading("HR + SpO2");
-        ui.weak("PPG infrared/red, estimates every 1 s over the last 8 s");
+        ui.heading(t!("heart-hr-spo2"));
+        ui.weak(t!("heart-ppg-infrared-red-estimates-every"));
     });
     ui.separator();
     let Some(o) = session.optics() else {
-        ui.label(if session.state().device.is_some() {
-            "No PPG on this device. HR/SpO2 are available on Muse 2 and Muse S."
-        } else {
-            "No device connected."
-        });
+        ui.label(if session.state().device.is_some() { t!("heart-no-ppg-on-this-device") } else { t!("heart-no-device-connected") });
         return;
     };
     let hr = Optics::current(&o.hr, o.time);
     let sp = Optics::current(&o.spo2, o.time);
     ui.horizontal(|ui| {
-        big(ui, "Heart rate", hr.map(|e| format!("{:.0} bpm", e.value)), hr, HR_COLOR);
+        big(ui, &t!("heart-heart-rate"), hr.map(|e| format!("{:.0} bpm", e.value)), hr, HR_COLOR);
         ui.add_space(40.0);
         big(ui, "SpO2", sp.map(|e| format!("{:.1} %", e.value)), sp, SPO2_COLOR);
     });
@@ -41,7 +37,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
     p.text(
         rect.left_top() + egui::vec2(8.0, 6.0),
         Align2::LEFT_TOP,
-        "Pulse wave (infrared)",
+        t!("heart-pulse-wave-infrared"),
         FontId::proportional(14.0),
         ui.visuals().strong_text_color(),
     );
@@ -63,7 +59,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
     p.text(
         rect.left_top() + egui::vec2(8.0, 6.0),
         Align2::LEFT_TOP,
-        "Trend (last 2 min)",
+        t!("heart-trend-last-2-min"),
         FontId::proportional(14.0),
         ui.visuals().strong_text_color(),
     );

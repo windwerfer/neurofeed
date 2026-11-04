@@ -2,6 +2,8 @@
 //! `nf_core::Session`; the UI reads `AppState` and emits `Command`s.
 
 pub mod app;
+#[macro_use]
+pub mod i18n;
 pub mod audio;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod bridge;

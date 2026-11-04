@@ -12,7 +12,7 @@ pub fn header<'a>(ui: &mut egui::Ui, session: &'a Session, title: &str, note: &s
     ui.separator();
     let live = session.live_signal();
     if live.is_none() {
-        ui.label("No device connected. Use Connect device in the top bar.");
+        ui.label(t!("plot-no-device-connected-use-connect"));
     }
     live
 }
@@ -107,10 +107,10 @@ pub fn viewport(ui: &mut egui::Ui, key: &str, options: &[f64], now: f64) -> View
             }
         }
         ui.separator();
-        if ui.selectable_label(vp.anchor.is_none(), "▶ Follow").clicked() {
+        if ui.selectable_label(vp.anchor.is_none(), t!("plot-follow")).clicked() {
             vp.anchor = None;
         }
-        if ui.selectable_label(vp.anchor.is_some(), "⏸ Inspect").clicked() && vp.anchor.is_none() {
+        if ui.selectable_label(vp.anchor.is_some(), t!("plot-inspect")).clicked() && vp.anchor.is_none() {
             vp.anchor = Some(now);
         }
         if vp.anchor.is_some() {

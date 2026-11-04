@@ -14,7 +14,7 @@ pub(super) fn window(ctx: &egui::Context, open: &mut bool, n: &Nerd) {
         ctx,
         |ui| {
             if !n.ready {
-                ui.weak("Collecting… the numbers appear after calibration.");
+                ui.weak(t!("nerd-collecting-the-numbers-appear-after"));
                 return;
             }
             if let Some(s) = &n.reward {

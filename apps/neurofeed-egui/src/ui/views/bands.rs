@@ -25,12 +25,12 @@ const ABS_MAX: f32 = 3.0;
 
 pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     ui.horizontal(|ui| {
-        ui.heading("Band powers");
+        ui.heading(t!("bands-band-powers"));
         if state.device.as_ref().is_some_and(|d| d.simulated) {
             ui.weak("(simulated data)");
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            for (scale, label) in [(BandScale::Relative, "Relative %"), (BandScale::Absolute, "Absolute (log)")] {
+            for (scale, label) in [(BandScale::Relative, t!("bands-relative")), (BandScale::Absolute, t!("bands-absolute-log"))] {
                 if ui.selectable_label(state.band_scale == scale, label).clicked() {
                     out.push(Command::ScaleSet { scale });
                 }
@@ -39,7 +39,7 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     });
     let mut chips = CHIPS.with(|c| *c.borrow());
     ui.horizontal(|ui| {
-        for (v, label) in [(true, "Over time"), (false, "Bars")] {
+        for (v, label) in [(true, t!("bands-over-time")), (false, t!("bands-bars"))] {
             if ui.selectable_label(chips.over_time == v, label).clicked() {
                 chips.over_time = v;
             }
@@ -47,7 +47,7 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
         ui.separator();
         if chips.over_time {
             if let Some(d) = &state.device {
-                ui.weak("Average of");
+                ui.weak(t!("bands-average-of"));
                 for (i, name) in d.channels.iter().enumerate().take(32) {
                     let on = chips.electrodes & (1 << i) != 0;
                     let others = chips.electrodes & !(1 << i) & ((1u32 << d.channels.len().min(31)) - 1);
@@ -63,11 +63,11 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     ui.separator();
 
     let Some(device) = &state.device else {
-        ui.label("No device connected. Use Connect device in the top bar.");
+        ui.label(t!("bands-no-device-connected-use-connect"));
         return;
     };
     let Some(snapshot) = state.bands.latest() else {
-        ui.label("Waiting for data…");
+        ui.label(t!("bands-waiting-for-data"));
         return;
     };
 
@@ -104,7 +104,7 @@ fn legend(ui: &mut egui::Ui, mut toggles: Option<&mut [bool; 5]>) {
             let text = format!("{} {lo:.0}–{hi:.0} Hz", band.name());
             match toggles.as_deref_mut() {
                 Some(t) => {
-                    if ui.selectable_label(on, text).on_hover_text("Show / hide this band").clicked() {
+                    if ui.selectable_label(on, text).on_hover_text(t!("bands-show-hide-this-band")).clicked() {
                         t[band.index()] = !on;
                     }
                 }

@@ -42,8 +42,8 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let id = ui.scope_id().with("import");
     let mut st: Ui = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     let en = session.enabled("history.import");
-    let r = ui.add_enabled(en.is_ok(), egui::Button::new("Import…"));
-    let r = r.on_hover_text("EDF/EDF+, Mind Monitor CSV, .neurofeed or raw NFEDBIN — or drop a file here");
+    let r = ui.add_enabled(en.is_ok(), egui::Button::new(t!("import-import")));
+    let r = r.on_hover_text(t!("import-edf-edf-mind-monitor-csv"));
     if r.clicked() {
         st.open = true;
     }
@@ -64,7 +64,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
 fn window(ui: &mut egui::Ui, session: &Session, st: &mut Ui, out: &mut Vec<Command>) {
     source(ui, session, st);
     let Some(p) = st.pending.clone() else {
-        ui.weak("Drop a file onto the window, or choose one above.");
+        ui.weak(t!("import-drop-a-file-onto-the"));
         return;
     };
     ui.separator();
@@ -77,7 +77,7 @@ fn window(ui: &mut egui::Ui, session: &Session, st: &mut Ui, out: &mut Vec<Comma
             summary(ui, pv);
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Save to history").clicked() {
+                if ui.button(t!("import-save-to-history")).clicked() {
                     let req = ImportRequest {
                         file_name: p.name.clone(),
                         data_base64: base64_encode(&p.bytes),
@@ -86,7 +86,7 @@ fn window(ui: &mut egui::Ui, session: &Session, st: &mut Ui, out: &mut Vec<Comma
                     out.push(Command::HistoryImport(req));
                     *st = Ui::default();
                 }
-                if ui.button("Cancel").clicked() {
+                if ui.button(t!("import-cancel")).clicked() {
                     st.pending = None;
                 }
             });
@@ -98,13 +98,13 @@ fn window(ui: &mut egui::Ui, session: &Session, st: &mut Ui, out: &mut Vec<Comma
 fn source(ui: &mut egui::Ui, session: &Session, st: &mut Ui) {
     ui.horizontal(|ui| {
         if cfg!(target_arch = "wasm32") || crate::platform::get().is_some() {
-            if ui.button("Choose file…").clicked() {
+            if ui.button(t!("import-choose-file")).clicked() {
                 open_picker();
             }
             return;
         }
         ui.add(egui::TextEdit::singleline(&mut st.path).hint_text("/path/to/recording.edf").desired_width(360.0));
-        if ui.add_enabled(!st.path.trim().is_empty(), egui::Button::new("Open")).clicked() {
+        if ui.add_enabled(!st.path.trim().is_empty(), egui::Button::new(t!("import-open"))).clicked() {
             st.pending = Some(read_path(session, st.path.trim()));
         }
     });
@@ -116,12 +116,12 @@ fn summary(ui: &mut egui::Ui, pv: &Preview) {
     if let Some(t) = pv.started_unix_ms {
         ui.weak(format!("recorded {}", super::history::local_time(t)));
     }
-    ui.label(RichText::new("Kept").strong());
+    ui.label(RichText::new(t!("import-kept")).strong());
     for k in &pv.summary.kept {
         ui.label(format!("✔ {k}"));
     }
     if !pv.summary.lost.is_empty() {
-        ui.label(RichText::new("Not imported").strong());
+        ui.label(RichText::new(t!("import-not-imported")).strong());
         for l in &pv.summary.lost {
             ui.label(RichText::new(format!("✖ {l}")).color(WARN));
         }

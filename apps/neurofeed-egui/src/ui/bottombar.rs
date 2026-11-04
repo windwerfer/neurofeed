@@ -9,17 +9,17 @@ pub fn show(root: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
         let w = (ui.available_width() - ui.spacing().item_spacing.x * (n as f32 - 1.0)) / n as f32;
         ui.horizontal_centered(|ui| {
             for view in PRIMARY {
-                let b = egui::Button::selectable(state.view == view, view.label());
+                let b = egui::Button::selectable(state.view == view, super::view_label(view));
                 if ui.add_sized([w, TOUCH], b).clicked() {
                     out.push(Command::ViewSet { view });
                 }
             }
             let other = !PRIMARY.contains(&state.view);
-            let text = if other { format!("☰ {}", state.view.label()) } else { "☰ More".to_owned() };
+            let text = if other { format!("☰ {}", super::view_label(state.view)) } else { format!("☰ {}", t!("bottombar-more")) };
             let r = ui.add_sized([w, TOUCH], egui::Button::selectable(other, text));
             egui::Popup::menu(&r).show(|ui| {
                 for view in View::ALL.into_iter().filter(|v| !PRIMARY.contains(v)) {
-                    if ui.add_sized([180.0, TOUCH], egui::Button::selectable(state.view == view, view.label())).clicked() {
+                    if ui.add_sized([180.0, TOUCH], egui::Button::selectable(state.view == view, super::view_label(view))).clicked() {
                         out.push(Command::ViewSet { view });
                     }
                 }
