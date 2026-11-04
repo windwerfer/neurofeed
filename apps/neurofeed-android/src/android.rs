@@ -50,10 +50,8 @@ fn android_main(app: AndroidApp) {
     }
     platform::install(Box::new(Hooks));
     let options = eframe::NativeOptions {
-        event_loop_builder: Some(Box::new(move |b| {
-            use winit::platform::android::EventLoopBuilderExtAndroid;
-            b.with_android_app(app);
-        })),
+        // eframe >= 0.35 builds the winit event loop itself and needs the app here.
+        android_app: Some(app),
         ..Default::default()
     };
     if let Err(e) = eframe::run_native("NeuroFeed", options, Box::new(|cc| Ok(Box::new(neurofeed_egui::NeuroFeedApp::new(cc))))) {
