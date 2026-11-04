@@ -150,6 +150,14 @@ off until the next connect or app start. `device.status` shows `scan_mode`
 A `screenshot` `path` is written by the CLI process, not by the app. The
 screenshot times out after 5 s, and any other bridge reply after 30 s.
 
+### UI layout
+
+`settings.set {"layout":"compact"}` forces the phone layout (compact top bar,
+bottom navigation, full-screen Device sheet) on any window; `"regular"`
+forces sidebar + top bar; `"auto"` (default) switches below 600 px width.
+Combine with `screenshot` to capture either mode. Contract:
+[.ai/contracts/ui-layout.md](../.ai/contracts/ui-layout.md).
+
 ## MCP clients
 
 `neurofeed-cli mcp` speaks MCP over stdio (server name `neurofeed`). Point the

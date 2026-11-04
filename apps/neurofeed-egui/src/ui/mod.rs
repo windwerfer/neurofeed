@@ -1,7 +1,9 @@
 //! egui rendering. Views read the `Session` (state + typed signal
 //! accessors) and push `Command`s; they never mutate state directly.
 
+mod bottombar;
 pub(crate) mod device_dialog;
+pub mod layout;
 mod onboarding;
 mod quality;
 mod sidebar;
@@ -38,9 +40,17 @@ pub fn show_with(root: &mut egui::Ui, session: &Session, error: Option<&str>, sh
     let state = session.state();
     let mut out = Vec::new();
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(views::MARKS_ID), state.settings.gesture_markers));
-    topbar::show(root, session, error, &mut out);
-    if state.sidebar_open {
-        sidebar::show(root, state, &mut out);
+    let width = root.available_width();
+    let lay = layout::pick(state.settings.layout, width);
+    layout::store(ctx, lay);
+    if lay.is_compact() {
+        layout::touch_style(root);
+    }
+    topbar::show(root, session, error, lay, &mut out);
+    if lay.is_compact() {
+        bottombar::show(root, state, &mut out);
+    } else if state.sidebar_open {
+        sidebar::show(root, state, width < layout::NARROW_SIDEBAR_WIDTH, &mut out);
     }
     egui::CentralPanel::default().show(root, |ui| {
         recovery(ui, session, &mut out);

@@ -18,6 +18,18 @@ pub enum Appearance {
     Dark,
 }
 
+/// UI layout: `auto` picks compact below ~600 logical px of width.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LayoutMode {
+    #[default]
+    Auto,
+    /// Phone layout: compact top bar, bottom navigation, full-screen sheets.
+    Compact,
+    /// Desktop layout: sidebar + top bar.
+    Regular,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct UserSettings {
@@ -43,6 +55,8 @@ pub struct UserSettings {
     pub record_aux: bool,
     /// Neurosity Crown pad quality: the Crown's own or the app's score.
     pub crown_quality: QualitySource,
+    /// UI layout (`auto` | `compact` | `regular`).
+    pub layout: LayoutMode,
 }
 
 /// Where Crown pad signal quality comes from (applies from the next second).
@@ -68,6 +82,7 @@ impl Default for UserSettings {
             muse_aux: false,
             record_aux: true,
             crown_quality: QualitySource::Crown,
+            layout: LayoutMode::Auto,
         }
     }
 }
@@ -97,6 +112,8 @@ pub struct SettingsPatch {
     pub record_aux: Option<bool>,
     #[serde(default)]
     pub crown_quality: Option<QualitySource>,
+    #[serde(default)]
+    pub layout: Option<LayoutMode>,
 }
 
 /// Apply `p` to `s`, validating first (nothing changes on error).
@@ -139,6 +156,9 @@ pub fn apply(s: &mut UserSettings, p: &SettingsPatch) -> Result<(), String> {
     }
     if let Some(v) = p.always_staged {
         s.always_staged = v;
+    }
+    if let Some(v) = p.layout {
+        s.layout = v;
     }
     if let Some(v) = p.gesture_markers {
         s.gesture_markers = v;

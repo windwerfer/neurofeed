@@ -1,9 +1,14 @@
 //! Top bar: sidebar toggle, device area (opens the Device dialog), mains, record, pause.
 
+use super::layout::{Layout, TOUCH};
 use super::{device_dialog, quality, theme};
 use nf_core::{mains_name, AppState, Command, LinkState, MainsMode, Session};
 
-pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
+pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, layout: Layout, out: &mut Vec<Command>) {
+    if layout.is_compact() {
+        compact(root, session, error, out);
+        return;
+    }
     let state = session.state();
     egui::Panel::top("topbar").exact_size(theme::TOPBAR_HEIGHT).show(root, |ui| {
         ui.horizontal_centered(|ui| {
@@ -17,6 +22,37 @@ pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &m
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 stream_controls(ui, state, out);
                 signal_controls(ui, session, out);
+            });
+        });
+    });
+}
+
+/// Compact top bar: device area (tap opens the Device dialog), error
+/// glyph, and icon-only record / pause. Notch lives in Settings → Devices.
+fn compact(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
+    let state = session.state();
+    egui::Panel::top("topbar").exact_size(TOUCH).show(root, |ui| {
+        ui.horizontal_centered(|ui| {
+            device(ui, session, out);
+            if let Some(e) = error {
+                ui.colored_label(ui.visuals().error_fg_color, "⚠").on_hover_text(e);
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (icon, cmd) = if state.paused { ("▶", Command::StreamResume) } else { ("⏸", Command::StreamPause) };
+                if ui.add_sized([TOUCH, TOUCH - 8.0], egui::Button::new(icon)).on_hover_text("Pause / resume").clicked() {
+                    out.push(cmd);
+                }
+                if let Some(r) = state.recording.as_ref().filter(|r| r.active) {
+                    if ui.add_sized([TOUCH + 24.0, TOUCH - 8.0], egui::Button::new(format!("⏹ {:.0}s", r.duration))).clicked() {
+                        out.push(Command::RecordingStop);
+                    }
+                } else if ui
+                    .add_enabled(state.device.is_some(), egui::Button::new("⏺").min_size(egui::vec2(TOUCH, TOUCH - 8.0)))
+                    .on_hover_text("Record")
+                    .clicked()
+                {
+                    out.push(Command::RecordingStart { wall_clock_unix_ms: None });
+                }
             });
         });
     });

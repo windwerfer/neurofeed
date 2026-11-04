@@ -52,8 +52,23 @@ pub fn show(ctx: &egui::Context, session: &Session, out: &mut Vec<Command>) {
     if !session.state().device_dialog {
         return;
     }
-    let modal = egui::Modal::new(egui::Id::unique("device-dialog")).show(ctx, |ui| {
-        ui.set_width(380.0_f32.min(ctx.content_rect().width() - 32.0));
+    let compact = super::layout::current(ctx).is_compact();
+    let mut modal = egui::Modal::new(egui::Id::unique("device-dialog"));
+    if compact {
+        // Full-screen sheet: the whole content rect, no rounded card.
+        modal =
+            modal.area(egui::Modal::default_area(egui::Id::unique("device-dialog-sheet")).anchor(egui::Align2::LEFT_TOP, egui::Vec2::ZERO));
+        modal = modal.frame(egui::Frame::window(&ctx.global_style()).corner_radius(0.0).inner_margin(12.0));
+    }
+    let modal = modal.show(ctx, |ui| {
+        if compact {
+            let r = ctx.content_rect();
+            super::layout::touch_style(ui);
+            ui.set_width(r.width() - 24.0);
+            ui.set_min_height(r.height() - 24.0);
+        } else {
+            ui.set_width(380.0_f32.min(ctx.content_rect().width() - 32.0));
+        }
         ui.horizontal(|ui| {
             ui.heading("Device");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -766,7 +766,7 @@ pub const SPECS: &[CommandSpec] = &[
         "Change settings",
         "settings",
         false,
-        "Appearance, subject id, onboarding done, debug mode, gesture markers.",
+        "Appearance, UI layout (auto/compact/regular), subject id, onboarding done, debug mode, gesture markers.",
         always,
     ),
     spec(
