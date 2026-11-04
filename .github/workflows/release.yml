@@ -1,7 +1,7 @@
 # Release packaging for every platform; assets are attached to the GitHub release.
 #   release published          -> build everything, upload to that release
 #   workflow_dispatch tag=vX.Y.Z -> same for an existing release (dry-run = build only)
-# Local equivalents: scripts/build-android.sh, scripts/package-{linux,flatpak,macos}.sh,
+# Local equivalents: scripts/build-android.sh, scripts/package-{linux,flatpak,macos,web}.sh,
 # scripts/package-windows.ps1 (docs/release.md).
 name: release
 on:
@@ -120,8 +120,22 @@ jobs:
       - uses: actions/upload-artifact@v6
         with: { name: release-macos, path: "dist/*", if-no-files-found: error }
 
+  web:
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with: { toolchain: "${{ env.RUST_VERSION }}", targets: wasm32-unknown-unknown }
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with: { tool: trunk@0.22.1 }
+      - run: scripts/package-web.sh --version "${{ needs.meta.outputs.version }}"
+      - uses: actions/upload-artifact@v6
+        with: { name: release-web, path: "dist/*", if-no-files-found: error }
+
   upload:
-    needs: [meta, android, linux, flatpak, windows, macos]
+    needs: [meta, android, linux, flatpak, windows, macos, web]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v7

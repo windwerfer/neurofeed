@@ -10,7 +10,12 @@ every platform and attaches the assets with `gh release upload`:
 | `neurofeed-X.Y.Z-x86_64.flatpak` | `flatpak` (`flatpak/org.windwerfer.neurofeed.yml`) | `scripts/package-flatpak.sh` |
 | `neurofeed-X.Y.Z-windows-x64.zip` (portable) | `windows` | `scripts/package-windows.ps1` |
 | `neurofeed-X.Y.Z-macos-arm64.dmg` | `macos` | `scripts/package-macos.sh` |
+| `neurofeed-web-X.Y.Z.zip` (static wasm site, unzip and serve over HTTP) | `web` (trunk) | `scripts/package-web.sh` |
 | `SHA256SUMS.txt` | `upload` | |
+
+Push CI (`rust-ci.yml`, job `wasm`) also runs `trunk build --release` and keeps the web
+`dist/` as the `neurofeed-web` artifact (14 days). Trunk is pinned to 0.22.1 (`Trunk.toml`);
+wasm-bindgen-cli follows the `wasm-bindgen` version in `Cargo.lock`.
 
 Test run without a release: *Actions → release → Run workflow* with `dry-run` checked (default):
 everything builds, the artifacts stay on the run, nothing is uploaded. With a `tag` and

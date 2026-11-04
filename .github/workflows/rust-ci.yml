@@ -54,6 +54,13 @@ jobs:
       - run: cargo clippy --target wasm32-unknown-unknown -p neurofeed-egui -- -D warnings
       - uses: taiki-e/install-action@v2
         with:
-          tool: trunk
+          tool: trunk@0.22.1
+      # Trunk.toml; wasm-bindgen-cli is picked from Cargo.lock by trunk.
       - run: trunk build --release
         working-directory: apps/neurofeed-egui
+      - uses: actions/upload-artifact@v6
+        with:
+          name: neurofeed-web
+          path: apps/neurofeed-egui/dist/
+          if-no-files-found: error
+          retention-days: 14
