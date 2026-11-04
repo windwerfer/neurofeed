@@ -1,0 +1,12 @@
+# Web build: `trunk build --release` (CI: rust-ci.yml `wasm`, release.yml `web`).
+# wasm-bindgen-cli is resolved by trunk from Cargo.lock, so it always matches the crate.
+trunk-version = "^0.22.1"
+
+[build]
+target = "index.html"
+dist = "dist"
+# Relative asset URLs: the dist works from any sub-path (release zip, GitHub Pages, file server).
+public_url = "./"
+
+[tools]
+wasm_opt = "version_131"
