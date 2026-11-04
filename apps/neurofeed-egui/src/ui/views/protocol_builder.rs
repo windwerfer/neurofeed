@@ -84,10 +84,16 @@ pub fn window(ctx: &egui::Context, session: &Session, out: &mut Vec<Command>) {
     let title = if e.replace { "Protocol Builder — edit" } else { "Protocol Builder — new" };
     egui::Window::new(title).open(&mut open).collapsible(false).default_width(760.0).resizable(true).show(ctx, |ui| {
         let problems = protocols::validate(&e.draft, &session.state().custom_protocols, e.replace);
-        ui.columns(2, |c| {
-            form(&mut c[0], &mut e, &problems);
-            preview(&mut c[1], &e, &problems);
-        });
+        if crate::ui::layout::current(ui.ctx()).is_compact() {
+            form(ui, &mut e, &problems);
+            ui.separator();
+            preview(ui, &e, &problems);
+        } else {
+            ui.columns(2, |c| {
+                form(&mut c[0], &mut e, &problems);
+                preview(&mut c[1], &e, &problems);
+            });
+        }
         ui.separator();
         close = footer(ui, session, &mut e, &problems, out);
     });

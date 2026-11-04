@@ -70,7 +70,11 @@ pub fn show(ctx: &egui::Context, out: &mut Vec<Command>) {
         .collapsible(false)
         .order(egui::Order::Foreground)
         .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-        .fixed_size([560.0, 340.0])
+        .fixed_size(if super::layout::current(ctx).is_compact() {
+            [screen.width() - 24.0, (screen.height() - 24.0).min(520.0)]
+        } else {
+            [560.0, 340.0]
+        })
         .show(ctx, |ui| {
             ui.add_space(6.0);
             ui.weak(format!("{} of {}", page + 1, PAGES.len()));

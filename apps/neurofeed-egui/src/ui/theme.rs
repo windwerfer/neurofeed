@@ -4,6 +4,7 @@ use egui::Color32;
 use nf_core::Band;
 
 pub const SIDEBAR_WIDTH: f32 = 170.0;
+pub const SIDEBAR_NARROW: f32 = 48.0;
 pub const TOPBAR_HEIGHT: f32 = 44.0;
 
 pub fn apply(ctx: &egui::Context) {

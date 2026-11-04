@@ -363,10 +363,15 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
     }
     if d.show_trust {
         let trust = live_trust(t, &mut d);
-        ui.columns(2, |c| {
-            indicator(&mut c[0], session, t, out);
-            super::trust::pane(&mut c[1], &trust, &mut d.plot, 180.0, false);
-        });
+        if crate::ui::layout::current(ui.ctx()).is_compact() {
+            indicator(ui, session, t, out);
+            super::trust::pane(ui, &trust, &mut d.plot, 180.0, false);
+        } else {
+            ui.columns(2, |c| {
+                indicator(&mut c[0], session, t, out);
+                super::trust::pane(&mut c[1], &trust, &mut d.plot, 180.0, false);
+            });
+        }
     } else {
         indicator(ui, session, t, out);
     }

@@ -2,7 +2,7 @@
 //! About) with searchable cards.
 
 use egui::RichText;
-use nf_core::settings::{Appearance, SettingsPatch};
+use nf_core::settings::{Appearance, LayoutMode, SettingsPatch};
 use nf_core::{Command, Session};
 use nf_feedback_consts::{DEFAULT_DIFFICULTY, DEFAULT_WINDOW, MAX_DIFFICULTY, MAX_WINDOW, MIN_WINDOW};
 
@@ -45,6 +45,7 @@ type CardFn = fn(&mut egui::Ui, &Session, &mut Vec<Command>, &mut crate::ui::She
 /// Every card: section, title, search terms, body.
 const CARDS: &[(Section, &str, &str, CardFn)] = &[
     (Section::General, "Appearance", "theme system light dark brightness", |ui, s, o, _| appearance(ui, s, o)),
+    (Section::General, "Layout", "layout compact regular phone desktop mobile sidebar bottom", |ui, s, o, _| layout(ui, s, o)),
     (Section::General, "Subject", "subject id nickname anonymous pseudonym", |ui, s, o, _| subject(ui, s, o)),
     (Section::General, "Feedback sound", "audio sound music volume chime binaural rain cutoff invert", |ui, s, o, _| {
         super::sound::show(ui, s, o)
@@ -137,6 +138,18 @@ fn matches(q: &str) -> Vec<&'static str> {
 
 fn set(out: &mut Vec<Command>, p: SettingsPatch) {
     out.push(Command::SettingsSet(p));
+}
+
+fn layout(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    let cur = session.state().settings.layout;
+    ui.horizontal(|ui| {
+        for (m, name) in [(LayoutMode::Auto, "Auto"), (LayoutMode::Compact, "Compact"), (LayoutMode::Regular, "Regular")] {
+            if ui.selectable_label(cur == m, name).clicked() && cur != m {
+                set(out, SettingsPatch { layout: Some(m), ..Default::default() });
+            }
+        }
+    });
+    ui.weak("Auto uses the compact phone layout below 600 px width; Compact / Regular force one.");
 }
 
 fn appearance(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
