@@ -29,6 +29,22 @@ pub trait Platform: Send + Sync {
     fn safe_insets_px(&self) -> [f32; 4] {
         [0.0; 4]
     }
+    /// Minimum top inset in points, used when the OS reports none (insets
+    /// not delivered yet, or a vendor that never sends them). Phones: the
+    /// status bar / clock must never cover the top bar.
+    fn min_top_inset_pt(&self) -> f32 {
+        0.0
+    }
+}
+
+/// Safe-area insets in points (`[left, top, right, bottom]`): the reported
+/// px insets divided by `ppp`, with the top raised to `min_top_pt`.
+#[must_use]
+pub fn insets_pt(px: [f32; 4], ppp: f32, min_top_pt: f32) -> [f32; 4] {
+    let ppp = if ppp.is_finite() && ppp > 0.0 { ppp } else { 1.0 };
+    let mut v = px.map(|x| if x.is_finite() { x.max(0.0) / ppp } else { 0.0 });
+    v[1] = v[1].max(min_top_pt);
+    v
 }
 
 static PLATFORM: OnceLock<Box<dyn Platform>> = OnceLock::new();
@@ -42,4 +58,14 @@ pub fn install(p: Box<dyn Platform>) {
 
 pub fn get() -> Option<&'static dyn Platform> {
     PLATFORM.get().map(|b| &**b)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn insets_scale_and_fallback() {
+        assert_eq!(super::insets_pt([0.0, 0.0, 0.0, 0.0], 2.0, 28.0), [0.0, 28.0, 0.0, 0.0]);
+        assert_eq!(super::insets_pt([10.0, 96.0, 0.0, 48.0], 2.0, 28.0), [5.0, 48.0, 0.0, 24.0]);
+        assert_eq!(super::insets_pt([f32::NAN, -3.0, 0.0, 0.0], 0.0, 0.0), [0.0; 4]);
+    }
 }
