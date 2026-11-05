@@ -70,6 +70,11 @@ android {
     }
 
     buildTypes {
+        // Debug installs next to the release build (org.windwerfer.neurofeed.rs.debug).
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             if (ksFile != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
