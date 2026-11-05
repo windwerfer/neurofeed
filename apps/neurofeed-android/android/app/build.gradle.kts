@@ -113,17 +113,21 @@ dependencies {
  * Build libneurofeed.so for every ABI with cargo-ndk into src/main/jniLibs.
  * The Rust side is always built optimized (debug egui is too slow on phones
  * and the unstripped .so would be huge); `-PrustDebug` opts out.
+ * `-PrustProfile=<name>` builds the debug .so with that cargo profile instead
+ * (scripts/build-android.sh --fast uses `android-fast`). Release is unaffected.
  */
-fun cargoTask(name: String, release: Boolean) = tasks.register<Exec>(name) {
+fun cargoTask(name: String, release: Boolean, profile: String? = null) = tasks.register<Exec>(name) {
     workingDir = repoRoot
     environment("NEUROFEED_VERSION", verName) // nf_core::APP_VERSION in the .so
     val args = mutableListOf("cargo", "ndk", "-P", "26", "-o", file("src/main/jniLibs").path)
     abiList.forEach { args += listOf("-t", it) }
     args += listOf("build", "-p", "neurofeed-android")
-    if (release) args += "--release"
+    if (profile != null) args += listOf("--profile", profile) else if (release) args += "--release"
     commandLine(args)
 }
-val cargoDebug = cargoTask("cargoBuildDebug", !hasProperty("rustDebug"))
+val cargoDebug = cargoTask(
+    "cargoBuildDebug", !hasProperty("rustDebug"), findProperty("rustProfile")?.toString(),
+)
 val cargoRelease = cargoTask("cargoBuildRelease", true)
 tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach { dependsOn(cargoDebug) }
 tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach { dependsOn(cargoRelease) }

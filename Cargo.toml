@@ -48,3 +48,13 @@ too_many_lines = "warn"
 # rlx-cpu 0.2.19 with its default BLAS feature disabled (pure Rust kernels).
 [patch.crates-io]
 rlx-cpu = { path = "vendor/rlx-cpu-0.2.19" }
+
+# Quick local Android iteration builds only (scripts/build-android.sh --fast).
+# Release, CI and reproducible builds keep using the plain release profile.
+[profile.android-fast]
+inherits = "release"
+opt-level = 2
+debug = false
+lto = false
+codegen-units = 256
+incremental = true
