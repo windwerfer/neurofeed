@@ -53,7 +53,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     }
     if st.open {
         let mut open = true;
-        egui::Window::new("Import a recording").open(&mut open).collapsible(false).default_width(520.0).show(ui.ctx(), |ui| {
+        egui::Window::new(t!("import-window-title")).open(&mut open).collapsible(false).default_width(520.0).show(ui.ctx(), |ui| {
             window(ui, session, &mut st, out);
         });
         st.open &= open;
@@ -103,7 +103,7 @@ fn source(ui: &mut egui::Ui, session: &Session, st: &mut Ui) {
             }
             return;
         }
-        ui.add(egui::TextEdit::singleline(&mut st.path).hint_text("/path/to/recording.edf").desired_width(360.0));
+        ui.add(egui::TextEdit::singleline(&mut st.path).hint_text(t!("import-path-hint")).desired_width(360.0));
         if ui.add_enabled(!st.path.trim().is_empty(), egui::Button::new(t!("import-open"))).clicked() {
             st.pending = Some(read_path(session, st.path.trim()));
         }
@@ -114,7 +114,7 @@ fn summary(ui: &mut egui::Ui, pv: &Preview) {
     let pr = &pv.provenance;
     ui.weak(format!("{} · {} · {:.0} s", pr.source_format, pv.device.channels.join(" "), pv.duration_s));
     if let Some(t) = pv.started_unix_ms {
-        ui.weak(format!("recorded {}", super::history::local_time(t)));
+        ui.weak(t!("import-recorded-at", time = super::history::local_time(t)));
     }
     ui.label(RichText::new(t!("import-kept")).strong());
     for k in &pv.summary.kept {
@@ -154,13 +154,13 @@ fn read_path(session: &Session, path: &str) -> Pending {
     let name = std::path::Path::new(path).file_name().map_or(path.to_owned(), |n| n.to_string_lossy().into_owned());
     match std::fs::read(path) {
         Ok(b) => load(session, name, b),
-        Err(e) => Pending { name, bytes: Arc::default(), preview: Err(format!("Cannot read file: {e}")) },
+        Err(e) => Pending { name, bytes: Arc::default(), preview: Err(t!("import-cannot-read-file", error = e.to_string())) },
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn read_path(_: &Session, path: &str) -> Pending {
-    Pending { name: path.to_owned(), bytes: Arc::default(), preview: Err("no file system in the browser".into()) }
+    Pending { name: path.to_owned(), bytes: Arc::default(), preview: Err(t!("import-no-file-system")) }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

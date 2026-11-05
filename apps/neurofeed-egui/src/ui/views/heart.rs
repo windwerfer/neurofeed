@@ -80,7 +80,7 @@ fn big(ui: &mut egui::Ui, title: &str, text: Option<String>, e: Option<Estimate>
     ui.vertical(|ui| {
         ui.weak(title);
         ui.label(egui::RichText::new(text.unwrap_or_else(|| "--".into())).size(40.0).color(color).strong());
-        ui.weak(e.map_or("waiting for pulse…".to_owned(), |e| format!("confidence {:.0} %", e.confidence * 100.0)));
+        ui.weak(e.map_or(t!("heart-waiting-for-pulse"), |e| t!("heart-confidence", pct = format!("{:.0}", e.confidence * 100.0))));
     });
 }
 

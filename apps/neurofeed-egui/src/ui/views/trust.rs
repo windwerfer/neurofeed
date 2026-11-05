@@ -126,7 +126,7 @@ fn guard_chart(ui: &mut egui::Ui, t: &Trust, height: f32, x: (f32, f32)) {
     p.line_segment([egui::pos2(r.left(), ly), egui::pos2(r.right(), ly)], Stroke::new(1.0_f32, THR));
     let vals: Vec<Option<f64>> = t.rows.iter().map(|r| r.guard_plot).collect();
     lines(&p, t, &vals, r, x, y, GUARD);
-    label(&p, r.left_top() + Vec2::new(0.0, -12.0), Align2::LEFT_TOP, format!("drowsiness guard (0–100) · warn line {line:.0}"));
+    label(&p, r.left_top() + Vec2::new(0.0, -12.0), Align2::LEFT_TOP, t!("trust-guard-axis", line = format!("{line:.0}")));
 }
 
 /// Warn line of the latest guarded second (legacy 75 when none was stored).
@@ -193,11 +193,7 @@ fn draw_plot(p: &egui::Painter, ui: &egui::Ui, t: &Trust, plot: Plot, r: Rect, x
         let top = to_screen(r, x, y, m.t as f32, y.1);
         p.line_segment([top, Pos2Ext::down(top, r.height())], Stroke::new(1.0_f32, MARK));
     }
-    let what = if plot == Plot::Percentile {
-        "percentile (dirty seconds hold the last clean value) · threshold"
-    } else {
-        "feature value · threshold"
-    };
+    let what = if plot == Plot::Percentile { t!("trust-axis-percentile") } else { t!("trust-axis-value") };
     label(p, r.left_top() + Vec2::new(0.0, -12.0), Align2::LEFT_TOP, what);
     label(p, r.right_bottom() + Vec2::new(0.0, 12.0), Align2::RIGHT_BOTTOM, format!("{:.0} s", x.1 - x.0));
     y
@@ -231,12 +227,12 @@ fn hover(ui: &egui::Ui, p: &egui::Painter, t: &Trust, (r, x, y): Axes, pos: egui
     p.line_segment([top, top.down(r.height() + 26.0)], Stroke::new(1.0_f32, Color32::GRAY));
     egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::unique("trust_hover"), egui::PopupAnchor::Pointer).show(|ui| {
         let at = (row.t as f32 - x.0).max(0.0) as u32;
-        ui.label(RichText::new(format!("{}:{:02} into the session", at / 60, at % 60)).strong());
+        ui.label(RichText::new(t!("trust-into-session", at = format!("{}:{:02}", at / 60, at % 60))).strong());
         ui.label(describe(row));
         let fmt = |v: Option<f64>, d: usize| v.map_or("--".into(), |v| format!("{v:.d$}"));
         match plot {
-            Plot::Percentile => ui.weak(format!("percentile {} · threshold {}", fmt(row.pct, 0), fmt(row.thr_pct, 0))),
-            Plot::Value => ui.weak(format!("value {} · threshold {}", fmt(row.value, 3), fmt(row.threshold, 3))),
+            Plot::Percentile => ui.weak(t!("trust-row-percentile", pct = fmt(row.pct, 0), thr = fmt(row.thr_pct, 0))),
+            Plot::Value => ui.weak(t!("trust-row-value", value = fmt(row.value, 3), thr = fmt(row.threshold, 3))),
         };
     });
 }
@@ -244,41 +240,49 @@ fn hover(ui: &egui::Ui, p: &egui::Painter, t: &Trust, (r, x, y): Axes, pos: egui
 /// One line for a second: the strip category and its reason.
 pub fn describe(r: &Row) -> String {
     let mut s = if r.calibrating {
-        "calibrating".to_owned()
+        t!("trust-calibrating")
     } else if r.paused {
-        "paused".to_owned()
+        t!("trust-paused")
     } else if !r.clean {
-        format!("dirty: {}", r.dirty.unwrap_or("no verdict").replace('_', " "))
+        t!("trust-dirty-reason", reason = r.dirty.map_or_else(|| t!("trust-no-verdict"), |d| d.replace('_', " ")))
     } else if !r.held_back.is_empty() {
-        format!("held back: {}", r.held_back.join(", ").replace('_', " "))
+        t!("trust-held-back-reason", reason = r.held_back.join(", ").replace('_', " "))
     } else if r.in_target {
-        "in zone".to_owned()
+        t!("trust-in-zone")
     } else {
-        "below threshold".to_owned()
+        t!("trust-below-threshold")
     };
     if r.warn == Some(true) {
-        s += " · drowsiness warning";
+        s += " · ";
+        s += &t!("trust-drowsiness-warning");
     }
     if r.reward_chime {
-        s += " · reward";
+        s += " · ";
+        s += &t!("trust-reward");
     }
     s
 }
 
 fn legend(ui: &mut egui::Ui, t: &Trust) {
     ui.horizontal_wrapped(|ui| {
-        for (c, name) in [(IN_ZONE, "in zone"), (BELOW, "below"), (HELD, "held back"), (DIRTY, "dirty"), (IDLE, "calibrating / paused")] {
+        for (c, name) in [
+            (IN_ZONE, t!("trust-in-zone")),
+            (BELOW, t!("trust-legend-below")),
+            (HELD, t!("trust-legend-held-back")),
+            (DIRTY, t!("trust-legend-dirty")),
+            (IDLE, t!("trust-legend-idle")),
+        ] {
             let (r, _) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
             ui.painter().rect_filled(r, 2.0, c);
             ui.weak(name);
             ui.add_space(6.0);
         }
         if !t.marks.is_empty() {
-            ui.label(RichText::new(format!("| {} gesture mark(s)", t.marks.len())).small().color(MARK));
+            ui.label(RichText::new(format!("| {}", t!("trust-gesture-marks", n = t.marks.len()))).small().color(MARK));
         }
     });
     if !t.totals.dirty_s.is_empty() {
         let parts: Vec<String> = t.totals.dirty_s.iter().map(|(k, n)| format!("{} {n} s", k.replace('_', " "))).collect();
-        ui.weak(format!("Dirty: {}", parts.join(" · ")));
+        ui.weak(t!("trust-dirty-totals", parts = parts.join(" · ")));
     }
 }

@@ -75,7 +75,7 @@ fn device(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         match &state.link {
             Some(LinkState::Connecting) => {
                 ui.spinner();
-                ui.weak("connecting…");
+                ui.weak(t!("topbar-connecting"));
             }
             Some(LinkState::Lost { reason }) => {
                 ui.colored_label(ui.visuals().error_fg_color, reason);
@@ -107,7 +107,7 @@ fn stream_controls(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) 
     }
     ui.weak(t!("topbar-time", s = state.time.round()));
     if let Some(r) = state.recording.as_ref().filter(|r| r.active) {
-        if ui.button(format!("⏹ Stop ({:.0} s)", r.duration)).clicked() {
+        if ui.button(t!("topbar-stop-recording", s = format!("{:.0}", r.duration))).clicked() {
             out.push(Command::RecordingStop);
         }
     } else {

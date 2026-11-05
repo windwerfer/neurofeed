@@ -251,7 +251,7 @@ fn mains(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
 
 fn protocols(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let n = session.state().custom_protocols.len();
-    ui.weak(format!("{n} custom protocol(s). Create and edit them from the Feedback screen (\"New protocol…\" under the cards)."));
+    ui.weak(t!("settings-n-custom-protocols", n = n));
     if ui.button(t!("settings-open-feedback")).clicked() {
         out.push(Command::ViewSet { view: nf_core::View::Feedback });
     }
@@ -262,19 +262,16 @@ fn calibration(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     if ui.checkbox(&mut on, t!("settings-always-staged")).changed() {
         set(out, SettingsPatch { always_staged: Some(on), ..Default::default() });
     }
-    ui.weak(format!(
-        "Off: Sleep Guard runs the staged sequence (15 s artifacts, 30 s eyes open, then the baseline); other protocols only collect the {} s baseline of clean signal. On: every protocol runs the staged sequence first, which also gives the AI guard its awake reference.",
-        nf_core::nf_feedback::BASELINE_VALID_S
-    ));
+    ui.weak(t!("settings-always-staged-help", s = nf_core::nf_feedback::BASELINE_VALID_S));
 }
 
 fn storage(ui: &mut egui::Ui, session: &Session, shell: &mut crate::ui::Shell) {
     let loc = &session.state().history_location;
-    ui.label(format!("Sessions and settings are stored in: {loc}"));
+    ui.label(t!("settings-stored-in", location = loc.as_str()));
     if let Some(p) = crate::platform::get() {
         ui.weak(t!("settings-android-the-database-stays-in"));
         ui.horizontal(|ui| {
-            ui.label(format!("Export folder: {}", p.folder_label().unwrap_or_else(|| "ask each time".into())));
+            ui.label(t!("settings-export-folder", folder = p.folder_label().unwrap_or_else(|| t!("settings-ask-each-time"))));
             if ui.button(t!("settings-choose-folder")).clicked() {
                 p.pick_folder();
             }
@@ -288,10 +285,10 @@ fn storage(ui: &mut egui::Ui, session: &Session, shell: &mut crate::ui::Shell) {
     let id = ui.scope_id().with("move-dir");
     let mut dir: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.add(egui::TextEdit::singleline(&mut dir).hint_text("new folder, e.g. /media/usb/neurofeed").desired_width(320.0));
+        ui.add(egui::TextEdit::singleline(&mut dir).hint_text(t!("settings-new-folder-hint")).desired_width(320.0));
         let busy = session.state().recording.as_ref().is_some_and(|r| r.active);
         let r = ui.add_enabled(!dir.trim().is_empty() && !busy, egui::Button::new(t!("settings-move-here")));
-        if r.on_disabled_hover_text("enter a folder; not while recording").clicked() {
+        if r.on_disabled_hover_text(t!("settings-enter-folder-not-recording")).clicked() {
             shell.move_store = Some(dir.clone());
         }
     });
@@ -366,7 +363,7 @@ fn debug(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
 fn faults(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     use nf_core::faults::{BadValue, FaultTag};
     if let Err(why) = session.enabled("sim.fault.add") {
-        ui.weak(format!("Fault injection: {why}"));
+        ui.weak(t!("settings-fault-injection-unavailable", reason = why.to_string()));
         return;
     }
     let id = egui::Id::unique("fault_duration");
@@ -374,7 +371,7 @@ fn faults(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     ui.horizontal(|ui| {
         ui.label(t!("settings-inject-fault-for"));
         ui.add(egui::DragValue::new(&mut dur).range(1.0..=600.0).suffix(" s"));
-        ui.weak("(all pads; disconnect reconnects after it)");
+        ui.weak(t!("settings-fault-all-pads"));
     });
     ui.data_mut(|d| d.insert_temp(id, dur));
     let kinds = [
@@ -405,8 +402,9 @@ fn faults(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let now = session.state().time;
     for f in &session.state().faults {
         ui.horizontal(|ui| {
-            let left = f.end().map_or("until cleared".into(), |e| format!("{:.0} s left", (e - now).max(0.0)));
-            let chans = if f.channels.is_empty() { "all".into() } else { f.channels.join(", ") };
+            let left =
+                f.end().map_or(t!("settings-until-cleared"), |e| t!("settings-seconds-left", s = format!("{:.0}", (e - now).max(0.0))));
+            let chans = if f.channels.is_empty() { t!("settings-all-channels") } else { f.channels.join(", ") };
             ui.monospace(format!("#{} {:?} · {chans} · {left}", f.id, f.kind));
             if ui.small_button(t!("settings-clear")).clicked() {
                 out.push(Command::SimFaultClear { id: Some(f.id) });
@@ -429,7 +427,7 @@ fn agents(ui: &mut egui::Ui, shell: &mut crate::ui::Shell) {
                 shell.set_bridge = Some(on);
             }
             match bridge {
-                Some(addr) => ui.weak(format!("Listening on {addr} (local only, token in bridge.json). Run: neurofeed-cli --bridge mcp")),
+                Some(addr) => ui.weak(t!("settings-bridge-listening", addr = addr.to_string())),
                 None => ui.weak(t!("settings-off-also-enabled-by-starting")),
             };
         }
@@ -455,13 +453,14 @@ fn stability(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
             UI.with(|st| {
                 let mut st = st.borrow_mut();
                 let mut w = st.window.unwrap_or(cur.window);
-                let r = ui.add(egui::Slider::new(&mut w, MIN_WINDOW..=MAX_WINDOW).text("window (s)"));
+                let r = ui.add(egui::Slider::new(&mut w, MIN_WINDOW..=MAX_WINDOW).text(t!("settings-window-s")));
                 st.window = (r.dragged() || r.has_focus()).then_some(w);
                 if r.drag_stopped() || (r.changed() && !r.dragged()) {
                     out.push(Command::StabilitySet { window: Some(w), difficulty: None, reset: false });
                 }
                 let mut d = st.difficulty.unwrap_or(cur.difficulty);
-                let r = ui.add(egui::Slider::new(&mut d, 0.0..=MAX_DIFFICULTY).step_by(0.01).fixed_decimals(2).text("difficulty"));
+                let r =
+                    ui.add(egui::Slider::new(&mut d, 0.0..=MAX_DIFFICULTY).step_by(0.01).fixed_decimals(2).text(t!("settings-difficulty")));
                 st.difficulty = (r.dragged() || r.has_focus()).then_some(d);
                 if r.drag_stopped() || (r.changed() && !r.dragged()) {
                     out.push(Command::StabilitySet { window: None, difficulty: Some(d), reset: false });
@@ -469,7 +468,14 @@ fn stability(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
             });
             let is_default = cur.window == DEFAULT_WINDOW && (cur.difficulty - DEFAULT_DIFFICULTY).abs() < 1e-9;
             if ui
-                .add_enabled(!is_default, egui::Button::new(format!("Reset to defaults ({DEFAULT_WINDOW} s, {DEFAULT_DIFFICULTY:.2})")))
+                .add_enabled(
+                    !is_default,
+                    egui::Button::new(t!(
+                        "settings-reset-stability",
+                        window = DEFAULT_WINDOW.to_string(),
+                        difficulty = format!("{DEFAULT_DIFFICULTY:.2}")
+                    )),
+                )
                 .clicked()
             {
                 out.push(Command::StabilitySet { window: None, difficulty: None, reset: true });

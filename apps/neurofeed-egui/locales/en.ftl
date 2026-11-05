@@ -352,3 +352,219 @@ topbar-pads = pads { $good }/{ $total }
 topbar-notch = notch { $notch }
 settings-language-auto = System
 settings-language-hint = System follows the device language (detected: { $lang }); anything not translated yet shows in English.
+
+# Formatted strings and protocol texts (Fluent variables).
+mod-closed-during-recording = ⚠ NeuroFeed closed during a recording ({ $device }, { $duration } saved). Recover it to History?
+heart-waiting-for-pulse = waiting for pulse…
+heart-confidence = confidence { $pct } %
+history-no-date = (no date)
+history-bad-date = (bad date)
+history-saved-sessions =
+    { $n ->
+        [one] { $n } saved session
+       *[other] { $n } saved sessions
+    } · { $location }
+history-pct-in-target = { $pct } % in target
+history-detail-stats =
+    { $pauses ->
+        [one] { $pauses } pause
+       *[other] { $pauses } pauses
+    } · { $eeg } EEG samples · { $ppg } PPG samples · { $feedback } feedback seconds · { $mb } MB
+history-export-not-in-web = export from the web build is not available yet
+history-n-selected = { $n } selected
+history-export-selected = Export selected ({ $format })
+history-exported-n-of-m = Exported { $ok } of { $n } to { $dir }
+history-imported-from = Imported from { $file } ({ $format })
+history-resampled-from = resampled from { $hz } Hz
+history-bands-from-file = bands from file
+history-n-notes =
+    { $n ->
+        [one] { $n } note
+       *[other] { $n } notes
+    }
+history-export-failed = Export failed: { $error }
+history-saved-path = Saved { $path }
+plot-seconds-ago-drag = { $s } s ago · drag to pan
+plot-drag-to-inspect = drag a plot to inspect
+settings-n-custom-protocols =
+    { $n ->
+        [one] { $n } custom protocol
+       *[other] { $n } custom protocols
+    }. Create and edit them from the Feedback screen ("New protocol…" under the cards).
+settings-always-staged-help = Off: Sleep Guard runs the staged sequence (15 s artifacts, 30 s eyes open, then the baseline); other protocols only collect the { $s } s baseline of clean signal. On: every protocol runs the staged sequence first, which also gives the AI guard its awake reference.
+settings-stored-in = Sessions and settings are stored in: { $location }
+settings-export-folder = Export folder: { $folder }
+settings-ask-each-time = ask each time
+settings-new-folder-hint = new folder, e.g. /media/usb/neurofeed
+settings-enter-folder-not-recording = enter a folder; not while recording
+settings-fault-injection-unavailable = Fault injection: { $reason }
+settings-fault-all-pads = (all pads; disconnect reconnects after it)
+settings-until-cleared = until cleared
+settings-seconds-left = { $s } s left
+settings-all-channels = all
+settings-bridge-listening = Listening on { $addr } (local only, token in bridge.json). Run: neurofeed-cli --bridge mcp
+settings-window-s = window (s)
+settings-difficulty = difficulty
+settings-reset-stability = Reset to defaults ({ $window } s, { $difficulty })
+sound-reward-chime = Chime
+sound-reward-chime-about = A singing bowl each time you enter the target.
+sound-reward-rain = Rain
+sound-reward-rain-about = Five rain stages: heavy far from target, near-silent on target.
+sound-reward-binaural = Binaural swell
+sound-reward-binaural-about = A binaural beat that grows louder as you improve (headphones).
+sound-reward-music = Music
+sound-reward-music-about = Your music; it opens up (low-pass) as you improve. Desktop only.
+sound-reward-none = None
+sound-reward-none-about = No reward sound.
+sound-bg-drone = Drone
+sound-bg-drone-loop = Drone loop
+sound-bg-rain = Rain
+sound-bg-binaural = Binaural
+sound-bg-none = None
+sound-guard-soft-bowl = Soft bowl
+sound-guard-chime = Chime
+sound-guard-cough = Cough
+sound-guard-alarm = Alarm (ramps up)
+sound-guard-none = None
+sound-music-path-hint = /path/to/music (.ogg .mp3 .flac .wav)
+sound-p-drowsy-above = P(drowsy) above { $thr }
+sound-above-your-calibration = above your calibration (p75)
+sound-ai-drowsiness-guard = ✔ AI drowsiness guard
+sound-ai-guard-warns =
+    { $model } warns{ $mute ->
+        [yes] {" "}and mutes the reward
+       *[no] {""}
+    } when { $when }. Change it in Settings → AI.
+sound-band-guard-warns =
+    Warns{ $mute ->
+        [yes] {" "}and mutes the reward
+       *[no] {""}
+    } when delta rises above your calibration (p75). Load an AI model (Settings → AI) for the AI guard.
+streaming-lsl-needs-desktop = LSL needs the desktop app
+streaming-web-no-udp = the web app cannot send UDP
+streaming-inlets-connected =
+    { $n ->
+        [one] { $n } inlet connected
+       *[other] { $n } inlets connected
+    }
+streaming-n-chunks = { $n } chunks
+streaming-n-messages = { $n } messages
+streaming-samples-dropped = { $n } samples dropped
+streaming-rows-per-message = { $n } rows/message
+nerd-nerd-sheet = Nerd sheet
+movement-axis-caption = accelerometer, g (x, y, z) and |a| − 1 g
+bands-simulated-data = (simulated data)
+import-window-title = Import a recording
+import-path-hint = /path/to/recording.edf
+import-recorded-at = recorded { $time }
+import-cannot-read-file = Cannot read file: { $error }
+import-no-file-system = no file system in the browser
+protocol-builder-feature-atr = Alpha / theta (ATR)
+protocol-builder-feature-tar = Theta / alpha (TAR)
+protocol-builder-feature-btr = Beta / theta (BTR)
+protocol-builder-feature-alpha = Relative alpha
+protocol-builder-feature-theta = Relative theta
+protocol-builder-feature-beta = Relative beta
+protocol-builder-eyes-closed = closed
+protocol-builder-eyes-open = open
+protocol-builder-threshold-desc = percentile of your calibration, adapted while you train
+protocol-builder-none = none
+protocol-builder-guard-warns-only = offered (warns only)
+protocol-builder-guard-warns-mutes = offered (warns and mutes reward)
+protocol-builder-n-to-fix = { $n } to fix before saving
+protocol-builder-copy-of = { $title } (copy)
+protocol-builder-start-from = Start from { $title } in the Protocol Builder
+protocol-builder-edit-title = Edit { $title }…
+about-version-line = NeuroFeed { $version } · Rust / egui build
+about-apache-license = · Apache-2.0 license
+trust-guard-axis = drowsiness guard (0–100) · warn line { $line }
+trust-axis-percentile = percentile (dirty seconds hold the last clean value) · threshold
+trust-axis-value = feature value · threshold
+trust-into-session = { $at } into the session
+trust-row-percentile = percentile { $pct } · threshold { $thr }
+trust-row-value = value { $value } · threshold { $thr }
+trust-calibrating = calibrating
+trust-paused = paused
+trust-dirty-reason = dirty: { $reason }
+trust-no-verdict = no verdict
+trust-held-back-reason = held back: { $reason }
+trust-below-threshold = below threshold
+trust-drowsiness-warning = drowsiness warning
+trust-reward = reward
+trust-legend-below = below
+trust-legend-held-back = held back
+trust-legend-dirty = dirty
+trust-legend-idle = calibrating / paused
+trust-gesture-marks =
+    { $n ->
+        [one] { $n } gesture mark
+       *[other] { $n } gesture marks
+    }
+trust-dirty-totals = Dirty: { $parts }
+raw-quality = quality { $q }
+ai-above-my-calibration = above my calibration (p75)
+ai-scorer-wake-light = wake vs light sleep
+ai-scorer-drowsiness = drowsiness (A-vig)
+ai-installing-pct = Installing… { $pct } %
+ai-ready-desc = Ready — { $description }
+ai-error-msg = Error: { $message }
+ai-selected = selected
+ai-size-window = ~{ $mb } MB · { $s } s window
+ai-folder = Folder: { $folder }
+ai-path-hint = path to { $file } (or drop it here)
+ai-not-scoring = Not scoring: { $reason }
+ai-live-line = Live ({ $model }): { $heads }   · { $ms } ms/window · { $windows } windows · { $ago } s ago
+ai-anchors = Anchors: clarity { $clarity } · sleep direction { $sleep }
+feedback-eyes-open = eyes open
+feedback-eyes-closed = eyes closed
+feedback-tag-experimental = experimental
+feedback-tag-custom = custom
+feedback-tag-needs-ai = needs AI model
+feedback-not-available = Not available: { $reason }
+feedback-eyes-minutes = { $eyes } · { $min } min
+feedback-calibrates-three-steps = { $title } calibrates in three steps, about { $s } s.
+feedback-calibration-takes = Calibration takes about { $s } seconds.
+feedback-pick-then-start = Pick what to train, then start.
+feedback-n-min = { $min } min
+feedback-start-title = Start { $title }
+feedback-hint-forehead = forehead sensor: press flat on bare skin, move hair away
+feedback-hint-ear = ear sensor: tuck behind the ear, touching skin
+feedback-hint-scalp = press the sensor onto the scalp, part the hair
+feedback-hold-still = Hold still… { $n }/{ $total } s
+feedback-good-seconds = { $n } of { $total } good seconds
+feedback-elapsed-stops-at = { $s } s elapsed · stops at { $max } s even if the signal was poor
+feedback-paused-reason = Paused: { $reason }
+feedback-held-back = Held back ({ $reason })
+feedback-time-left = { $time } left
+feedback-last-second-didnt-count = Last second didn't count: { $reason }
+feedback-summary-line = Threshold { $from } to { $to } ({ $steps } adjustments) · { $counted } counted seconds · { $pauses } pauses · saved to History
+feedback-ended-by = { $title } · ended: { $reason }
+spectrogram-caption = 1 s Hamming windows every 0.25 s, 0–50 Hz, dB re µV²/Hz
+psd-caption = log10 µV²/Hz, last 1 s (Hamming); marker = alpha peak
+topbar-connecting = connecting…
+topbar-stop-recording = ⏹ Stop ({ $s } s)
+device-dialog-lost = lost: { $reason }
+device-dialog-battery-pct = Battery { $pct }%
+device-dialog-scanning = scanning…
+device-dialog-waiting-for = Waiting for { $device } to come back (reconnects on its own).
+device-dialog-auto-reconnect-off = Auto-reconnect to { $device } is off until you connect a device.
+device-dialog-group-simulated = Simulated
+device-dialog-no-rssi = no RSSI (network device, or not reported yet)
+app-move-failed = Move failed: { $error }
+store-moved-sessions =
+    { $n ->
+        [one] Moved { $n } session to { $dir }
+       *[other] Moved { $n } sessions to { $dir }
+    }
+protocol-rest-awake-title = Rest Awake
+protocol-rest-awake-summary = Rewards alpha over theta (ATR) with eyes closed.
+protocol-open-monitor-title = Open Monitor
+protocol-open-monitor-summary = Rewards relative alpha with eyes closed.
+protocol-alert-open-title = Alert, Eyes Open
+protocol-alert-open-summary = Rewards beta over theta (BTR) with eyes open.
+protocol-alert-closed-title = Alert, Eyes Closed
+protocol-alert-closed-summary = Rewards beta over theta (BTR) with eyes closed.
+protocol-sleep-guard-title = Sleep Guard
+protocol-sleep-guard-summary = No reward; warns when you drift towards sleep.
+protocol-band-stability-title = Band Stability
+protocol-band-stability-summary = Experimental: rewards steadier alpha than in your calibration.
