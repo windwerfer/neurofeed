@@ -62,7 +62,7 @@ fn guard_settings(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) 
         let mut v = a.settings.fixed_threshold;
         let (lo, hi) = nf_feedback_range();
         let s = ui.add_enabled(mode == ThresholdMode::Fixed, egui::Slider::new(&mut v, lo..=hi).step_by(0.01).fixed_decimals(2));
-        let pct = ui.radio_value(&mut mode, ThresholdMode::Percentile, "above my calibration (p75)");
+        let pct = ui.radio_value(&mut mode, ThresholdMode::Percentile, t!("ai-above-my-calibration"));
         if fixed.changed() || pct.changed() {
             out.push(Command::AiSet(AiPatch { threshold_mode: Some(mode), ..AiPatch::default() }));
         }
@@ -81,7 +81,7 @@ fn nf_feedback_range() -> (f64, f64) {
 }
 
 fn scorer_label(id: &str) -> String {
-    let what = if id.contains("wake_light") { "wake vs light sleep" } else { "drowsiness (A-vig)" };
+    let what = if id.contains("wake_light") { t!("ai-scorer-wake-light") } else { t!("ai-scorer-drowsiness") };
     let model = AiModel::for_scorer(id).map_or("?", AiModel::label);
     format!("{what} · {model}")
 }
@@ -89,12 +89,12 @@ fn scorer_label(id: &str) -> String {
 fn state_text(s: &AiModelState) -> (String, Color32) {
     match s {
         AiModelState::Missing => (t!("ai-not-installed"), Color32::GRAY),
-        AiModelState::Installing { progress: Some(p) } => (format!("Installing… {:.0} %", p * 100.0), WARN),
+        AiModelState::Installing { progress: Some(p) } => (t!("ai-installing-pct", pct = format!("{:.0}", p * 100.0)), WARN),
         AiModelState::Installing { progress: None } => (t!("ai-installing"), WARN),
         AiModelState::Installed => (t!("ai-installed-not-loaded"), Color32::GRAY),
         AiModelState::Loading => (t!("ai-loading"), WARN),
-        AiModelState::Ready { description } => (format!("Ready — {description}"), OK),
-        AiModelState::Failed { message } => (format!("Error: {message}"), Color32::from_rgb(210, 70, 60)),
+        AiModelState::Ready { description } => (t!("ai-ready-desc", description = description.to_string()), OK),
+        AiModelState::Failed { message } => (t!("ai-error-msg", message = message.to_string()), Color32::from_rgb(210, 70, 60)),
     }
 }
 
@@ -102,9 +102,9 @@ fn card(ui: &mut egui::Ui, session: &Session, m: &ModelStatus, selected: bool, i
     ui.horizontal(|ui| {
         ui.label(RichText::new(m.label).strong().size(16.0));
         if selected {
-            ui.label(RichText::new("selected").small().color(OK));
+            ui.label(RichText::new(t!("ai-selected")).small().color(OK));
         }
-        ui.weak(format!("~{} MB · {:.0} s window", m.size_mb, m.window_s));
+        ui.weak(t!("ai-size-window", mb = m.size_mb.to_string(), s = format!("{:.0}", m.window_s)));
     });
     ui.weak(m.description);
     let (txt, col) = state_text(&m.state);
@@ -148,7 +148,7 @@ fn card(ui: &mut egui::Ui, session: &Session, m: &ModelStatus, selected: bool, i
         import_row(ui, m, i, out);
     }
     if let Some(f) = &m.folder {
-        ui.weak(format!("Folder: {f}"));
+        ui.weak(t!("ai-folder", folder = f.to_string()));
     }
 }
 
@@ -162,9 +162,7 @@ fn import_row(ui: &mut egui::Ui, m: &ModelStatus, i: usize, out: &mut Vec<Comman
         }
         ui.horizontal(|ui| {
             ui.add(
-                egui::TextEdit::singleline(&mut p[i])
-                    .hint_text(format!("path to {} (or drop it here)", m.weights_file))
-                    .desired_width(360.0),
+                egui::TextEdit::singleline(&mut p[i]).hint_text(t!("ai-path-hint", file = m.weights_file.to_string())).desired_width(360.0),
             );
             if ui.add_enabled(!p[i].trim().is_empty(), egui::Button::new(t!("ai-import"))).clicked() {
                 out.push(Command::AiInstall { model: Some(m.model), path: Some(p[i].trim().to_owned()) });
@@ -177,7 +175,7 @@ fn live(ui: &mut egui::Ui, session: &Session) {
     let s = session.state();
     let Some(l) = &s.ai.live else {
         if let Err(r) = s.ai.ready_reason() {
-            ui.weak(format!("Not scoring: {r}"));
+            ui.weak(t!("ai-not-scoring", reason = r.to_string()));
         } else {
             ui.weak(t!("ai-ready-scores-appear-once-a"));
         }
@@ -185,15 +183,15 @@ fn live(ui: &mut egui::Ui, session: &Session) {
     };
     let age = s.time - l.t;
     let heads: Vec<String> = l.heads.iter().map(|(k, v)| format!("{k} {v:.2}")).collect();
-    ui.label(format!(
-        "Live ({}): {}   · {:.0} ms/window · {} windows · {:.0} s ago",
-        l.model.label(),
-        heads.join("  "),
-        l.ms,
-        l.windows,
-        age
+    ui.label(t!(
+        "ai-live-line",
+        model = l.model.label(),
+        heads = heads.join("  "),
+        ms = format!("{:.0}", l.ms),
+        windows = l.windows,
+        ago = format!("{age:.0}")
     ));
     if let (Some(c), Some(d)) = (l.clarity, l.sleep_dir) {
-        ui.weak(format!("Anchors: clarity {c:.2} · sleep direction {d:.2}"));
+        ui.weak(t!("ai-anchors", clarity = format!("{c:.2}"), sleep = format!("{d:.2}")));
     }
 }

@@ -253,7 +253,8 @@ impl eframe::App for NeuroFeedApp {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(dir) = shell.move_store.take() {
             self.store_note = Some(
-                crate::store::move_to(&mut self.session, std::path::Path::new(dir.trim())).unwrap_or_else(|e| format!("Move failed: {e}")),
+                crate::store::move_to(&mut self.session, std::path::Path::new(dir.trim()))
+                    .unwrap_or_else(|e| crate::t!("app-move-failed", error = e)),
             );
         }
         self.platform_frame();

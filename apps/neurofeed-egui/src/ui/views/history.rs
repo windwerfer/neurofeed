@@ -29,7 +29,7 @@ const THUMB_W: f32 = 70.0;
 const THUMBS_PER_FRAME: usize = 2;
 
 fn date(m: &SessionMeta) -> String {
-    m.started_unix_ms.map_or("(no date)".into(), local_time)
+    m.started_unix_ms.map_or(t!("history-no-date"), local_time)
 }
 
 /// `YYYY-MM-DD HH:MM` in the viewer's local zone (shell concern; the core
@@ -38,7 +38,7 @@ pub fn local_time(unix_ms: f64) -> String {
     use chrono::TimeZone;
     match chrono::Local.timestamp_millis_opt(unix_ms as i64) {
         chrono::LocalResult::Single(t) | chrono::LocalResult::Ambiguous(t, _) => t.format("%Y-%m-%d %H:%M").to_string(),
-        chrono::LocalResult::None => "(bad date)".into(),
+        chrono::LocalResult::None => t!("history-bad-date"),
     }
 }
 
@@ -54,7 +54,7 @@ fn success(m: &SessionMeta) -> Option<f64> {
 fn title(m: &SessionMeta, custom: &[nf_core::nf_feedback::Protocol]) -> String {
     m.protocol.clone().map_or_else(
         || if m.import.is_some() { t!("history-imported-recording") } else { t!("history-recording") },
-        |p| nf_core::protocols::find(custom, &p).map_or(p, |x| x.title),
+        |p| nf_core::protocols::find(custom, &p).map_or(p, |x| crate::i18n::protocol_title(&x)),
     )
 }
 
@@ -65,7 +65,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     ui.add_space(6.0);
     ui.heading(RichText::new(t!("history-history")).size(24.0));
     ui.horizontal(|ui| {
-        ui.weak(format!("{} saved session(s) · {}", state.history.len(), state.history_location));
+        ui.weak(t!("history-saved-sessions", n = state.history.len(), location = state.history_location.as_str()));
         super::import::show(ui, session, out);
     });
     ui.add_space(10.0);
@@ -90,7 +90,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
                         title(m, &state.custom_protocols),
                         date(m),
                         mmss(m.duration_s),
-                        success(m).map_or("--".into(), |x| format!("{:.0} % in target", x * 100.0))
+                        success(m).map_or("--".into(), |x| t!("history-pct-in-target", pct = format!("{:.0}", x * 100.0)))
                     );
                     ui.horizontal(|ui| {
                         let mut p = st.picked.contains(&m.id);
@@ -124,13 +124,13 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
     ui.label(RichText::new(title(m, &session.state().custom_protocols)).size(20.0).strong());
     ui.weak(format!("{} · {} · {}", date(m), m.device_name, mmss(m.duration_s)));
     ui.add_space(8.0);
-    ui.weak(format!(
-        "{} pause(s) · {} EEG samples · {} PPG samples · {} feedback seconds · {:.1} MB",
-        m.summary.as_ref().and_then(|s| s.get("pauses")).and_then(serde_json::Value::as_u64).unwrap_or(0),
-        m.eeg_samples,
-        m.ppg_samples,
-        m.feedback_seconds,
-        m.bytes as f64 / 1e6
+    ui.weak(t!(
+        "history-detail-stats",
+        pauses = m.summary.as_ref().and_then(|s| s.get("pauses")).and_then(serde_json::Value::as_u64).unwrap_or(0),
+        eeg = m.eeg_samples,
+        ppg = m.ppg_samples,
+        feedback = m.feedback_seconds,
+        mb = format!("{:.1}", m.bytes as f64 / 1e6)
     ));
     provenance(ui, m);
     super::meta::context(ui, m.context.as_ref());
@@ -151,7 +151,7 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
             (ExportFormat::Pdf, t!("history-export-pdf")),
         ] {
             let r = ui.add_enabled(cfg!(not(target_arch = "wasm32")), egui::Button::new(name));
-            let r = r.on_disabled_hover_text("export from the web build is not available yet");
+            let r = r.on_disabled_hover_text(t!("history-export-not-in-web"));
             if r.clicked() {
                 st.note = Some((m.id, export(session, m.id, fmt)));
             }
@@ -198,17 +198,18 @@ fn bulk_bar(ui: &mut egui::Ui, session: &Session, st: &mut Ui) {
         if ui.small_button(if n == all.len() { t!("history-select-none") } else { t!("history-select-all") }).clicked() {
             st.picked = if n == all.len() { Default::default() } else { all.iter().copied().collect() };
         }
-        ui.weak(format!("{n} selected"));
+        ui.weak(t!("history-n-selected", n = n));
         for (fmt, name) in [(ExportFormat::Nfed6, ".neurofeed"), (ExportFormat::Edf, "EDF"), (ExportFormat::Pdf, "PDF")] {
             let en = n > 0 && cfg!(not(target_arch = "wasm32"));
-            if ui.add_enabled(en, egui::Button::new(format!("Export selected ({name})"))).clicked() {
+            if ui.add_enabled(en, egui::Button::new(t!("history-export-selected", format = name))).clicked() {
                 let notes: Vec<String> = st.picked.iter().map(|&id| export(session, id, fmt)).collect();
-                let ok = notes.iter().filter(|s| s.starts_with("Saved")).count();
+                let saved = t!("history-saved-path", path = "");
+                let ok = notes.iter().filter(|s| s.starts_with(saved.as_str())).count();
                 let dir = notes
                     .iter()
-                    .find_map(|s| s.strip_prefix("Saved "))
+                    .find_map(|s| s.strip_prefix(saved.as_str()))
                     .and_then(|p| std::path::Path::new(p).parent().map(|d| d.display().to_string()));
-                st.bulk_note = Some(format!("Exported {ok} of {n} to {}", dir.unwrap_or_else(|| "?".into())));
+                st.bulk_note = Some(t!("history-exported-n-of-m", ok = ok, n = n, dir = dir.unwrap_or_else(|| "?".into())));
             }
         }
     });
@@ -248,15 +249,18 @@ fn thumb(
 fn provenance(ui: &mut egui::Ui, m: &SessionMeta) {
     let Some(p) = &m.import else { return };
     let s = |k: &str| p[k].as_str().unwrap_or("?").to_owned();
-    let mut line = format!("Imported from {} ({})", s("source_file_name"), s("source_format"));
+    let mut line = t!("history-imported-from", file = s("source_file_name"), format = s("source_format"));
     if p["resampled"].as_bool() == Some(true) {
-        line += &format!(" · resampled from {} Hz", p["original_rate_hz"].as_f64().unwrap_or(0.0));
+        line += " · ";
+        line += &t!("history-resampled-from", hz = p["original_rate_hz"].as_f64().unwrap_or(0.0).to_string());
     }
     if p["bands_from_file"].as_bool() == Some(true) {
-        line += " · bands from file";
+        line += " · ";
+        line += &t!("history-bands-from-file");
     }
     if let Some(n) = p["annotations"].as_array().map(Vec::len).filter(|n| *n > 0) {
-        line += &format!(" · {n} note(s)");
+        line += " · ";
+        line += &t!("history-n-notes", n = n);
     }
     ui.label(RichText::new(line).color(THR));
     for w in p["warnings"].as_array().into_iter().flatten().filter_map(|w| w.as_str()) {
@@ -276,13 +280,15 @@ fn export(session: &Session, id: u64, format: ExportFormat) -> String {
             ExportFormat::Pdf => "application/pdf",
             _ => "application/octet-stream",
         };
-        return p.export(&format!("neurofeed-session-{id}.{ext}"), mime, bytes).unwrap_or_else(|e| format!("Export failed: {e}"));
+        return p
+            .export(&format!("neurofeed-session-{id}.{ext}"), mime, bytes)
+            .unwrap_or_else(|e| t!("history-export-failed", error = e.to_string()));
     }
     let dir = std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Downloads")).unwrap_or_else(std::env::temp_dir);
     let path = dir.join(format!("neurofeed-session-{id}.{ext}"));
     match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, bytes)) {
-        Ok(()) => format!("Saved {}", path.display()),
-        Err(e) => format!("Export failed: {e}"),
+        Ok(()) => t!("history-saved-path", path = path.display().to_string()),
+        Err(e) => t!("history-export-failed", error = e.to_string()),
     }
 }
 

@@ -45,7 +45,13 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
         if ch < n_eeg {
             let q = sig.quality[ch];
             let c = if sig.usable(ch) { Color32::from_rgb(0x66, 0xBB, 0x6A) } else { Color32::from_rgb(0xEF, 0x53, 0x50) };
-            p.text(r.right_top() + egui::vec2(-4.0, -18.0), Align2::RIGHT_TOP, format!("quality {q:.0}"), egui::FontId::monospace(11.0), c);
+            p.text(
+                r.right_top() + egui::vec2(-4.0, -18.0),
+                Align2::RIGHT_TOP,
+                t!("raw-quality", q = format!("{q:.0}")),
+                egui::FontId::monospace(11.0),
+                c,
+            );
         }
     });
     if let Some(resp) = resp {

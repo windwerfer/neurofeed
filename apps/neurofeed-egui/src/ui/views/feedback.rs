@@ -59,10 +59,10 @@ fn chip(ui: &mut egui::Ui, text: &str, color: Color32) {
     p.galley(rect.center() - galley.size() / 2.0, galley, color);
 }
 
-fn eyes(e: Eyes) -> &'static str {
+fn eyes(e: Eyes) -> String {
     match e {
-        Eyes::Open => "eyes open",
-        Eyes::Closed => "eyes closed",
+        Eyes::Open => t!("feedback-eyes-open"),
+        Eyes::Closed => t!("feedback-eyes-closed"),
     }
 }
 
@@ -79,21 +79,21 @@ pub(super) fn card(ui: &mut egui::Ui, p: &Protocol, selected: bool, w: f32) -> e
             ui.set_height(92.0);
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(&p.title).strong().size(17.0));
+                    ui.label(RichText::new(crate::i18n::protocol_title(p)).strong().size(17.0));
                     if p.experimental {
-                        ui.label(RichText::new("experimental").small().color(FAIR));
+                        ui.label(RichText::new(t!("feedback-tag-experimental")).small().color(FAIR));
                     }
                     if p.custom {
-                        ui.label(RichText::new("custom").small().color(CALM));
+                        ui.label(RichText::new(t!("feedback-tag-custom")).small().color(CALM));
                     }
                     if p.guard_only {
-                        ui.label(RichText::new("needs AI model").small().color(FAIR));
+                        ui.label(RichText::new(t!("feedback-tag-needs-ai")).small().color(FAIR));
                     }
                 });
-                ui.label(&p.summary);
+                ui.label(crate::i18n::protocol_summary(p));
                 ui.weak(match &p.unavailable {
-                    Some(r) => format!("Not available: {r}"),
-                    None => format!("{} · {} min", eyes(p.eyes), p.default_minutes),
+                    Some(r) => t!("feedback-not-available", reason = r.to_string()),
+                    None => t!("feedback-eyes-minutes", eyes = eyes(p.eyes), min = p.default_minutes),
                 });
             });
         })
@@ -102,15 +102,15 @@ pub(super) fn card(ui: &mut egui::Ui, p: &Protocol, selected: bool, w: f32) -> e
 
 fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let cal = if t.protocol.guard_only {
-        format!(
-            "{} calibrates in three steps, about {} s.",
-            t.protocol.title,
-            nf_core::nf_feedback::STAGED_TIMED_S + nf_core::nf_feedback::BASELINE_VALID_S
+        t!(
+            "feedback-calibrates-three-steps",
+            title = crate::i18n::protocol_title(&t.protocol),
+            s = nf_core::nf_feedback::STAGED_TIMED_S + nf_core::nf_feedback::BASELINE_VALID_S
         )
     } else {
-        format!("Calibration takes about {} seconds.", nf_core::nf_feedback::BASELINE_VALID_S)
+        t!("feedback-calibration-takes", s = nf_core::nf_feedback::BASELINE_VALID_S)
     };
-    header(ui, &t!("feedback-choose-a-protocol"), &format!("Pick what to train, then start. {cal}"));
+    header(ui, &t!("feedback-choose-a-protocol"), &format!("{} {cal}", t!("feedback-pick-then-start")));
     if let Some(m) = &t.message {
         chip(ui, m, FAIR);
         ui.add_space(8.0);
@@ -138,7 +138,7 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     ui.horizontal(|ui| {
         ui.label(t!("feedback-length"));
         for m in MINUTES {
-            if ui.selectable_label(t.minutes == m, format!("{m} min")).clicked() {
+            if ui.selectable_label(t.minutes == m, t!("feedback-n-min", min = m)).clicked() {
                 out.push(Command::ProtocolSet { id: t.protocol.id.clone(), minutes: Some(m) });
             }
         }
@@ -147,7 +147,7 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
             ui,
             session,
             "feedback.start",
-            &format!("Start {}", t.protocol.title),
+            &t!("feedback-start-title", title = crate::i18n::protocol_title(&t.protocol)),
             true,
             Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None },
             out,
@@ -184,11 +184,11 @@ fn pad_color(p: &PadFit) -> Color32 {
     }
 }
 
-fn hint(name: &str) -> &'static str {
+fn hint(name: &str) -> String {
     match name {
-        "AF7" | "AF8" => "forehead sensor: press flat on bare skin, move hair away",
-        "TP9" | "TP10" => "ear sensor: tuck behind the ear, touching skin",
-        _ => "press the sensor onto the scalp, part the hair",
+        "AF7" | "AF8" => t!("feedback-hint-forehead"),
+        "TP9" | "TP10" => t!("feedback-hint-ear"),
+        _ => t!("feedback-hint-scalp"),
     }
 }
 
@@ -229,7 +229,7 @@ fn fit_check(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
             if t.fit_ready() {
                 chip(ui, &t!("feedback-good-fit-ready-to-calibrate"), GOOD);
             } else if t.pads.iter().all(|p| p.good) && !t.pads.is_empty() {
-                chip(ui, &format!("Hold still… {}/{FIT_GREEN_S} s", t.green_for), GOOD);
+                chip(ui, &t!("feedback-hold-still", n = t.green_for, total = FIT_GREEN_S), GOOD);
             } else {
                 chip(ui, &t!("feedback-adjust-the-headband"), FAIR);
             }
@@ -282,12 +282,12 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
         (false, _, Eyes::Open) => t!("feedback-keep-your-eyes-open-on"),
     };
     header(ui, &t!("feedback-calibrating"), &instruction);
-    ui.add(
-        egui::ProgressBar::new(c.valid_s as f32 / c.needed_s.max(1) as f32)
-            .desired_width(520.0)
-            .text(format!("{} of {} good seconds", c.valid_s, c.needed_s)),
-    );
-    ui.weak(format!("{} s elapsed · stops at {} s even if the signal was poor", c.wall_s, c.max_s));
+    ui.add(egui::ProgressBar::new(c.valid_s as f32 / c.needed_s.max(1) as f32).desired_width(520.0).text(t!(
+        "feedback-good-seconds",
+        n = c.valid_s,
+        total = c.needed_s
+    )));
+    ui.weak(t!("feedback-elapsed-stops-at", s = c.wall_s, max = c.max_s));
     ui.add_space(10.0);
     if c.awake_missing {
         egui::Frame::group(ui.style()).stroke(Stroke::new(1.5_f32, BAD)).inner_margin(10.0).show(ui, |ui| {
@@ -298,7 +298,7 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
         });
     } else {
         match &c.waiting {
-            Some(w) => chip(ui, &format!("Paused: {w}"), FAIR),
+            Some(w) => chip(ui, &t!("feedback-paused-reason", reason = w.to_string()), FAIR),
             None => chip(ui, &t!("feedback-collecting"), GOOD),
         }
     }
@@ -352,7 +352,7 @@ fn status(t: &Trainer) -> (String, Color32) {
         Phase::Paused { reason: PauseReason::Disconnected } => (t!("feedback-paused-device-disconnected").to_owned(), BAD),
         _ if last.is_some_and(|r| r.in_target) => (t!("feedback-in-target").to_owned(), GOOD),
         _ if held.is_some() => {
-            (format!("Held back ({})", format!("{:?}", held.copied().unwrap_or(HeldBack::NoThreshold)).to_lowercase()), FAIR)
+            (t!("feedback-held-back", reason = format!("{:?}", held.copied().unwrap_or(HeldBack::NoThreshold)).to_lowercase()), FAIR)
         }
         _ => (t!("feedback-training").to_owned(), CALM),
     }
@@ -361,8 +361,8 @@ fn status(t: &Trainer) -> (String, Color32) {
 fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let mut d: Dash = ui.data(|x| x.get_temp(dash_id())).unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.heading(&t.protocol.title);
-        ui.weak(format!("{} left", mmss(t.total_s().saturating_sub(t.played_s))));
+        ui.heading(crate::i18n::protocol_title(&t.protocol));
+        ui.weak(t!("feedback-time-left", time = mmss(t.total_s().saturating_sub(t.played_s))));
         let frac = t.played_s as f32 / t.total_s().max(1) as f32;
         ui.add(egui::ProgressBar::new(frac).desired_width(160.0).desired_height(6.0));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -440,7 +440,7 @@ fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
         }
         ui.add_space(6.0);
         let why = last.and_then(|r| (!r.counted).then(|| r.reason.clone()).flatten());
-        ui.weak(why.map_or(" ".to_owned(), |w| format!("Last second didn't count: {w}")));
+        ui.weak(why.map_or(" ".to_owned(), |w| t!("feedback-last-second-didnt-count", reason = w.to_string())));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             ui.add_space((ui.available_width() - 200.0).max(0.0) / 2.0);
@@ -456,20 +456,24 @@ fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
 
 fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let Some(s) = &t.summary else { return };
-    header(ui, &t!("feedback-session-complete"), &format!("{} · ended: {}", t.protocol.title, s.ended_by));
+    header(
+        ui,
+        &t!("feedback-session-complete"),
+        &t!("feedback-ended-by", title = crate::i18n::protocol_title(&t.protocol), reason = s.ended_by.to_string()),
+    );
     let mut d: Dash = ui.data(|x| x.get_temp(dash_id())).unwrap_or_default();
     let trust = live_trust(t, &mut d);
     ui.allocate_ui(Vec2::new(ui.available_width().min(900.0), 360.0), |ui| super::trust::pane(ui, &trust, &mut d.plot, 200.0, true));
     ui.data_mut(|x| x.insert_temp(dash_id(), d));
     ui.add_space(6.0);
     let thr = |x: Option<f64>| x.map_or("--".into(), |v| format!("{v:.3}"));
-    ui.weak(format!(
-        "Threshold {} to {} ({} adjustments) · {} counted seconds · {} pauses · saved to History",
-        thr(s.threshold_start),
-        thr(s.threshold_end),
-        s.adapt_steps,
-        s.counted_s,
-        s.pauses
+    ui.weak(t!(
+        "feedback-summary-line",
+        from = thr(s.threshold_start),
+        to = thr(s.threshold_end),
+        steps = s.adapt_steps,
+        counted = s.counted_s,
+        pauses = s.pauses
     ));
     if let Some(id) = t.saved_id {
         ui.add_space(8.0);

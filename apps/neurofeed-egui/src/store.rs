@@ -66,7 +66,7 @@ pub fn move_to(session: &mut nf_core::Session, dir: &std::path::Path) -> Result<
     for ext in ["", "-wal", "-shm"] {
         let _ = std::fs::remove_file(format!("{}{ext}", old.display()));
     }
-    Ok(format!("Moved {n} session(s) to {}", new.display()))
+    Ok(crate::t!("store-moved-sessions", n = n, dir = new.display().to_string()))
 }
 
 pub fn open() -> Box<dyn Store> {

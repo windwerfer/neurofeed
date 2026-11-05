@@ -39,7 +39,7 @@ fn gaps(times: impl Iterator<Item = f64>, t0: f64, t1: f64, newest: f64, now: f6
 pub fn show(ui: &mut egui::Ui, session: &Session) {
     ui.horizontal(|ui| {
         ui.heading(t!("movement-movement"));
-        ui.weak("accelerometer, g (x, y, z) and |a| − 1 g");
+        ui.weak(t!("movement-axis-caption"));
     });
     ui.separator();
     let Some(side) = session.side().filter(|s| !s.accel.is_empty()) else {

@@ -89,11 +89,10 @@ fn recovery(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         ui.horizontal_wrapped(|ui| {
             let s = p.duration_s.max(0.0) as u64;
             ui.label(
-                egui::RichText::new(format!(
-                    "⚠ NeuroFeed closed during a recording ({}, {}:{:02} saved). Recover it to History?",
-                    p.device_name,
-                    s / 60,
-                    s % 60
+                egui::RichText::new(t!(
+                    "mod-closed-during-recording",
+                    device = p.device_name.as_str(),
+                    duration = format!("{}:{:02}", s / 60, s % 60)
                 ))
                 .color(egui::Color32::WHITE),
             );

@@ -86,6 +86,50 @@ pub fn tr(key: &str, args: &[(&str, FluentValue<'_>)]) -> String {
     })
 }
 
+/// `key` translated, or `fallback` when no locale has it.
+fn tr_or(key: &str, fallback: &str) -> String {
+    let s = tr(key, &[]);
+    if s == key {
+        fallback.to_owned()
+    } else {
+        s
+    }
+}
+
+/// `protocol-<kebab id>-<field>` for a built-in protocol id like `restAwake`.
+fn protocol_key(id: &str, field: &str) -> String {
+    let mut k = String::from("protocol-");
+    for c in id.chars() {
+        if c.is_ascii_uppercase() {
+            k.push('-');
+        }
+        k.push(c.to_ascii_lowercase());
+    }
+    format!("{k}-{field}")
+}
+
+/// Display title of a protocol: built-ins are translated (`protocol-<id>-title`),
+/// custom protocols show the user's own text. The id and the English title in
+/// `nf-core` stay as they are for MCP / CLI.
+#[must_use]
+pub fn protocol_title(p: &nf_core::nf_feedback::Protocol) -> String {
+    if p.custom {
+        p.title.clone()
+    } else {
+        tr_or(&protocol_key(&p.id, "title"), &p.title)
+    }
+}
+
+/// Display summary of a protocol (see [`protocol_title`]).
+#[must_use]
+pub fn protocol_summary(p: &nf_core::nf_feedback::Protocol) -> String {
+    if p.custom {
+        p.summary.clone()
+    } else {
+        tr_or(&protocol_key(&p.id, "summary"), &p.summary)
+    }
+}
+
 /// `t!("key")`, `t!("key", n = 3, name = "x")`.
 #[macro_export]
 macro_rules! t {
@@ -153,6 +197,31 @@ mod tests {
             }
         }
         assert!(missing.is_empty(), "keys missing from en.ftl: {missing:?}");
+    }
+
+    #[test]
+    fn builtin_protocols_translated() {
+        for p in nf_core::nf_feedback::builtin() {
+            for f in ["title", "summary"] {
+                let k = protocol_key(&p.id, f);
+                for (code, src) in &LOCALES {
+                    assert!(keys(src).contains(&k), "{code}.ftl misses {k}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn variables_and_plurals() {
+        set(Language::De);
+        assert_eq!(tr("history-n-selected", &[("n", FluentValue::from(3))]), "3 ausgewählt");
+        assert_eq!(tr("history-n-notes", &[("n", FluentValue::from(1))]), "1 Notiz");
+        set(Language::En);
+        assert_eq!(tr("history-n-notes", &[("n", FluentValue::from(2))]), "2 notes");
+        assert_eq!(
+            tr("sound-band-guard-warns", &[("mute", FluentValue::from("yes"))]).split(" when").next(),
+            Some("Warns and mutes the reward")
+        );
     }
 
     #[test]

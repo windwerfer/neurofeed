@@ -8,7 +8,7 @@ const MAX_HZ: f32 = 50.0;
 const LOG_RANGE: (f32, f32) = (-2.0, 3.0);
 
 pub fn show(ui: &mut egui::Ui, session: &Session) {
-    let Some((dev, sig)) = plot::header(ui, session, "PSD", "log10 µV²/Hz, last 1 s (Hamming); marker = alpha peak") else {
+    let Some((dev, sig)) = plot::header(ui, session, "PSD", &t!("psd-caption")) else {
         return;
     };
     let w = sig.window_len();

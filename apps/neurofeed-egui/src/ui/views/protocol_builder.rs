@@ -10,12 +10,12 @@ use nf_core::{Command, Session};
 const BAD: Color32 = Color32::from_rgb(0xE5, 0x73, 0x73);
 const NOTE: Color32 = Color32::from_rgb(0xFF, 0xB7, 0x4D);
 const FEATURES: [(FeatureArg, &str); 6] = [
-    (FeatureArg::Atr, "Alpha / theta (ATR)"),
-    (FeatureArg::Tar, "Theta / alpha (TAR)"),
-    (FeatureArg::Btr, "Beta / theta (BTR)"),
-    (FeatureArg::Alpha, "Relative alpha"),
-    (FeatureArg::Theta, "Relative theta"),
-    (FeatureArg::Beta, "Relative beta"),
+    (FeatureArg::Atr, "protocol-builder-feature-atr"),
+    (FeatureArg::Tar, "protocol-builder-feature-tar"),
+    (FeatureArg::Btr, "protocol-builder-feature-btr"),
+    (FeatureArg::Alpha, "protocol-builder-feature-alpha"),
+    (FeatureArg::Theta, "protocol-builder-feature-theta"),
+    (FeatureArg::Beta, "protocol-builder-feature-beta"),
 ];
 
 #[derive(Clone)]
@@ -39,7 +39,7 @@ fn open(ctx: &egui::Context, session: &Session, id: &str, as_copy: bool) {
     let replace = p.custom && !as_copy;
     if p.custom && as_copy {
         draft.id = free_id(custom, &format!("{}-2", p.id));
-        draft.title = format!("{} (copy)", p.title).chars().take(protocols::TITLE_MAX).collect();
+        draft.title = t!("protocol-builder-copy-of", title = crate::i18n::protocol_title(&p)).chars().take(protocols::TITLE_MAX).collect();
     }
     ctx.data_mut(|d| d.insert_temp(state_id(), Some(Edit { draft, replace, notes, confirm_delete: false })));
 }
@@ -60,12 +60,15 @@ pub fn launcher(ui: &mut egui::Ui, session: &Session) {
     let en = session.enabled("protocol.save");
     ui.horizontal(|ui| {
         let r = ui.add_enabled(en.is_ok(), egui::Button::new(t!("protocol-builder-new-protocol")));
-        let r = r.on_hover_text(format!("Start from {} in the Protocol Builder", t.protocol.title));
+        let r = r.on_hover_text(t!("protocol-builder-start-from", title = crate::i18n::protocol_title(&t.protocol)));
         if r.clicked() {
             open(ui.ctx(), session, &t.protocol.id, true);
         }
         if t.protocol.custom {
-            let r = ui.add_enabled(en.is_ok(), egui::Button::new(format!("Edit {}…", t.protocol.title)));
+            let r = ui.add_enabled(
+                en.is_ok(),
+                egui::Button::new(t!("protocol-builder-edit-title", title = crate::i18n::protocol_title(&t.protocol))),
+            );
             if r.clicked() {
                 open(ui.ctx(), session, &t.protocol.id, false);
             }
@@ -143,17 +146,17 @@ fn training(ui: &mut egui::Ui, d: &mut ProtocolDraft, problems: &[Problem]) {
     section(ui, &t!("protocol-builder-training"));
     egui::Grid::new("pb_training").num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
         ui.label(t!("protocol-builder-reward"));
-        let current = FEATURES.iter().find(|(f, _)| *f == d.feature).map_or("", |(_, l)| l);
+        let current = FEATURES.iter().find(|(f, _)| *f == d.feature).map_or(String::new(), |(_, l)| crate::i18n::tr(l, &[]));
         egui::ComboBox::from_id_salt("pb_feature").selected_text(current).width(220.0).show_ui(ui, |ui| {
             for (f, l) in FEATURES {
-                ui.selectable_value(&mut d.feature, f, l);
+                ui.selectable_value(&mut d.feature, f, crate::i18n::tr(l, &[]));
             }
         });
         ui.end_row();
         ui.label(t!("protocol-builder-eyes"));
         ui.horizontal(|ui| {
-            ui.radio_value(&mut d.eyes, EyesArg::Closed, "closed");
-            ui.radio_value(&mut d.eyes, EyesArg::Open, "open");
+            ui.radio_value(&mut d.eyes, EyesArg::Closed, t!("protocol-builder-eyes-closed"));
+            ui.radio_value(&mut d.eyes, EyesArg::Open, t!("protocol-builder-eyes-open"));
         });
         ui.end_row();
         ui.label(t!("protocol-builder-length"));
@@ -206,12 +209,15 @@ fn preview(ui: &mut egui::Ui, e: &Edit, problems: &[Problem]) {
     super::feedback::card(ui, &p, true, ui.available_width().min(320.0));
     ui.add_space(8.0);
     let rows = [
-        (t!("protocol-builder-reward"), FEATURES.iter().find(|(f, _)| *f == e.draft.feature).map_or("", |(_, l)| l).to_owned()),
-        (t!("protocol-builder-threshold"), "percentile of your calibration, adapted while you train".to_owned()),
+        (
+            t!("protocol-builder-reward"),
+            FEATURES.iter().find(|(f, _)| *f == e.draft.feature).map_or(String::new(), |(_, l)| crate::i18n::tr(l, &[])),
+        ),
+        (t!("protocol-builder-threshold"), t!("protocol-builder-threshold-desc")),
         (
             t!("protocol-builder-ceilings"),
             if e.draft.inhibit.is_empty() {
-                "none".to_owned()
+                t!("protocol-builder-none")
             } else {
                 e.draft.inhibit.iter().map(|x| format!("{} ≤ {:.2}", band_name(x.band), x.max)).collect::<Vec<_>>().join(", ")
             },
@@ -219,9 +225,9 @@ fn preview(ui: &mut egui::Ui, e: &Edit, problems: &[Problem]) {
         (
             t!("protocol-builder-guard"),
             match (e.draft.guard, e.draft.muffle_reward) {
-                (false, _) => "none".to_owned(),
-                (true, false) => "offered (warns only)".to_owned(),
-                (true, true) => "offered (warns and mutes reward)".to_owned(),
+                (false, _) => t!("protocol-builder-none"),
+                (true, false) => t!("protocol-builder-guard-warns-only"),
+                (true, true) => t!("protocol-builder-guard-warns-mutes"),
             },
         ),
     ];
@@ -237,7 +243,7 @@ fn preview(ui: &mut egui::Ui, e: &Edit, problems: &[Problem]) {
     }
     if !problems.is_empty() {
         ui.add_space(6.0);
-        ui.label(RichText::new(format!("{} to fix before saving", problems.len())).color(BAD));
+        ui.label(RichText::new(t!("protocol-builder-n-to-fix", n = problems.len())).color(BAD));
     }
 }
 

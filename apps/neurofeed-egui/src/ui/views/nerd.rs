@@ -10,9 +10,12 @@ const THR: Color32 = Color32::from_rgb(0xFF, 0xB7, 0x4D);
 const LIVE: Color32 = Color32::from_rgb(0x66, 0xBB, 0x6A);
 
 pub(super) fn window(ctx: &egui::Context, open: &mut bool, n: &Nerd) {
-    egui::Window::new("Nerd sheet").open(open).default_width(380.0).resizable(false).anchor(Align2::RIGHT_BOTTOM, [-16.0, -16.0]).show(
-        ctx,
-        |ui| {
+    egui::Window::new(t!("nerd-nerd-sheet"))
+        .open(open)
+        .default_width(380.0)
+        .resizable(false)
+        .anchor(Align2::RIGHT_BOTTOM, [-16.0, -16.0])
+        .show(ctx, |ui| {
             if !n.ready {
                 ui.weak(t!("nerd-collecting-the-numbers-appear-after"));
                 return;
@@ -29,8 +32,7 @@ pub(super) fn window(ctx: &egui::Context, open: &mut bool, n: &Nerd) {
                 legend(ui, THR, "threshold");
                 legend(ui, LIVE, "live");
             });
-        },
-    );
+        });
 }
 
 fn legend(ui: &mut egui::Ui, c: Color32, name: &str) {

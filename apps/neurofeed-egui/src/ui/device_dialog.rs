@@ -106,16 +106,16 @@ fn current(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
             Some(LinkState::Connecting) => {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.weak("connecting…");
+                    ui.weak(t!("topbar-connecting"));
                 });
             }
             Some(LinkState::Lost { reason }) => {
-                ui.colored_label(ui.visuals().error_fg_color, format!("lost: {reason}"));
+                ui.colored_label(ui.visuals().error_fg_color, t!("device-dialog-lost", reason = reason.to_string()));
             }
             _ => {}
         }
         ui.label(match state.battery {
-            Some(b) => format!("Battery {b:.0}%"),
+            Some(b) => t!("device-dialog-battery-pct", pct = format!("{b:.0}")),
             None => t!("device-dialog-battery").to_owned(),
         });
         let q = scores(session);
@@ -147,7 +147,7 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         ui.strong(t!("device-dialog-nearby-devices"));
         if scanning {
             ui.spinner();
-            ui.weak("scanning…");
+            ui.weak(t!("device-dialog-scanning"));
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
         }
         if !scanning {
@@ -167,9 +167,9 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     });
     let auto = &state.auto;
     if let (Some(t), Some(_)) = (&auto.target, auto.searching_since) {
-        ui.weak(format!("Waiting for {t} to come back (reconnects on its own)."));
+        ui.weak(t!("device-dialog-waiting-for", device = t.to_string()));
     } else if let (Some(t), true) = (&auto.target, auto.suspended) {
-        ui.weak(format!("Auto-reconnect to {t} is off until you connect a device."));
+        ui.weak(t!("device-dialog-auto-reconnect-off", device = t.to_string()));
     }
     for e in session.provider_errors() {
         ui.colored_label(ui.visuals().error_fg_color, e);
@@ -178,7 +178,7 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let groups: [Group; 3] = [
         ("Muse", |d| !d.simulated && d.kind == DeviceKind::Muse),
         ("Neurosity Crown", |d| !d.simulated && d.kind == DeviceKind::Crown),
-        ("Simulated", |d| d.simulated),
+        ("device-dialog-group-simulated", |d| d.simulated),
     ];
     let connected = state.device.is_some();
     egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
@@ -188,7 +188,7 @@ fn scan_list(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
                 continue;
             }
             ui.add_space(4.0);
-            ui.weak(*title);
+            ui.weak(crate::i18n::tr(title, &[]));
             for d in rows {
                 row(ui, d, state.device.as_ref().is_some_and(|c| c.id == d.id), connected, out);
             }
@@ -235,7 +235,7 @@ fn signal_bars(ui: &mut egui::Ui, rssi: Option<i16>) {
         let r = egui::Rect::from_min_max(egui::pos2(x, rect.bottom() - h), egui::pos2(x + 3.0, rect.bottom()));
         ui.painter().rect_filled(r, 0.5, if i < lit { on } else { off });
     }
-    resp.on_hover_text(rssi.map_or("no RSSI (network device, or not reported yet)".to_owned(), |r| format!("{r} dBm")));
+    resp.on_hover_text(rssi.map_or(t!("device-dialog-no-rssi"), |r| format!("{r} dBm")));
 }
 
 #[cfg(test)]

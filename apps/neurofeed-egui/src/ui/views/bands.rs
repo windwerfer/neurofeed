@@ -27,7 +27,7 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     ui.horizontal(|ui| {
         ui.heading(t!("bands-band-powers"));
         if state.device.as_ref().is_some_and(|d| d.simulated) {
-            ui.weak("(simulated data)");
+            ui.weak(t!("bands-simulated-data"));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             for (scale, label) in [(BandScale::Relative, t!("bands-relative")), (BandScale::Absolute, t!("bands-absolute-log"))] {

@@ -114,9 +114,9 @@ pub fn viewport(ui: &mut egui::Ui, key: &str, options: &[f64], now: f64) -> View
             vp.anchor = Some(now);
         }
         if vp.anchor.is_some() {
-            ui.weak(format!("{:.1} s ago · drag to pan", (now - vp.anchor.unwrap_or(now)).max(0.0)));
+            ui.weak(t!("plot-seconds-ago-drag", s = format!("{:.1}", (now - vp.anchor.unwrap_or(now)).max(0.0))));
         } else {
-            ui.weak("drag a plot to inspect");
+            ui.weak(t!("plot-drag-to-inspect"));
         }
     });
     ui.data_mut(|d| d.insert_temp(id, vp));

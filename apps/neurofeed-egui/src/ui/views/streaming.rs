@@ -25,7 +25,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     ui.add_space(8.0);
     let mut on = s.enabled;
     let available = if lsl { st.lsl_transport } else { st.transport };
-    let en = session.enabled("streaming.set").and_then(|()| if available { Ok(()) } else { Err(unavailable(lsl).into()) });
+    let en = session.enabled("streaming.set").and_then(|()| if available { Ok(()) } else { Err(unavailable(lsl)) });
     let r = ui.add_enabled(en.is_ok() || on, egui::Checkbox::new(&mut on, t!("streaming-stream-while-connected")));
     if let Err(why) = &en {
         r.on_disabled_hover_text(why.as_str());
@@ -49,11 +49,11 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     stats(ui, state, lsl);
 }
 
-fn unavailable(lsl: bool) -> &'static str {
+fn unavailable(lsl: bool) -> String {
     if lsl {
-        "LSL needs the desktop app"
+        t!("streaming-lsl-needs-desktop")
     } else {
-        "the web app cannot send UDP"
+        t!("streaming-web-no-udp")
     }
 }
 
@@ -77,7 +77,14 @@ fn osc_addresses(ui: &mut egui::Ui, state: &nf_core::AppState) {
         ui.weak(t!("streaming-connect-a-device-to-see"));
     }
     for g in gs {
-        ui.monospace(format!("{}/{}  {} ch @ {} Hz · {} rows/message", s.prefix, g.id, g.channels.len(), g.rate, g.chunk));
+        ui.monospace(format!(
+            "{}/{}  {} ch @ {} Hz · {}",
+            s.prefix,
+            g.id,
+            g.channels.len(),
+            g.rate,
+            t!("streaming-rows-per-message", n = g.chunk)
+        ));
     }
     ui.weak(t!("streaming-each-message-time-s-of"));
 }
@@ -97,14 +104,13 @@ fn lsl_streams(ui: &mut egui::Ui, state: &nf_core::AppState) {
 fn stats(ui: &mut egui::Ui, state: &nf_core::AppState, lsl: bool) {
     let (s, x) = (&state.streaming.settings, &state.streaming.stats);
     let live = s.enabled && state.device.is_some();
-    let who = if lsl { format!(" · {} inlet(s) connected", x.lsl_consumers) } else { String::new() };
-    let unit = if lsl { "chunks" } else { "messages" };
+    let who = if lsl { format!(" · {}", t!("streaming-inlets-connected", n = x.lsl_consumers)) } else { String::new() };
+    let sent = if lsl { t!("streaming-n-chunks", n = x.packets_sent) } else { t!("streaming-n-messages", n = x.packets_sent) };
     ui.label(format!(
-        "{}{who} · {} {unit} · {:.1} kB · {} samples dropped",
+        "{}{who} · {sent} · {:.1} kB · {}",
         if live { t!("streaming-streaming") } else { t!("streaming-idle") },
-        x.packets_sent,
         x.bytes_sent as f64 / 1e3,
-        x.dropped_samples
+        t!("streaming-samples-dropped", n = x.dropped_samples)
     ));
     if let Some(e) = &x.last_error {
         ui.colored_label(egui::Color32::from_rgb(0xE5, 0x73, 0x73), e);
