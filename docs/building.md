@@ -13,6 +13,7 @@ Linux desktop needs the usual X11/Wayland + OpenGL libraries.
 | Tests | `cargo test` |
 | Lints | `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` |
 | Android APKs (per ABI) | `scripts/build-android.sh` (see [release.md](release.md)) |
+| Android quick iteration (arm64 debug) | `scripts/build-android.sh --fast` (not reproducible; see apps/neurofeed-android/README.md) |
 | Release packages | `scripts/package-{linux,flatpak,macos}.sh`, `scripts/package-windows.ps1` ([release.md](release.md)) |
 | WASM type check | `cargo check -p neurofeed-egui --target wasm32-unknown-unknown` (nf-mcp is native only) |
 
