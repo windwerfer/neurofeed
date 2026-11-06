@@ -1939,7 +1939,7 @@ impl Session {
         let s = &self.state;
         match (id, s.bands.oldest(), s.bands.latest()) {
             (crate::monitor::MonitorId::Bands, Some(a), Some(b)) => crate::monitor::Span { oldest_s: a.time, newest_s: b.time },
-            // Raw EEG: the signal ring (10 s), ending at its newest sample.
+            // Raw EEG: the signal ring (`BUFFER_S`), ending at its newest sample.
             (crate::monitor::MonitorId::RawEeg, _, _) => {
                 let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
                 crate::monitor::Span { oldest_s: (newest - crate::signal::BUFFER_S).max(0.0), newest_s: newest }

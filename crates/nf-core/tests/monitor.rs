@@ -93,7 +93,7 @@ fn raw_display_commands_and_dynamic_channels() {
         // Pan clamps inside the ring; Follow returns.
         s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": -100.0 })).unwrap();
         let g = s.call("monitor.get", json!({})).unwrap();
-        assert!((g["monitors"]["raw_eeg"]["start_s"].as_f64().unwrap() - (newest - 10.0)).abs() < 1e-6);
+        assert!((g["monitors"]["raw_eeg"]["start_s"].as_f64().unwrap() - (newest - nf_core::signal::BUFFER_S).max(0.0)).abs() < 1e-6);
         s.call("monitor.zoom", json!({ "monitor": "raw_eeg", "factor": 100.0 })).unwrap();
         assert_eq!(s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["window_s"], 1.0, "min window");
         s.call("monitor.viewport", json!({ "monitor": "raw_eeg", "mode": "follow" })).unwrap();
@@ -127,4 +127,36 @@ fn raw_mode_and_scale_validate_and_persist() {
     // An old settings doc without the raw fields loads with defaults.
     let old: nf_core::settings::Persisted = serde_json::from_str("{}").unwrap();
     assert_eq!(old.raw_mode, nf_core::monitor::RawMode::Sweep);
+}
+
+#[test]
+fn raw_inspect_can_pan_back_through_the_ring() {
+    let mut s = Session::new();
+    s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
+    s.call("clock.advance", json!({ "seconds": 70.0 })).unwrap();
+    s.call("monitor.viewport", json!({ "monitor": "raw_eeg", "mode": "inspect" })).unwrap();
+    let end0 = s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["end_s"].as_f64().unwrap();
+    for _ in 0..30 {
+        s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": -1.0 })).unwrap();
+    }
+    let end = s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["end_s"].as_f64().unwrap();
+    assert!((end0 - end - 30.0).abs() < 1e-6, "panned {} s of 30", end0 - end);
+}
+
+#[test]
+fn raw_inspect_stays_frozen_while_live_data_arrives() {
+    let mut s = Session::new();
+    s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
+    s.call("clock.advance", json!({ "seconds": 70.0 })).unwrap();
+    s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": -20.0 })).unwrap();
+    let get = |s: &mut Session| s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["end_s"].as_f64().unwrap();
+    let end = get(&mut s);
+    s.call("clock.advance", json!({ "seconds": 5.0 })).unwrap();
+    assert!((get(&mut s) - end).abs() < 1e-9, "frozen while new samples arrive");
+    // Once the ring evicts the window's start, the next pan clamps to the oldest data.
+    s.call("clock.advance", json!({ "seconds": 40.0 })).unwrap();
+    s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": 0.0 })).unwrap();
+    let newest = s.live_signal().and_then(|(_, g)| g.time).unwrap();
+    let start = s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["start_s"].as_f64().unwrap();
+    assert!((start - (newest - nf_core::signal::BUFFER_S)).abs() < 1e-6, "history boundary");
 }

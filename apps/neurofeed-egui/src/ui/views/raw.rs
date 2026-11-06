@@ -67,6 +67,9 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
         ui.label(if live.is_none() { t!("plot-no-device-connected-use-connect") } else { t!("raw-waiting-for-data") });
         return;
     };
+    let range = monitor::presented_range_lead(ui, state, id, vp, span, rt::RAW_FOLLOW_LEAD_S);
+    // Only the samples the window needs (the ring holds up to 60 s).
+    let need = (((span.newest_s - range.0).max(0.0) + 1.0) * sig.rate).ceil() as usize;
     let mut panes: Vec<Pane> = state
         .monitors
         .raw
@@ -76,8 +79,8 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
             name: dev.channels[ch].clone(),
             end_t: sig.channel_time(ch).unwrap_or(span.newest_s),
             rate: sig.rate,
-            values: sig.last(ch, usize::MAX, true),
-            flags: sig.last_flags(ch, usize::MAX),
+            values: sig.last(ch, need, true),
+            flags: sig.last_flags(ch, need),
             quality: Some(sig.quality[ch]),
         })
         .collect();
@@ -88,13 +91,12 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
                 name: t!("raw-aux", name = name),
                 end_t: span.newest_s,
                 rate: side.aux_rate,
-                values: buf.iter().copied().collect(),
+                values: buf.iter().skip(buf.len().saturating_sub(need)).copied().collect(),
                 flags: Vec::new(),
                 quality: None,
             });
         }
     }
-    let range = monitor::presented_range_lead(ui, state, id, vp, span, rt::RAW_FOLLOW_LEAD_S);
     let map = mapping(state.monitors.raw.mode, vp, range);
     let half = half_range(ui, state.monitors.raw.scale, &panes, map);
     stack(ui, &panes, map, half, vp, out);
@@ -279,6 +281,7 @@ fn scale_menu(ui: &mut Ui, state: &AppState, out: &mut Vec<Command>) {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::panic)]
     use super::*;
 
     #[test]
@@ -300,5 +303,93 @@ mod tests {
         assert!(matches!(mapping(RawMode::Scroll, vp, (2.0, 10.0)), Mapping::Scroll { .. }));
         vp.end_s = Some(9.0);
         assert!(matches!(mapping(RawMode::Sweep, vp, (1.0, 9.0)), Mapping::Scroll { start, end } if start == 1.0 && end == 9.0));
+    }
+
+    /// Drive the whole UI with a pointer drag over the first Raw pane and
+    /// return the summed `monitor.pan` seconds (commands are applied).
+    fn drag(session: &mut Session, steps: &[Vec2], size: Vec2) -> f64 {
+        let _lang = crate::i18n::lang_lock();
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(Pos2::ZERO, size);
+        let mut t = 0.0;
+        let mut frame = |events: Vec<egui::Event>, s: &mut Session| -> f64 {
+            t += 1.0 / 60.0;
+            let input = egui::RawInput { screen_rect: Some(screen), time: Some(t), events, ..Default::default() };
+            let mut cmds = Vec::new();
+            ctx.run_ui(input, |u| cmds = crate::ui::show(u, s, None)).textures_delta.clear();
+            let mut sum = 0.0;
+            for c in cmds {
+                if let Command::MonitorPan { seconds, .. } = c {
+                    sum += seconds;
+                }
+                s.execute(c).ok();
+            }
+            sum
+        };
+        frame(vec![], session);
+        frame(vec![], session);
+        let mut at = Pos2::new(size.x * 0.5, 200.0);
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut total = frame(vec![egui::Event::PointerMoved(at), button(at, true)], session);
+        for d in steps {
+            at += *d;
+            total += frame(vec![egui::Event::PointerMoved(at)], session);
+        }
+        total + frame(vec![button(at, false)], session)
+    }
+
+    fn raw_session(dev: &str) -> Session {
+        let mut s = Session::new();
+        for c in [
+            json_cmd("settings.set", serde_json::json!({ "onboarded": true, "layout": "regular" })),
+            json_cmd("device.connect", serde_json::json!({ "id": dev })),
+            json_cmd("view.set", serde_json::json!({ "view": "raw_eeg" })),
+            json_cmd("clock.advance", serde_json::json!({ "seconds": 40.0 })),
+            json_cmd("monitor.viewport", serde_json::json!({ "monitor": "raw_eeg", "mode": "inspect" })),
+        ] {
+            s.execute(c).unwrap();
+        }
+        s
+    }
+
+    fn json_cmd(id: &str, p: serde_json::Value) -> Command {
+        match nf_core::Request::parse(id, p) {
+            Ok(nf_core::Request::Command(c)) => c,
+            _ => panic!("{id}"),
+        }
+    }
+
+    fn end(s: &Session) -> f64 {
+        s.state().monitors.viewport(MonitorId::RawEeg).end_s.unwrap_or(f64::NAN)
+    }
+
+    #[test]
+    fn inspect_drag_follows_the_finger() {
+        // 4 panes fit (no list scrolling) and 8 overflow: horizontal drags
+        // pan by finger distance / plot width x window in both.
+        for (dev, size) in [("sim:muse", Vec2::new(1000.0, 900.0)), ("sim:crown", Vec2::new(1000.0, 700.0))] {
+            let mut s = raw_session(dev);
+            let e0 = end(&s);
+            let steps = vec![Vec2::new(30.0, 0.0); 10]; // 300 px right = earlier
+            let panned = drag(&mut s, &steps, size);
+            let plot_w = 1000.0 - crate::ui::theme::SIDEBAR_WIDTH - 2.0 * 8.0 - 4.0 - RIGHT_GUTTER;
+            let want = -300.0 / f64::from(plot_w) * 8.0;
+            assert!((panned - want).abs() < 0.25, "{dev}: commands {panned} vs {want}");
+            assert!((end(&s) - (e0 + panned)).abs() < 1e-6, "{dev}: view moved {} of {panned}", end(&s) - e0);
+        }
+    }
+
+    #[test]
+    fn vertical_drag_in_an_overflowing_stack_does_not_pan() {
+        let mut s = raw_session("sim:crown");
+        let e0 = end(&s);
+        let steps = vec![Vec2::new(3.0, -25.0); 8];
+        assert_eq!(drag(&mut s, &steps, Vec2::new(1000.0, 700.0)), 0.0);
+        assert!((end(&s) - e0).abs() < 1e-9);
     }
 }
