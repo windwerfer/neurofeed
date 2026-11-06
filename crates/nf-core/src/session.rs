@@ -1225,11 +1225,13 @@ impl Session {
             Command::DeviceConnect { id } => {
                 self.connect(&id)?;
                 self.state.auto.suspended = false;
+                self.persist_settings();
             }
             Command::DeviceDisconnect => {
                 self.disconnect();
                 self.state.auto.suspended = true;
                 self.state.auto.stop();
+                self.persist_settings();
             }
             Command::DeviceDialog { open } => {
                 self.state.device_dialog = open;
@@ -1545,7 +1547,8 @@ impl Session {
     fn auto_reconnect(&mut self, now: f64) {
         let connecting = matches!(self.state.link, Some(LinkState::Connecting));
         if let (Some(d), Some(LinkState::Streaming)) = (&self.state.device, &self.state.link) {
-            if !d.simulated && self.state.auto.target.as_deref() != Some(d.id.as_str()) {
+            // Simulators too (decision 2026-11-07): the last device the user chose.
+            if self.state.auto.target.as_deref() != Some(d.id.as_str()) {
                 self.state.auto.target = Some(d.id.clone());
                 self.persist_settings();
             }

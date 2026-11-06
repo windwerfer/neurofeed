@@ -121,7 +121,7 @@ fn over_time(ui: &mut egui::Ui, state: &AppState, device: &DeviceInfo, span: Spa
     let plot = Rect::from_min_max(rect.left_top() + Vec2::new(40.0, 16.0), rect.right_bottom() - Vec2::new(8.0, 18.0));
     let vp = state.monitors.viewport(MonitorId::Bands);
     monitor::interact(ui, &resp, plot, MonitorId::Bands, vp, out);
-    let range = vp.range(span);
+    let range = monitor::presented_range(ui, state, MonitorId::Bands, vp, span);
     let chans = state.monitors.bands.selected(&device.channels);
     let pts = series(state, &chans, plot, range);
     let (y0, y1) = y_range(relative(state), &pts);

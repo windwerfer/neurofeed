@@ -273,6 +273,66 @@ pub fn band_values(s: &BandSnapshot, channels: &[usize], visible: [bool; 5], rel
     out
 }
 
+/// Follow trails the newest data by this much (Flutter
+/// `bandsFollowLeadSeconds`), so the right edge can glide at presentation
+/// speed while snapshots arrive in ~0.1 s steps with jitter.
+pub const FOLLOW_LEAD_S: f64 = 1.0;
+/// Data-clock vs prediction error beyond which [`FollowClock`] re-anchors
+/// (stream stalled and resumed, a new device, a clock jump).
+pub const FOLLOW_RESYNC_S: f64 = 2.0;
+/// Share of the data-clock error corrected per new snapshot.
+const FOLLOW_SLEW: f64 = 0.1;
+
+/// Smooth Follow right edge: maps monotonic presentation time (seconds, e.g.
+/// egui `input.time`) onto session data time. Only moves the viewport; the
+/// drawn points keep their true timestamps and nothing is interpolated.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct FollowClock {
+    /// `(data_s, now_s)`: data time `data_s` corresponds to presentation `now_s`.
+    anchor: Option<(f64, f64)>,
+    newest: f64,
+    last_end: Option<f64>,
+}
+
+impl FollowClock {
+    /// Right edge at presentation time `now` with data up to `newest`:
+    /// advances with `now`, never passes `newest`, never steps back (unless
+    /// re-anchored).
+    pub fn end(&mut self, newest: f64, now: f64, lead: f64) -> f64 {
+        if !(newest.is_finite() && now.is_finite()) {
+            return newest;
+        }
+        let lead = finite_or(lead, 0.0).max(0.0);
+        let resync = match self.anchor {
+            None => true,
+            Some((d, w)) => {
+                let predicted = d + (now - w);
+                if now < w || (predicted - newest).abs() > FOLLOW_RESYNC_S + lead {
+                    true
+                } else {
+                    if newest != self.newest {
+                        // A new snapshot: slew toward the data clock.
+                        self.anchor = Some((predicted + (newest - predicted) * FOLLOW_SLEW, now));
+                    }
+                    false
+                }
+            }
+        };
+        if resync {
+            self.anchor = Some((newest, now));
+            self.last_end = None;
+        }
+        self.newest = newest;
+        let (d, w) = self.anchor.unwrap_or((newest, now));
+        let mut end = (d + (now - w) - lead).min(newest);
+        if let Some(last) = self.last_end {
+            end = end.max(last).min(newest.max(last));
+        }
+        self.last_end = Some(end);
+        end
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,5 +468,47 @@ mod tests {
         let mut back = Monitors::default();
         back.restore_windows(&serde_json::from_str(&j).unwrap());
         assert_eq!(back.viewport(MonitorId::Bands), Viewport { window_s: 60.0, end_s: None });
+    }
+
+    #[test]
+    fn follow_clock_glides_between_snapshots() {
+        let mut c = FollowClock::default();
+        // Snapshots every 0.1 s, frames every 1/60 s.
+        let mut prev = f64::NEG_INFINITY;
+        let mut steps = Vec::new();
+        for f in 0..600 {
+            let now = f64::from(f) / 60.0;
+            let newest = 100.0 + (now * 10.0).floor() / 10.0;
+            let e = c.end(newest, now, FOLLOW_LEAD_S);
+            assert!(e <= newest + 1e-9, "never past the data");
+            if prev.is_finite() {
+                assert!(e >= prev - 1e-12, "monotonic");
+                steps.push(e - prev);
+            }
+            prev = e;
+        }
+        // After settling every frame advances ~1/60 s (no 0.1 s jumps).
+        let tail = &steps[120..];
+        assert!(tail.iter().all(|d| (d - 1.0 / 60.0).abs() < 0.004), "{tail:?}");
+        assert!((prev - (100.0 + 9.9 - FOLLOW_LEAD_S)).abs() < 0.2, "{prev}");
+    }
+
+    #[test]
+    fn follow_clock_stops_at_the_data_and_resyncs() {
+        let mut c = FollowClock::default();
+        for f in 0..60 {
+            let now = f64::from(f) / 30.0;
+            c.end(10.0 + now, now, 1.0);
+        }
+        // Stream stalls at 12.0: the edge reaches the newest data and stays.
+        let mut e = 0.0;
+        for f in 60..300 {
+            e = c.end(12.0, f64::from(f) / 30.0, 1.0);
+        }
+        assert!((e - 12.0).abs() < 1e-9);
+        // A new device starting at 0: re-anchor at once, not stuck at 12.
+        let e = c.end(0.5, 10.1, 1.0);
+        assert!((e - (0.5 - 1.0)).abs() < 1e-9, "{e}");
+        assert!(c.end(f64::NAN, 10.2, 1.0).is_nan());
     }
 }

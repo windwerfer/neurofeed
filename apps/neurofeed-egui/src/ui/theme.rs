@@ -63,6 +63,11 @@ pub fn axis_text(v: &egui::Visuals) -> Color32 {
     v.weak_text_color()
 }
 
+/// Debug overlay backdrop (perf counter).
+pub fn overlay_bg(v: &egui::Visuals) -> Color32 {
+    v.extreme_bg_color.gamma_multiply(0.85)
+}
+
 /// Off-scale marker (value clipped at the axis edge).
 pub const CLIPPED: Color32 = Color32::from_rgb(0xEF, 0x53, 0x50);
 

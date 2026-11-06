@@ -20,6 +20,11 @@ static FOLDER: Mutex<Option<String>> = Mutex::new(None);
 static PAUSED: AtomicBool = AtomicBool::new(false);
 /// System-bar insets in px (left, top, right, bottom), stored as f32 bits.
 static INSETS: [AtomicU32; 4] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+/// Android reported insets at least once (listener or poll).
+static REPORTED: AtomicBool = AtomicBool::new(false);
+/// The `systemBars | displayCutout` listener delivered: the poll (deprecated
+/// system-window insets, no cutout) must not overwrite it.
+static FROM_LISTENER: AtomicBool = AtomicBool::new(false);
 
 /// Logcat (tag `neurofeed`) plus a panic hook that logs the panic message,
 /// location, thread and a backtrace before the process dies; without it a Rust
@@ -115,7 +120,13 @@ impl Platform for Hooks {
         call_void!("keepScreenOn", "(Z)V", &[JValue::Bool(on)]);
     }
     fn min_top_inset_pt(&self) -> f32 {
-        FALLBACK_TOP_PT
+        // Only until Android delivered real insets once (then 0 is real, e.g.
+        // landscape with the status bar hidden).
+        if REPORTED.load(Ordering::Relaxed) {
+            0.0
+        } else {
+            FALLBACK_TOP_PT
+        }
     }
     fn take_paused(&self) -> bool {
         PAUSED.swap(false, Ordering::Relaxed)
@@ -132,6 +143,9 @@ const FALLBACK_TOP_PT: f32 = 28.0;
 /// Re-read the insets from the decor view (at most every 500 ms): covers a
 /// missed / consumed `OnApplyWindowInsetsListener` and rotation changes.
 fn poll_insets() {
+    if FROM_LISTENER.load(Ordering::Relaxed) {
+        return;
+    }
     static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
     {
         let Ok(mut last) = LAST.lock() else { return };
@@ -164,6 +178,7 @@ fn poll_insets() {
             for (a, x) in INSETS.iter().zip(v) {
                 a.store((x.max(0) as f32).to_bits(), Ordering::Relaxed);
             }
+            REPORTED.store(true, Ordering::Relaxed);
         }
         Ok(_) => {}
         Err(e) => log::debug!("insets poll: {e}"),
@@ -234,4 +249,6 @@ pub extern "system" fn Java_org_neurofeed_android_MainActivity_nativeInsets(
     for (a, v) in INSETS.iter().zip([left, top, right, bottom]) {
         a.store((v.max(0) as f32).to_bits(), Ordering::Relaxed);
     }
+    REPORTED.store(true, Ordering::Relaxed);
+    FROM_LISTENER.store(true, Ordering::Relaxed);
 }

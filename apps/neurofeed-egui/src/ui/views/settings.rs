@@ -65,7 +65,7 @@ const CARDS: &[(Section, &str, &str, CardFn)] = &[
     (Section::Recording, "Record AUX", "aux auxiliary muse recording edf", |ui, s, o, _| record_aux(ui, s, o)),
     (Section::Recording, "Gesture markers", "eye up down blink clench double markers feedback", |ui, s, o, _| gestures(ui, s, o)),
     (Section::About, "About NeuroFeed", "about version licenses credits notices", |ui, _, _, _| super::about::card(ui)),
-    (Section::About, "Debug mode", "debug simulator sim fault", |ui, s, o, _| debug(ui, s, o)),
+    (Section::About, "Debug mode", "debug simulator sim fault fps frame rate overlay", |ui, s, o, _| debug(ui, s, o)),
     (Section::About, "Agents", "mcp bridge agent ai control", |ui, _, _, sh| agents(ui, sh)),
     (Section::About, "Getting started", "onboarding tour intro help welcome", |ui, _, o, _| tour(ui, o)),
 ];
@@ -353,6 +353,10 @@ fn debug(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let mut on = session.state().settings.debug;
     if ui.checkbox(&mut on, t!("settings-show-simulated-devices-and-fault")).changed() {
         set(out, SettingsPatch { debug: Some(on), ..Default::default() });
+    }
+    let mut perf = session.state().settings.perf_overlay;
+    if ui.checkbox(&mut perf, t!("settings-perf-overlay")).on_hover_text(t!("settings-perf-overlay-hint")).changed() {
+        set(out, SettingsPatch { perf_overlay: Some(perf), ..Default::default() });
     }
     if on {
         faults(ui, session, out);

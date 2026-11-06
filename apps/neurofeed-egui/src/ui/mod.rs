@@ -5,6 +5,7 @@ pub(crate) mod device_dialog;
 pub mod layout;
 pub(crate) mod monitor;
 mod onboarding;
+mod perf;
 mod quality;
 mod sidebar;
 pub mod theme;
@@ -27,6 +28,8 @@ pub struct Shell {
     pub move_store: Option<String>,
     /// Result of the last move (shown in Settings → Storage).
     pub store_note: Option<String>,
+    /// CPU seconds of the previous frame (eframe), for the perf overlay.
+    pub cpu_s: Option<f32>,
 }
 
 /// Translated navigation label of a view.
@@ -54,6 +57,34 @@ pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>) -> Vec<
 
 /// [`show`] with shell settings (bridge toggle).
 pub fn show_with(root: &mut egui::Ui, session: &Session, error: Option<&str>, shell: &mut Shell) -> Vec<Command> {
+    // egui 0.37's root ui spans the whole viewport, not `content_rect`: the
+    // safe area (status bar, cutout, gesture bar) is applied here, once.
+    // The covered strips get the panel colour so the bars sit on our theme.
+    within_safe_area(root, |ui| show_safe(ui, session, error, shell))
+}
+
+/// Run `f` in a child of `root` limited to the safe area.
+pub(crate) fn within_safe_area<R>(root: &mut egui::Ui, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let full = root.ctx().viewport_rect();
+    let safe = safe_rect(full, root.ctx().content_rect());
+    if safe != full {
+        root.painter().rect_filled(full, 0.0, root.visuals().panel_fill);
+    }
+    root.scope_builder(egui::UiBuilder::new().max_rect(safe), f).inner
+}
+
+/// The area the UI may use: `content` inside `full`, never empty.
+#[must_use]
+pub fn safe_rect(full: egui::Rect, content: egui::Rect) -> egui::Rect {
+    let r = content.intersect(full);
+    if r.is_positive() {
+        r
+    } else {
+        full
+    }
+}
+
+fn show_safe(root: &mut egui::Ui, session: &Session, error: Option<&str>, shell: &mut Shell) -> Vec<Command> {
     let ctx = &root.ctx().clone();
     let state = session.state();
     let mut out = Vec::new();
@@ -88,6 +119,9 @@ pub fn show_with(root: &mut egui::Ui, session: &Session, error: Option<&str>, sh
     if !state.settings.onboarded && !shell.no_tour {
         onboarding::show(ctx, &mut out);
     }
+    if state.settings.perf_overlay {
+        perf::show(ctx, shell.cpu_s);
+    }
     out
 }
 
@@ -114,4 +148,49 @@ fn recovery(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         });
     });
     ui.add_space(6.0);
+}
+
+#[cfg(test)]
+mod safe_area_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+    use egui::{pos2, Rect};
+
+    /// The rect a top panel gets inside [`super::within_safe_area`], after
+    /// the full UI ran once with the same insets.
+    fn top_bar_rect(insets: egui::SafeAreaInsets, size: egui::Vec2) -> Rect {
+        let _lang = crate::i18n::lang_lock();
+        let ctx = egui::Context::default();
+        let session = nf_core::Session::new();
+        let input = || egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), size)),
+            safe_area_insets: Some(insets),
+            ..Default::default()
+        };
+        ctx.run_ui(input(), |u| drop(super::show(u, &session, None))).textures_delta.clear();
+        let mut rect = Rect::NOTHING;
+        ctx.run_ui(input(), |u| {
+            super::within_safe_area(u, |ui| {
+                rect = egui::Panel::top("probe").show(ui, |_| ()).response.rect;
+            });
+        })
+        .textures_delta
+        .clear();
+        rect
+    }
+
+    #[test]
+    fn top_bar_starts_below_the_status_bar() {
+        let m = egui::epaint::MarginF32 { left: 0.0, top: 24.0, right: 0.0, bottom: 16.0 };
+        let r = top_bar_rect(egui::SafeAreaInsets(m), egui::vec2(400.0, 800.0));
+        assert!((r.top() - 24.0).abs() < 0.5, "top bar at {r:?}");
+        let none = top_bar_rect(egui::SafeAreaInsets::default(), egui::vec2(400.0, 800.0));
+        assert!(none.top().abs() < 0.5, "no inset, no gap: {none:?}");
+    }
+
+    #[test]
+    fn safe_rect_never_empty() {
+        let full = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(100.0, 100.0));
+        assert_eq!(super::safe_rect(full, Rect::from_min_max(pos2(0.0, 24.0), pos2(100.0, 90.0))).top(), 24.0);
+        assert_eq!(super::safe_rect(full, Rect::from_min_max(pos2(0.0, 120.0), pos2(100.0, 90.0))), full);
+    }
 }

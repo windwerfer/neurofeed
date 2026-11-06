@@ -150,16 +150,19 @@ pub fn keys(src: &str) -> std::collections::BTreeSet<String> {
         .collect()
 }
 
+/// The active language is process-global: tests that switch it (or run
+/// the whole UI, which sets it) run one at a time.
+#[cfg(test)]
+static LANG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+pub(crate) fn lang_lock() -> std::sync::MutexGuard<'static, ()> {
+    LANG.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The active language is process-global: tests that switch it run one at a time.
-    static LANG: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    fn lang_lock() -> std::sync::MutexGuard<'static, ()> {
-        LANG.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
 
     #[test]
     fn every_key_in_every_locale() {

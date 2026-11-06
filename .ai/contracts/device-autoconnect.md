@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | **Implemented.** `crates/nf-core/src/autoconnect.rs` (timing), `Session::auto_reconnect` (`crates/nf-core/src/session.rs`). Tests: `crates/nf-mcp/tests/autoconnect.rs` (push transport, manual clock) and the unit tests in `autoconnect.rs`. |
-| Date | 2026-11-03 |
+| Date | 2026-11-03, amended 2026-11-07 (simulator target, persisted Disconnect: `docs/decisions.md`) |
 | Scope | When the app scans for devices, and which device it connects without a user action. Muse BLE, Crown OSC, simulators. Desktop, Android, headless (`neurofeed-cli`). |
 | Not this | What a live feedback session does on link loss ([feedback-disconnect.md](feedback-disconnect.md)). Connect list labels and groups ([../connect-simulator-ux.md](../connect-simulator-ux.md)). Muse matching rules ([../../docs/automation.md](../../docs/automation.md) troubleshooting). |
 
@@ -21,9 +21,9 @@ The workflow: a device the user has already connected finds its way back at any 
 
    The search scans only the target's provider (`muse` → BLE, `crown` → OSC listen). Once the target is in the device list, the session connects it. If the target is the current device with a lost link, it is reopened in place, so the recording and feedback session waiting for that id carry on.
 3. **Other devices are never connected automatically.** A device that is not the target, even one found during the background search, needs the user: **Connect** / **Switch** in the dialog, or an explicit `device.connect` (MCP, CLI, `--device`). A failed user connect to a new device is not retried. The user retries it.
-4. **The user's Disconnect suspends auto-reconnect.** `device.disconnect` stops the search and sets `suspended`. The suspension ends at the next user connect (any device, including a simulator) or at the next app start. It is not persisted. The target stays remembered.
-5. **The target is the last real device that streamed.** It is set when a non-simulated device's link reaches `streaming`, not when the connect starts, so a failed connect does not replace it. It is persisted as `last_device` in the settings doc and survives a restart: on start, with nothing connected, the search begins at once.
-6. **Simulators are never the target.** Connecting `sim:*` does not change the target, and a simulator is never auto-connected. Simulators are always "visible", so making them a target would connect one on every start. Connecting a simulator while a real headset is remembered is still a user connect: it lifts the suspension of rule 4. While the simulator streams, nothing is searched (a device is connected).
+4. **The user's Disconnect suspends auto-reconnect.** `device.disconnect` stops the search and sets `suspended`. The suspension ends at the next user connect (any device, including a simulator). It is persisted (`auto_suspended` in the settings doc), so a restart after a Disconnect connects nothing. The target stays remembered.
+5. **The target is the last device that streamed.** It is set when the device's link reaches `streaming` (real or simulator), not when the connect starts, so a failed connect does not replace it. It is persisted as `last_device` in the settings doc and survives a restart: on start, with nothing connected, the search begins at once.
+6. **A simulator the user chose last is the target like any device.** Once `sim:*` streams it becomes the target, so the next start reconnects it. Simulators are always listed, so no scan runs: the session connects it on the first tick. Switching to another device replaces the target; a Disconnect suspends it (rule 4). A missing real target never falls back to a simulator.
 7. **Crown follows the same rules over OSC.** "Scanning" means listening on UDP 9000 for Crown OSC packets. A burst listens for the burst length. The target Crown is auto-connected once its packets name its device id again. A Crown sending to this machine that is not the target is listed but not connected.
 8. **App exit disconnects and waits.** Closing the window (egui `on_exit`, also after SIGINT/SIGTERM on desktop), the CLI ending, or SIGINT/SIGTERM for the CLI all call `Session::shutdown(SHUTDOWN_TIMEOUT_S = 10)` before the process ends. It:
    - ends the recording;
@@ -32,7 +32,7 @@ The workflow: a device the user has already connected finds its way back at any 
    - blocks until every provider reports its links closed (`DeviceProvider::shutdown`), 10 s in total, and logs whatever is still open.
 
    The tokio runtime lives in the provider, which outlives that wait. Exit is not a user Disconnect: the target stays, and nothing is suspended. Android: the same path runs when eframe gets the activity's destroy. Moving to the background does not disconnect: the recording foreground service keeps the link.
-9. **At start, connect nothing but the remembered device.** The app never auto-connects a simulator. The only exceptions are explicit: `NF_DEVICE=<id>` (`?device=` on the web), the screenshot runs (`NF_DEMO` / `NF_VIEW`), the web build (it has no hardware), and the CLI's `--device` (default `sim:muse_s` for headless automation; `--device none` or `--no-hardware`). With no remembered device, nothing connects, and the status bar offers the Device dialog.
+9. **At start, connect nothing but the remembered device** (which may be a simulator, rule 6). Beyond that, the only exceptions are explicit: `NF_DEVICE=<id>` (`?device=` on the web), the screenshot runs (`NF_DEMO` / `NF_VIEW`), the web build (it has no hardware), and the CLI's `--device` (default `sim:muse_s` for headless automation; `--device none` or `--no-hardware`). With no remembered device, nothing connects, and the status bar offers the Device dialog.
 10. **A Muse left connected is released.** Before each scan, a Muse that BlueZ still reports as connected, with no link of this process, is disconnected. This is a leftover from a crash or kill, and such a headset does not advertise. Matching is by name or service, as in discovery. After that it advertises again, and rules 2 and 3 apply as usual.
 
 ---

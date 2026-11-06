@@ -63,3 +63,9 @@
 - `NF_WINDOW=WxH` sets the desktop window size for screenshot runs.
 - i18n tests that switch the global language are serialized (removes a flaky race).
 - Plan and next steps: docs/ui-port/monitors.md.
+
+## 2026-11-07 — M1b fixes (safe area, simulator reconnect, smooth Follow, perf overlay)
+- Status bar overlap: egui 0.37 root ui = full viewport; the app now lays out inside `content_rect` (see decisions 2026-11-07). Desktop preview: `NF_SAFE_AREA=l,t,r,b`.
+- Simulator chosen last reconnects after restart; Disconnect persists (`auto_suspended`).
+- Bands Follow glides (`FollowClock`, 1 s lead, vsync repaint only while live + Follow). Measured sim cadence: 10 Hz snapshots, 94–141 ms apart; the old repaint was 100 ms, unsynced.
+- Perf overlay setting `perf_overlay`.

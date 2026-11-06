@@ -38,13 +38,23 @@ pub trait Platform: Send + Sync {
 }
 
 /// Safe-area insets in points (`[left, top, right, bottom]`): the reported
-/// px insets divided by `ppp`, with the top raised to `min_top_pt`.
+/// px insets divided by `ppp`. `fallback_top_pt` is used only when nothing
+/// was reported (all zero), so real insets are never raised or added to.
 #[must_use]
-pub fn insets_pt(px: [f32; 4], ppp: f32, min_top_pt: f32) -> [f32; 4] {
+pub fn insets_pt(px: [f32; 4], ppp: f32, fallback_top_pt: f32) -> [f32; 4] {
     let ppp = if ppp.is_finite() && ppp > 0.0 { ppp } else { 1.0 };
     let mut v = px.map(|x| if x.is_finite() { x.max(0.0) / ppp } else { 0.0 });
-    v[1] = v[1].max(min_top_pt);
+    if v.iter().all(|&x| x == 0.0) {
+        v[1] = fallback_top_pt.max(0.0);
+    }
     v
+}
+
+/// Points per physical pixel for this frame's input: the window's native
+/// scale times the egui zoom (the context's own value lags one frame).
+#[must_use]
+pub fn frame_ppp(native: Option<f32>, zoom: f32, last: f32) -> f32 {
+    native.filter(|n| n.is_finite() && *n > 0.0).map_or(last, |n| n * zoom)
 }
 
 static PLATFORM: OnceLock<Box<dyn Platform>> = OnceLock::new();
@@ -67,5 +77,18 @@ mod tests {
         assert_eq!(super::insets_pt([0.0, 0.0, 0.0, 0.0], 2.0, 28.0), [0.0, 28.0, 0.0, 0.0]);
         assert_eq!(super::insets_pt([10.0, 96.0, 0.0, 48.0], 2.0, 28.0), [5.0, 48.0, 0.0, 24.0]);
         assert_eq!(super::insets_pt([f32::NAN, -3.0, 0.0, 0.0], 0.0, 0.0), [0.0; 4]);
+        // Real insets are not raised by the fallback (no double counting):
+        // a status bar of 63 px at 2.625 ppp is 24 pt, not 28.
+        assert_eq!(super::insets_pt([0.0, 63.0, 0.0, 0.0], 2.625, 28.0), [0.0, 24.0, 0.0, 0.0]);
+        // Landscape with the status bar hidden: only the side cutout.
+        assert_eq!(super::insets_pt([84.0, 0.0, 0.0, 0.0], 2.0, 28.0), [42.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn ppp_uses_this_frames_scale() {
+        assert!((super::frame_ppp(Some(2.625), 1.0, 1.0) - 2.625).abs() < 1e-6);
+        assert!((super::frame_ppp(Some(2.0), 1.5, 1.0) - 3.0).abs() < 1e-6);
+        assert!((super::frame_ppp(None, 1.0, 2.0) - 2.0).abs() < 1e-6);
+        assert!((super::frame_ppp(Some(0.0), 1.0, 2.0) - 2.0).abs() < 1e-6);
     }
 }

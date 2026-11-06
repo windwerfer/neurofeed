@@ -88,10 +88,12 @@ fn user_disconnect_suspends_until_the_user_connects() {
     assert_eq!(connected(&s), None);
     assert_eq!(h.take_scan_requests(), 0, "no background scan after Disconnect");
     assert_eq!(status(&mut s)["auto_reconnect"]["suspended"], true);
-    // A sim connect is a user connect: lifts the suspension, keeps the target.
+    // A sim connect is a user connect: lifts the suspension; once it streams
+    // it is the target (decision 2026-11-07).
     s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
+    assert_eq!(status(&mut s)["auto_reconnect"]["suspended"], false);
     advance(&mut s, 1.0);
-    assert_eq!(status(&mut s)["auto_reconnect"]["target"], A, "simulators are never the target");
+    assert_eq!(status(&mut s)["auto_reconnect"]["target"], "sim:muse_s");
     s.call("device.disconnect", json!({})).unwrap();
     s.call("device.connect", json!({ "id": A })).unwrap();
     assert_eq!(status(&mut s)["auto_reconnect"]["suspended"], false);
@@ -144,7 +146,7 @@ fn temp_store(tag: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn switch_from_simulator_is_remembered_and_startup_never_picks_a_simulator() {
+fn switch_from_simulator_is_remembered_and_startup_never_falls_back_to_a_simulator() {
     let path = temp_store("switch");
     {
         let (mut s, h) = session(Some(&path));
@@ -162,6 +164,76 @@ fn switch_from_simulator_is_remembered_and_startup_never_picks_a_simulator() {
     h.announce(muse_info(A, "Muse-AA"));
     advance(&mut s, 0.5);
     assert_eq!(connected(&s).as_deref(), Some(A));
+    std::fs::remove_dir_all(path.parent().unwrap()).ok();
+}
+
+#[test]
+fn simulator_last_chosen_reconnects_after_restart_without_scanning() {
+    let path = temp_store("sim-restart");
+    {
+        let (mut s, _h) = session(Some(&path));
+        s.call("device.connect", json!({ "id": "sim:muse_s" })).unwrap();
+        advance(&mut s, 1.0);
+        assert_eq!(status(&mut s)["auto_reconnect"]["target"], "sim:muse_s");
+        assert!(s.shutdown(1.0).is_empty());
+    }
+    let (mut s, h) = session(Some(&path));
+    h.take_scan_requests();
+    advance(&mut s, 0.1);
+    assert_eq!(connected(&s).as_deref(), Some("sim:muse_s"));
+    assert_eq!(h.take_scan_requests(), 0, "a simulator needs no BLE scan");
+    std::fs::remove_dir_all(path.parent().unwrap()).ok();
+}
+
+#[test]
+fn simulator_disconnected_by_the_user_stays_off_after_restart() {
+    let path = temp_store("sim-disc");
+    {
+        let (mut s, _h) = session(Some(&path));
+        s.call("device.connect", json!({ "id": "sim:muse_s" })).unwrap();
+        advance(&mut s, 1.0);
+        s.call("device.disconnect", json!({})).unwrap();
+        advance(&mut s, 30.0);
+        assert_eq!(connected(&s), None);
+    }
+    let (mut s, h) = session(Some(&path));
+    advance(&mut s, 60.0);
+    assert_eq!(connected(&s), None, "a Disconnect survives the restart");
+    assert_eq!(h.take_scan_requests(), 0);
+    assert_eq!(status(&mut s)["auto_reconnect"]["suspended"], true);
+    std::fs::remove_dir_all(path.parent().unwrap()).ok();
+}
+
+#[test]
+fn real_device_disconnected_by_the_user_stays_off_after_restart() {
+    let path = temp_store("real-disc");
+    {
+        let (mut s, h) = session(Some(&path));
+        connect_and_stream(&mut s, &h, A);
+        s.call("device.disconnect", json!({})).unwrap();
+    }
+    let (mut s, h) = session(Some(&path));
+    h.announce(muse_info(A, "Muse-AA"));
+    advance(&mut s, 60.0);
+    assert_eq!(connected(&s), None);
+    assert_eq!(h.take_scan_requests(), 0);
+    std::fs::remove_dir_all(path.parent().unwrap()).ok();
+}
+
+#[test]
+fn switch_from_real_device_to_simulator_remembers_the_simulator() {
+    let path = temp_store("to-sim");
+    {
+        let (mut s, h) = session(Some(&path));
+        connect_and_stream(&mut s, &h, A);
+        s.call("device.connect", json!({ "id": "sim:muse_s" })).unwrap();
+        advance(&mut s, 1.0);
+        assert!(s.shutdown(1.0).is_empty());
+    }
+    let (mut s, h) = session(Some(&path));
+    h.announce(muse_info(A, "Muse-AA"));
+    advance(&mut s, 0.5);
+    assert_eq!(connected(&s).as_deref(), Some("sim:muse_s"), "the last chosen device, not the headset");
     std::fs::remove_dir_all(path.parent().unwrap()).ok();
 }
 
