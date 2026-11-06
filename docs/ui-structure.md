@@ -16,9 +16,17 @@
 
 - `apps/neurofeed-egui/src/ui/topbar.rs`: `TopBottomPanel`; ☰ toggles the sidebar, Pause freezes data.
 - `apps/neurofeed-egui/src/ui/sidebar.rs`: `SidePanel` listing `View::ALL` (same order as the Flutter app).
-- `apps/neurofeed-egui/src/ui/views/bands.rs`: grid of one card per channel (TP9, AF7, AF8, TP10);
-  each card has five colored bars with the value on top. Toggle between
-  absolute (log10) and relative (%) scaling. Colors live in `apps/neurofeed-egui/src/ui/theme.rs`.
+- `apps/neurofeed-egui/src/ui/views/bands.rs`: Bands monitor (legacy layout). One full-bleed
+  time series of band power averaged over the chosen electrodes, a floating band legend
+  (tap hides a band), and the monitor toolbar: Follow | Inspect, window, dB | %, electrode
+  chips, and `…` → per-electrode bars. Colors live in `apps/neurofeed-egui/src/ui/theme.rs`.
+- `apps/neurofeed-egui/src/ui/monitor.rs`: shared monitor chrome and plot input for every
+  live graph: the single toolbar row, gestures → `monitor.*` commands (drag pan, pinch /
+  Ctrl+wheel zoom at the pointer, wheel pan, double-click Follow), and `m:ss` time grid.
+  The viewport state machine is `nf_core::monitor`.
+- Layouts (`ui/layout.rs`): Regular (sidebar), Compact (☰ drawer, `sidebar::drawer`), and
+  Immersive (phone landscape, monitor screens show the graph only). See
+  `.ai/contracts/ui-layout.md`.
 
 The UI never mutates state: it returns `nf_core::Command`s that the app runs
 through `Session::execute` (same path as MCP).

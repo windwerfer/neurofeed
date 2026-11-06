@@ -5,6 +5,9 @@ use nf_core::{DeviceInfo, Session, Signal};
 
 /// Heading plus the live signal, or a hint when nothing is connected.
 pub fn header<'a>(ui: &mut egui::Ui, session: &'a Session, title: &str, note: &str) -> Option<(&'a DeviceInfo, &'a Signal)> {
+    if crate::ui::monitor::immersive(ui) {
+        return session.live_signal();
+    }
     ui.horizontal(|ui| {
         ui.heading(title);
         ui.weak(note);
@@ -99,6 +102,9 @@ impl Viewport {
 pub fn viewport(ui: &mut egui::Ui, key: &str, options: &[f64], now: f64) -> Viewport {
     let id = egui::Id::unique(("nf_viewport", key));
     let mut vp = ui.data(|d| d.get_temp::<Viewport>(id)).unwrap_or(Viewport { window_s: options[options.len() / 2], anchor: None });
+    if crate::ui::monitor::immersive(ui) {
+        return vp;
+    }
     ui.horizontal(|ui| {
         ui.weak("window");
         for &o in options {

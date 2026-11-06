@@ -24,7 +24,8 @@ pub enum Appearance {
 pub enum LayoutMode {
     #[default]
     Auto,
-    /// Phone layout: compact top bar, bottom navigation, full-screen sheets.
+    /// Phone layout: compact top bar, hamburger drawer, full-screen sheets;
+    /// in landscape, monitor screens show the graph only.
     Compact,
     /// Desktop layout: sidebar + top bar.
     Regular,
@@ -201,6 +202,12 @@ pub struct Persisted {
     pub ai: crate::ai::AiSettings,
     /// Auto-reconnect target: the last real device that streamed.
     pub last_device: Option<String>,
+    /// Monitor window length per monitor (seconds).
+    #[serde(default)]
+    pub monitor_windows: std::collections::BTreeMap<crate::monitor::MonitorId, f64>,
+    /// Bands monitor: hidden bands.
+    #[serde(default)]
+    pub hidden_bands: Vec<nf_types::Band>,
 }
 
 impl Default for Persisted {
@@ -223,6 +230,8 @@ impl Persisted {
             streaming: crate::streaming::StreamSettings { enabled: false, ..s.streaming.settings.clone() },
             ai: s.ai.settings.clone(),
             last_device: s.auto.target.clone(),
+            monitor_windows: s.monitors.windows(),
+            hidden_bands: s.monitors.bands.hidden_bands.clone(),
         }
     }
 
@@ -237,6 +246,8 @@ impl Persisted {
         s.streaming.settings = crate::streaming::StreamSettings { enabled: s.streaming.settings.enabled, ..self.streaming };
         s.ai.settings = self.ai;
         s.auto.target = self.last_device;
+        s.monitors.restore_windows(&self.monitor_windows);
+        s.monitors.bands.hidden_bands = self.hidden_bands;
     }
 }
 

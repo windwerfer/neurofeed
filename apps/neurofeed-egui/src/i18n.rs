@@ -154,6 +154,13 @@ pub fn keys(src: &str) -> std::collections::BTreeSet<String> {
 mod tests {
     use super::*;
 
+    /// The active language is process-global: tests that switch it run one at a time.
+    static LANG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lang_lock() -> std::sync::MutexGuard<'static, ()> {
+        LANG.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     #[test]
     fn every_key_in_every_locale() {
         let en = keys(LOCALES[0].1);
@@ -213,6 +220,7 @@ mod tests {
 
     #[test]
     fn variables_and_plurals() {
+        let _g = lang_lock();
         set(Language::De);
         assert_eq!(tr("history-n-selected", &[("n", FluentValue::from(3))]), "3 ausgewählt");
         assert_eq!(tr("history-n-notes", &[("n", FluentValue::from(1))]), "1 Notiz");
@@ -226,6 +234,7 @@ mod tests {
 
     #[test]
     fn lookup_and_fallback() {
+        let _g = lang_lock();
         assert_eq!(from_locale("de-AT"), "de");
         assert_eq!(from_locale("fr_FR"), "en");
         set(Language::De);

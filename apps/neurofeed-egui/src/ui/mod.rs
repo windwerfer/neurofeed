@@ -1,9 +1,9 @@
 //! egui rendering. Views read the `Session` (state + typed signal
 //! accessors) and push `Command`s; they never mutate state directly.
 
-mod bottombar;
 pub(crate) mod device_dialog;
 pub mod layout;
+pub(crate) mod monitor;
 mod onboarding;
 mod quality;
 mod sidebar;
@@ -59,22 +59,31 @@ pub fn show_with(root: &mut egui::Ui, session: &Session, error: Option<&str>, sh
     let mut out = Vec::new();
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique(views::MARKS_ID), state.settings.gesture_markers));
     crate::i18n::set(state.settings.language);
-    let width = root.available_width();
-    let lay = layout::pick(state.settings.layout, width);
+    let size = root.available_size();
+    let width = size.x;
+    let lay = layout::for_view(layout::pick(state.settings.layout, size, layout::phone(size)), state.view);
     layout::store(ctx, lay);
     if lay.is_compact() {
         layout::touch_style(root);
     }
-    topbar::show(root, session, error, lay, &mut out);
-    if lay.is_compact() {
-        bottombar::show(root, state, &mut out);
-    } else if state.sidebar_open {
-        sidebar::show(root, state, width < layout::NARROW_SIDEBAR_WIDTH, &mut out);
+    if lay == layout::Layout::Immersive {
+        // Phone landscape on a monitor: the graph only (safe area via the root ui).
+        egui::CentralPanel::default()
+            .frame(egui::Frame::central_panel(root.style()).inner_margin(0.0))
+            .show(root, |ui| views::show(ui, session, &mut out, shell));
+    } else {
+        topbar::show(root, session, error, lay, &mut out);
+        if !lay.is_compact() && state.sidebar_open {
+            sidebar::show(root, state, width < layout::NARROW_SIDEBAR_WIDTH, &mut out);
+        }
+        egui::CentralPanel::default().show(root, |ui| {
+            recovery(ui, session, &mut out);
+            views::show(ui, session, &mut out, shell);
+        });
+        if lay.is_compact() {
+            sidebar::drawer(ctx, state, &mut out);
+        }
     }
-    egui::CentralPanel::default().show(root, |ui| {
-        recovery(ui, session, &mut out);
-        views::show(ui, session, &mut out, shell);
-    });
     device_dialog::show(ctx, session, &mut out);
     if !state.settings.onboarded && !shell.no_tour {
         onboarding::show(ctx, &mut out);

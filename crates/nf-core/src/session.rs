@@ -1202,6 +1202,26 @@ impl Session {
                 self.state.band_scale = scale;
                 self.emit(Event::ScaleChanged { scale });
             }
+            Command::MonitorViewport { monitor, window_s, mode, end_s } => self.monitor_viewport(monitor, window_s, mode, end_s),
+            Command::MonitorZoom { monitor, factor, focal } => {
+                if !(factor.is_finite() && factor > 0.0) {
+                    return Err(CoreError::InvalidArgs("factor must be a positive number".into()));
+                }
+                let (spec, span) = (monitor.spec(), self.monitor_span(monitor));
+                self.with_viewport(monitor, |v| v.zoom(spec, span, factor, focal.unwrap_or(1.0)));
+            }
+            Command::MonitorPan { monitor, seconds } => {
+                let span = self.monitor_span(monitor);
+                self.with_viewport(monitor, |v| v.pan(span, seconds));
+            }
+            Command::MonitorDisplay { electrodes, hidden_bands } => {
+                if let Some(e) = electrodes {
+                    self.state.monitors.bands.electrodes = e.into_iter().take(64).collect();
+                }
+                if let Some(h) = hidden_bands {
+                    self.state.monitors.bands.hidden_bands = h;
+                }
+            }
             Command::DeviceConnect { id } => {
                 self.connect(&id)?;
                 self.state.auto.suspended = false;
@@ -1581,6 +1601,7 @@ impl Session {
         self.live.artifacts = None;
         self.live.side = None;
         self.state.bands.clear();
+        self.state.monitors.follow_all();
         if let Some(d) = self.state.device.take() {
             self.emit(Event::Disconnected { id: d.id });
         }
@@ -1664,6 +1685,7 @@ impl Session {
                 .collect::<Vec<_>>()),
             Query::FeedbackNerd => serde_json::to_value(crate::nerd::build(&s.feedback, s.time)).unwrap_or_default(),
             Query::SettingsGet => serde_json::to_value(crate::settings::Persisted::of(s)).unwrap_or_default(),
+            Query::MonitorGet => self.monitor_json(),
             Query::BandsGet { scale } => self.bands_json(scale.unwrap_or(s.band_scale)),
             Query::DeviceList => serde_json::to_value(self.device_list()).unwrap_or_default(),
             Query::DeviceStatus => json!({
@@ -1897,6 +1919,61 @@ impl Session {
             }));
         }
         Ok(json!({ "time": sig.time, "df_hz": df, "unit": "uV^2/Hz", "channels": out }))
+    }
+
+    /// Data range of a monitor: band history for Bands, else the monitor's
+    /// longest window back from now.
+    fn monitor_span(&self, id: crate::monitor::MonitorId) -> crate::monitor::Span {
+        let s = &self.state;
+        match (id, s.bands.oldest(), s.bands.latest()) {
+            (crate::monitor::MonitorId::Bands, Some(a), Some(b)) => crate::monitor::Span { oldest_s: a.time, newest_s: b.time },
+            _ => crate::monitor::Span { oldest_s: (s.time - id.spec().max_s).max(0.0), newest_s: s.time },
+        }
+    }
+
+    fn with_viewport(&mut self, id: crate::monitor::MonitorId, f: impl FnOnce(&mut crate::monitor::Viewport)) {
+        let mut v = self.state.monitors.viewport(id);
+        f(&mut v);
+        self.state.monitors.set(id, v);
+    }
+
+    fn monitor_viewport(
+        &mut self,
+        id: crate::monitor::MonitorId,
+        window_s: Option<f64>,
+        mode: Option<crate::monitor::ViewportMode>,
+        end_s: Option<f64>,
+    ) {
+        let (spec, span) = (id.spec(), self.monitor_span(id));
+        self.with_viewport(id, |v| {
+            if let Some(w) = window_s {
+                v.set_window(spec, w);
+            }
+            match mode {
+                Some(crate::monitor::ViewportMode::Follow) => v.follow(),
+                Some(crate::monitor::ViewportMode::Inspect) => v.inspect(span, end_s),
+                None if end_s.is_some() => v.inspect(span, end_s),
+                None => {}
+            }
+        });
+    }
+
+    fn monitor_json(&self) -> Reply {
+        let m = &self.state.monitors;
+        let views: serde_json::Map<String, serde_json::Value> = crate::monitor::MonitorId::ALL
+            .into_iter()
+            .map(|id| {
+                let (v, spec, span) = (m.viewport(id), id.spec(), self.monitor_span(id));
+                let (a, b) = v.range(span);
+                let mode = if v.following() { "follow" } else { "inspect" };
+                (
+                    id.name().to_owned(),
+                    serde_json::json!({ "window_s": v.window_s, "mode": mode, "start_s": a, "end_s": b,
+                        "presets": spec.presets, "min_s": spec.min_s, "max_s": spec.max_s }),
+                )
+            })
+            .collect();
+        serde_json::json!({ "monitors": views, "bands": m.bands, "scale": self.state.band_scale })
     }
 
     fn bands_json(&self, scale: BandScale) -> Reply {

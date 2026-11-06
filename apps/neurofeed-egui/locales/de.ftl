@@ -155,12 +155,6 @@ meta-subject = Proband
 meta-mains-notch = Netz-Notch
 meta-sound = Ton
 meta-app-version = App-Version
-bands-band-powers = Bandleistungen
-bands-relative = Relativ %
-bands-absolute-log = Absolut (log)
-bands-over-time = Über Zeit
-bands-bars = Balken
-bands-average-of = Mittel aus
 bands-no-device-connected-use-connect = Kein Gerät verbunden. Nutze „Gerät verbinden“ oben.
 bands-waiting-for-data = Warte auf Daten…
 bands-show-hide-this-band = Dieses Band ein-/ausblenden
@@ -344,7 +338,6 @@ view-heart-rate = HF+SpO2
 view-movement = Bewegung
 view-streaming = Streaming
 view-settings = Einstellungen
-bottombar-more = Mehr
 protocol-builder-beta = Beta
 topbar-time = t = { $s } s
 topbar-stop = ⏹ Stopp ({ $s } s)
@@ -453,7 +446,6 @@ streaming-samples-dropped = { $n } Samples verworfen
 streaming-rows-per-message = { $n } Zeilen/Nachricht
 nerd-nerd-sheet = Technik-Details
 movement-axis-caption = Beschleunigungssensor, g (x, y, z) und |a| − 1 g
-bands-simulated-data = (simulierte Daten)
 import-window-title = Aufnahme importieren
 import-path-hint = /pfad/zur/aufnahme.edf
 import-recorded-at = aufgenommen { $time }
@@ -568,3 +560,18 @@ protocol-sleep-guard-title = Schlafwächter
 protocol-sleep-guard-summary = Keine Belohnung; warnt, wenn du in den Schlaf abdriftest.
 protocol-band-stability-title = Bandstabilität
 protocol-band-stability-summary = Experimentell: belohnt stabileres Alpha als in deiner Kalibrierung.
+
+## Monitor-Werkzeugleiste und Gesten (alle Monitor-Ansichten)
+monitor-follow = Folgen
+monitor-inspect = Untersuchen
+monitor-follow-hint = Neueste Daten am rechten Rand halten
+monitor-inspect-hint = Grafik anhalten. Ziehen verschiebt, Zwei-Finger-Zoom oder Strg+Mausrad zoomt, Doppelklick folgt wieder
+monitor-window-hint = Zeitfenster
+monitor-custom = { $s } (eigene)
+topbar-menu = Menü
+bands-scale-db = dB
+bands-scale-relative = %
+bands-scale-db-hint = Absolute Bandleistung, logarithmisch (dB = 10·log10 µV²/Hz)
+bands-scale-relative-hint = Anteil der sichtbaren Bänder in Prozent (aus linearer Leistung)
+bands-electrode-hint = Diese Elektrode in den Mittelwert aufnehmen
+bands-bars-per-electrode = Balken pro Elektrode

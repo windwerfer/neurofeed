@@ -22,6 +22,7 @@ mod command;
 pub mod faults;
 pub mod feedback;
 pub mod import;
+pub mod monitor;
 pub mod nerd;
 pub mod optics;
 pub mod protocols;
@@ -38,6 +39,7 @@ pub mod streaming;
 pub mod trust;
 
 pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn, Query, Request, SPECS};
+pub use monitor::{MonitorId, Viewport, ViewportMode};
 /// DSP primitives for views that render core buffers (pure functions).
 pub use nf_audio;
 pub use nf_dsp as dsp;

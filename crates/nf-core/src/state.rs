@@ -84,9 +84,9 @@ pub struct BandHistory {
 }
 
 impl BandHistory {
-    pub const CAPACITY: usize = 1200; // ~120 s at 10 Hz
-    /// Seconds the history covers (the longest Bands viewport window).
-    pub const SECONDS: f64 = 120.0;
+    pub const CAPACITY: usize = 18_000; // ~30 min at 10 Hz
+    /// Seconds the history covers (the longest Bands zoom window).
+    pub const SECONDS: f64 = 1800.0;
 
     pub fn push(&mut self, s: BandSnapshot) {
         if self.snapshots.len() >= Self::CAPACITY {
@@ -98,6 +98,18 @@ impl BandHistory {
     /// Oldest first.
     pub fn iter(&self) -> impl Iterator<Item = &BandSnapshot> {
         self.snapshots.iter()
+    }
+
+    /// Oldest snapshot.
+    pub fn oldest(&self) -> Option<&BandSnapshot> {
+        self.snapshots.front()
+    }
+
+    /// Snapshots with `start <= time <= end` (binary search; oldest first).
+    pub fn range(&self, start: f64, end: f64) -> impl Iterator<Item = &BandSnapshot> {
+        let a = self.snapshots.partition_point(|s| s.time < start);
+        let b = self.snapshots.partition_point(|s| s.time <= end).max(a);
+        self.snapshots.range(a..b)
     }
 
     pub fn latest(&self) -> Option<&BandSnapshot> {
@@ -165,6 +177,8 @@ pub struct AppState {
     pub device_dialog: bool,
     /// Background reconnect to the last device (`.ai/contracts/device-autoconnect.md`).
     pub auto: crate::autoconnect::AutoReconnect,
+    /// Monitor viewports (Follow/Inspect, window) and Bands display choices.
+    pub monitors: crate::monitor::Monitors,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -198,6 +212,7 @@ impl Default for AppState {
             history_location: "memory".into(),
             recovery: None,
             faults: Vec::new(),
+            monitors: crate::monitor::Monitors::default(),
             revision: 0,
         }
     }
