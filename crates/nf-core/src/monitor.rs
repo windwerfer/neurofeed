@@ -176,6 +176,70 @@ pub fn mmss(t: f64) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+/// Raw EEG trace layout (`monitor.raw {"mode"}`, saved).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RawMode {
+    /// Oscilloscope: the trace is rewritten from the left, a cursor marks now.
+    #[default]
+    Sweep,
+    /// The window slides; the newest sample is at the right edge.
+    Scroll,
+}
+
+/// Raw EEG Y scale (`monitor.raw {"scale"}`, saved). `auto` is **shared**
+/// by all panes (as in Flutter): half range = half the min..max span of the
+/// visible OK samples of every shown channel + 15 %, clamped to 10..10 000 µV,
+/// re-fitted at most every 250 ms. One scale keeps amplitudes comparable
+/// across electrodes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum RawScale {
+    #[default]
+    #[serde(rename = "auto")]
+    Auto,
+    #[serde(rename = "50")]
+    Uv50,
+    #[serde(rename = "100")]
+    Uv100,
+    #[serde(rename = "200")]
+    Uv200,
+}
+
+impl RawScale {
+    pub const ALL: [RawScale; 4] = [RawScale::Auto, RawScale::Uv50, RawScale::Uv100, RawScale::Uv200];
+
+    /// Fixed half range in µV (`None` = auto).
+    pub fn fixed_uv(self) -> Option<f32> {
+        match self {
+            RawScale::Auto => None,
+            RawScale::Uv50 => Some(50.0),
+            RawScale::Uv100 => Some(100.0),
+            RawScale::Uv200 => Some(200.0),
+        }
+    }
+}
+
+/// What Raw EEG shows. `mode` and `scale` persist; the electrode choice
+/// (by name, empty = all, like Bands) lasts for the session.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct RawDisplay {
+    pub electrodes: Vec<String>,
+    pub mode: RawMode,
+    pub scale: RawScale,
+}
+
+impl RawDisplay {
+    /// Indices of `channels` shown (all when none match: a new device).
+    pub fn selected(&self, channels: &[String]) -> Vec<usize> {
+        let picked: Vec<usize> = channels.iter().enumerate().filter(|(_, n)| self.electrodes.contains(n)).map(|(i, _)| i).collect();
+        if picked.is_empty() {
+            (0..channels.len()).collect()
+        } else {
+            picked
+        }
+    }
+}
+
 /// What the Bands monitor shows (also the electrode choice of later
 /// averaged monitors).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -207,6 +271,7 @@ impl BandsDisplay {
 pub struct Monitors {
     viewports: BTreeMap<MonitorId, Viewport>,
     pub bands: BandsDisplay,
+    pub raw: RawDisplay,
 }
 
 impl Monitors {

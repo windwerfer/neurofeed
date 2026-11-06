@@ -281,6 +281,11 @@ impl Signal {
         }
     }
 
+    /// Time of channel `ch`'s newest buffered sample (gap padding included).
+    pub fn channel_time(&self, ch: usize) -> Option<f64> {
+        self.last_t.get(ch).copied().flatten()
+    }
+
     /// Flags of the last `n` samples of channel `ch`.
     pub fn last_flags(&self, ch: usize, n: usize) -> Vec<u8> {
         self.flags.get(ch).map(|b| b.iter().skip(b.len().saturating_sub(n)).copied().collect()).unwrap_or_default()

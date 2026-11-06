@@ -67,12 +67,7 @@ fn visible(state: &AppState) -> [bool; 5] {
 }
 
 fn inspect_label(ui: &mut egui::Ui, state: &AppState, span: Span) {
-    let vp = state.monitors.viewport(MonitorId::Bands);
-    if !vp.following() {
-        let (a, b) = vp.range(span);
-        ui.weak(format!("{}–{}", nf_core::monitor::mmss(a), nf_core::monitor::mmss(b)));
-        ui.add_space(8.0);
-    }
+    monitor::inspect_label(ui, state.monitors.viewport(MonitorId::Bands), span);
 }
 
 fn scale_toggle(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
@@ -91,26 +86,10 @@ fn scale_toggle(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
 /// Electrodes in the average (at least one stays on). Names come from the device.
 fn electrode_chips(ui: &mut egui::Ui, state: &AppState, device: &DeviceInfo, out: &mut Vec<Command>) {
     let sel = state.monitors.bands.selected(&device.channels);
-    ui.spacing_mut().item_spacing.x = 2.0;
-    for (i, name) in device.channels.iter().enumerate() {
-        let on = sel.contains(&i);
-        if ui.selectable_label(on, name).on_hover_text(t!("bands-electrode-hint")).clicked() {
-            let mut next: Vec<usize> = sel.iter().copied().filter(|&c| c != i).collect();
-            if !on {
-                next.push(i);
-            }
-            if next.is_empty() {
-                continue;
-            }
-            let names = if next.len() == device.channels.len() {
-                Vec::new()
-            } else {
-                device.channels.iter().enumerate().filter(|(c, _)| next.contains(c)).map(|(_, n)| n.clone()).collect()
-            };
-            out.push(Command::MonitorDisplay { electrodes: Some(names), hidden_bands: None });
-        }
-    }
-    ui.spacing_mut().item_spacing.x = 8.0;
+    monitor::electrode_chips(ui, &device.channels, &sel, &t!("bands-electrode-hint"), out, |names| Command::MonitorDisplay {
+        electrodes: Some(names),
+        hidden_bands: None,
+    });
 }
 
 /// One decimated point: x on screen and the five band values.
