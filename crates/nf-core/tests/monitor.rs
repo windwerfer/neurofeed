@@ -73,3 +73,58 @@ fn window_hidden_bands_and_scale_persist() {
     assert!(st.monitors.bands.electrodes.is_empty());
     assert_eq!(st.band_scale, BandScale::Relative);
 }
+
+#[test]
+fn raw_display_commands_and_dynamic_channels() {
+    for (id, n) in [("sim:muse", 4usize), ("sim:crown", 8)] {
+        let mut s = Session::new();
+        s.call("device.connect", json!({ "id": id })).unwrap();
+        s.call("clock.advance", json!({ "seconds": 12.0 })).unwrap();
+        let dev = s.state().device.clone().unwrap();
+        assert_eq!(dev.channels.len(), n);
+        let raw = &s.state().monitors.raw;
+        assert_eq!(raw.selected(&dev.channels).len(), n, "all channels by default");
+        // Raw viewport spans the 10 s signal ring and ends at its newest sample.
+        let g = s.call("monitor.get", json!({})).unwrap();
+        let m = &g["monitors"]["raw_eeg"];
+        assert_eq!(m["window_s"], 8.0);
+        let newest = s.live_signal().and_then(|(_, sig)| sig.time).unwrap();
+        assert!((m["end_s"].as_f64().unwrap() - newest).abs() < 1e-9);
+        // Pan clamps inside the ring; Follow returns.
+        s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": -100.0 })).unwrap();
+        let g = s.call("monitor.get", json!({})).unwrap();
+        assert!((g["monitors"]["raw_eeg"]["start_s"].as_f64().unwrap() - (newest - 10.0)).abs() < 1e-6);
+        s.call("monitor.zoom", json!({ "monitor": "raw_eeg", "factor": 100.0 })).unwrap();
+        assert_eq!(s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["window_s"], 1.0, "min window");
+        s.call("monitor.viewport", json!({ "monitor": "raw_eeg", "mode": "follow" })).unwrap();
+        // Electrodes by name; unknown names fall back to all.
+        let pick = vec![dev.channels[0].clone(), dev.channels[n - 1].clone()];
+        s.call("monitor.raw", json!({ "electrodes": pick })).unwrap();
+        assert_eq!(s.state().monitors.raw.selected(&dev.channels), vec![0, n - 1]);
+        s.call("monitor.raw", json!({ "electrodes": ["NOPE"] })).unwrap();
+        assert_eq!(s.state().monitors.raw.selected(&dev.channels).len(), n);
+    }
+}
+
+#[test]
+fn raw_mode_and_scale_validate_and_persist() {
+    let mut s = Session::new();
+    let g = s.call("monitor.get", json!({})).unwrap();
+    assert_eq!((g["raw"]["mode"].as_str(), g["raw"]["scale"].as_str()), (Some("sweep"), Some("auto")));
+    s.call("monitor.raw", json!({ "mode": "scroll", "scale": "100" })).unwrap();
+    assert!(s.call("monitor.raw", json!({ "scale": "75" })).is_err());
+    assert!(s.call("monitor.raw", json!({ "mode": "wipe" })).is_err());
+    let g = s.call("monitor.get", json!({})).unwrap();
+    assert_eq!((g["raw"]["mode"].as_str(), g["raw"]["scale"].as_str()), (Some("scroll"), Some("100")));
+    // Round trip through the persisted settings document.
+    let doc = nf_core::settings::Persisted::of(s.state());
+    let back: nf_core::settings::Persisted = serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
+    let mut st = nf_core::AppState::default();
+    back.restore(&mut st);
+    assert_eq!(st.monitors.raw.mode, nf_core::monitor::RawMode::Scroll);
+    assert_eq!(st.monitors.raw.scale, nf_core::monitor::RawScale::Uv100);
+    assert!(st.monitors.raw.electrodes.is_empty(), "electrodes are session-only");
+    // An old settings doc without the raw fields loads with defaults.
+    let old: nf_core::settings::Persisted = serde_json::from_str("{}").unwrap();
+    assert_eq!(old.raw_mode, nf_core::monitor::RawMode::Sweep);
+}

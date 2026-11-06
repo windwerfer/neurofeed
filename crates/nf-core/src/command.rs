@@ -69,6 +69,17 @@ pub enum Command {
         #[serde(default)]
         hidden_bands: Option<Vec<nf_types::Band>>,
     },
+    /// Raw EEG display: trace mode (sweep | scroll, saved), Y scale
+    /// (auto | 50 | 100 | 200 µV, saved) and the electrodes shown (empty = all).
+    #[serde(rename = "monitor.raw")]
+    MonitorRaw {
+        #[serde(default)]
+        mode: Option<crate::monitor::RawMode>,
+        #[serde(default)]
+        scale: Option<crate::monitor::RawScale>,
+        #[serde(default)]
+        electrodes: Option<Vec<String>>,
+    },
     /// Connect a device by id (`sim:muse`, `sim:crown`, ...).
     #[serde(rename = "device.connect")]
     DeviceConnect { id: String },
@@ -729,6 +740,7 @@ pub const SPECS: &[CommandSpec] = &[
     spec("monitor.zoom", "Zoom monitor", "monitor", false, "Zoom a monitor's time axis by a factor around a focal point (0 left .. 1 right).", always),
     spec("monitor.pan", "Pan monitor", "monitor", false, "Move a monitor's time window by seconds; enters Inspect.", always),
     spec("monitor.display", "Bands display", "monitor", false, "Electrodes in the Bands average (empty = all) and hidden bands.", always),
+    spec("monitor.raw", "Raw EEG display", "monitor", false, "Raw EEG: sweep or scroll traces, Y scale (auto, ±50/100/200 µV) and shown electrodes (empty = all).", always),
     spec("device.list", "List devices", "device", true, "Connectable devices (simulators and registered providers).", always),
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
     spec("device.scan", "Scan", "device", false, "Timed discovery (Muse BLE, Crown OSC). The Device dialog watches until it closes instead.", can_scan),
@@ -1020,6 +1032,11 @@ fn base_examples() -> Vec<Request> {
         C(Command::MonitorZoom { monitor: crate::monitor::MonitorId::Bands, factor: 2.0, focal: Some(0.5) }),
         C(Command::MonitorPan { monitor: crate::monitor::MonitorId::Bands, seconds: -5.0 }),
         C(Command::MonitorDisplay { electrodes: Some(vec!["AF7".into()]), hidden_bands: Some(vec![nf_types::Band::Gamma]) }),
+        C(Command::MonitorRaw {
+            mode: Some(crate::monitor::RawMode::Scroll),
+            scale: Some(crate::monitor::RawScale::Uv100),
+            electrodes: Some(vec!["TP9".into(), "TP10".into()]),
+        }),
         Q(Query::MonitorGet),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
         C(Command::DeviceDisconnect),

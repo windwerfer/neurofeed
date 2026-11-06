@@ -1222,6 +1222,15 @@ impl Session {
                     self.state.monitors.bands.hidden_bands = h;
                 }
             }
+            Command::MonitorRaw { mode, scale, electrodes } => {
+                let r = &mut self.state.monitors.raw;
+                r.mode = mode.unwrap_or(r.mode);
+                r.scale = scale.unwrap_or(r.scale);
+                if let Some(e) = electrodes {
+                    r.electrodes = e.into_iter().take(64).collect();
+                }
+                self.persist_settings();
+            }
             Command::DeviceConnect { id } => {
                 self.connect(&id)?;
                 self.state.auto.suspended = false;
@@ -1930,6 +1939,11 @@ impl Session {
         let s = &self.state;
         match (id, s.bands.oldest(), s.bands.latest()) {
             (crate::monitor::MonitorId::Bands, Some(a), Some(b)) => crate::monitor::Span { oldest_s: a.time, newest_s: b.time },
+            // Raw EEG: the signal ring (10 s), ending at its newest sample.
+            (crate::monitor::MonitorId::RawEeg, _, _) => {
+                let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
+                crate::monitor::Span { oldest_s: (newest - crate::signal::BUFFER_S).max(0.0), newest_s: newest }
+            }
             _ => crate::monitor::Span { oldest_s: (s.time - id.spec().max_s).max(0.0), newest_s: s.time },
         }
     }
@@ -1976,7 +1990,7 @@ impl Session {
                 )
             })
             .collect();
-        serde_json::json!({ "monitors": views, "bands": m.bands, "scale": self.state.band_scale })
+        serde_json::json!({ "monitors": views, "bands": m.bands, "raw": m.raw, "scale": self.state.band_scale })
     }
 
     fn bands_json(&self, scale: BandScale) -> Reply {

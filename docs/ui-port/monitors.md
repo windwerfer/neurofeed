@@ -298,8 +298,7 @@ can be reviewed against `compare-bands-regular.png`.
 
 ### Next milestones (ordered)
 
-1. **Raw EEG** (≈2 d): core viewport `raw_eeg` and the shared toolbar; sweep mode by default; stacked plots
-   from the device channel list; Y-scale menu (Auto, ±50/100/200 µV); wheel pan.
+1. ~~**Raw EEG**~~ — done 2026-11-07 (see "Raw EEG milestone" below).
 2. **Histogram + PSD** (≈3 d): one averaged panel with electrode chips (`monitor.display`); 2/4/8 s epoch;
    Bands context strip (7:3) on the shared plot; PSD band shading, Hz range and tap readout; µV range for
    the histogram.
@@ -308,3 +307,22 @@ can be reviewed against `compare-bands-regular.png`.
 4. **HR+SpO2** (≈1.5 d): overview (two Y axes) + detail panes on the shared plot, both zoomable.
 5. **Movement** onto the shared toolbar (≈0.5 d).
 6. **Theme** (≈1 d): Material 3 palette light/dark, Roboto, spacing tokens; Follow lead and smoothing.
+
+
+### Raw EEG milestone (done 2026-11-07)
+- `ui/views/raw.rs` on the shared toolbar and core viewport `raw_eeg` (presets 2/4/8/10 s, saved; 1–10 s zoom).
+  One full-width pane per shown channel from `DeviceInfo.channels` (Muse 4, Crown 8, any count), AUX panes after.
+  Minimum pane height 160 (regular), 140 (compact), 96 (phone landscape); below that the stack scrolls
+  vertically. Plain vertical wheel / vertical drag scroll the stack when it overflows; otherwise the wheel pans
+  in Inspect. Sideways drag/wheel pans, pinch and Ctrl/⌘+wheel zoom, double-click returns to Follow.
+- `monitor.raw {mode, scale, electrodes}`: `sweep` (default) | `scroll`; `auto` | `50` | `100` | `200` µV (both
+  saved); electrodes by name, session-only like Bands. `monitor.get` reports `raw`.
+- Geometry in `nf_core::rawtrace` (pure, tested): true sample timestamps from the gap-padded ring; sweep x =
+  phase in a window-long slot, lines split at the wrap, gaps and non-finite values; 2 % blank after the cursor;
+  min+max per pixel column at their true x (spikes kept, ≤ 2 points per column). Bad samples are drawn with red
+  shading, gaps grey; values beyond the scale are clamped with a red dot.
+- Auto Y is **shared** by all panes: max |µV| of the visible OK samples + 15 %, 10..10 000 µV, re-fit every
+  250 ms (Flutter fits min..max; symmetric here so nothing is clipped around the 0 line).
+- Follow uses `FollowClock` with a 0.25 s lead (`RAW_FOLLOW_LEAD_S`) so the cursor glides; vsync repaints only
+  while live + Follow. Inspect (drag, wheel, Inspect button) holds a time-ordered window in both modes.
+- Deferred: inspect older than the 10 s RAM ring (file-backed); per-channel Auto; quality numbers (a dot only).

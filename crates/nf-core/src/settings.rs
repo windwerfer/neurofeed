@@ -219,6 +219,11 @@ pub struct Persisted {
     /// Bands monitor: hidden bands.
     #[serde(default)]
     pub hidden_bands: Vec<nf_types::Band>,
+    /// Raw EEG trace mode and Y scale.
+    #[serde(default)]
+    pub raw_mode: crate::monitor::RawMode,
+    #[serde(default)]
+    pub raw_scale: crate::monitor::RawScale,
 }
 
 impl Default for Persisted {
@@ -244,6 +249,8 @@ impl Persisted {
             auto_suspended: s.auto.suspended,
             monitor_windows: s.monitors.windows(),
             hidden_bands: s.monitors.bands.hidden_bands.clone(),
+            raw_mode: s.monitors.raw.mode,
+            raw_scale: s.monitors.raw.scale,
         }
     }
 
@@ -261,6 +268,8 @@ impl Persisted {
         s.auto.suspended = self.auto_suspended;
         s.monitors.restore_windows(&self.monitor_windows);
         s.monitors.bands.hidden_bands = self.hidden_bands;
+        s.monitors.raw.mode = self.raw_mode;
+        s.monitors.raw.scale = self.raw_scale;
     }
 }
 

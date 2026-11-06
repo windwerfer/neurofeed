@@ -63,6 +63,20 @@ pub fn axis_text(v: &egui::Visuals) -> Color32 {
     v.weak_text_color()
 }
 
+/// Raw EEG trace (light, as Flutter's onSurface trace).
+pub fn raw_trace(v: &egui::Visuals) -> Color32 {
+    v.text_color().gamma_multiply(0.9)
+}
+
+/// Raw EEG sweep cursor.
+pub fn sweep_cursor(v: &egui::Visuals) -> Color32 {
+    v.strong_text_color().gamma_multiply(0.6)
+}
+
+/// Raw EEG shading: no data (gap) and samples the device sent as invalid.
+pub const GAP_SHADE: Color32 = Color32::from_rgba_premultiplied(0x39, 0x39, 0x39, 40);
+pub const BAD_SHADE: Color32 = Color32::from_rgba_premultiplied(0x2F, 0x10, 0x10, 50);
+
 /// Debug overlay backdrop (perf counter).
 pub fn overlay_bg(v: &egui::Visuals) -> Color32 {
     v.extreme_bg_color.gamma_multiply(0.85)

@@ -26,6 +26,7 @@ pub mod monitor;
 pub mod nerd;
 pub mod optics;
 pub mod protocols;
+pub mod rawtrace;
 mod recording;
 pub mod recovery;
 pub mod replay;

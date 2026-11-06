@@ -114,6 +114,11 @@ pub fn live(state: &AppState) -> bool {
 /// with presentation time ([`m::FollowClock`], ~1 s behind the newest
 /// snapshot) and the next frame is requested. Otherwise the core range.
 pub fn presented_range(ui: &Ui, state: &AppState, id: MonitorId, vp: Viewport, span: m::Span) -> (f64, f64) {
+    presented_range_lead(ui, state, id, vp, span, m::FOLLOW_LEAD_S)
+}
+
+/// [`presented_range`] with the Follow lead (seconds behind the newest data).
+pub fn presented_range_lead(ui: &Ui, state: &AppState, id: MonitorId, vp: Viewport, span: m::Span, lead_s: f64) -> (f64, f64) {
     let ctx = ui.ctx();
     if !vp.following() || !live(state) {
         ctx.data_mut(|d| d.remove::<m::FollowClock>(follow_id(id)));
@@ -121,7 +126,7 @@ pub fn presented_range(ui: &Ui, state: &AppState, id: MonitorId, vp: Viewport, s
     }
     let now = ui.input(|i| i.time);
     let mut clock = ctx.data_mut(|d| d.get_temp::<m::FollowClock>(follow_id(id))).unwrap_or_default();
-    let end = clock.end(span.newest_s, now, m::FOLLOW_LEAD_S);
+    let end = clock.end(span.newest_s, now, lead_s);
     ctx.data_mut(|d| d.insert_temp(follow_id(id), clock));
     ctx.data_mut(|d| d.insert_temp(follow_id(id).with("end"), end));
     ctx.request_repaint(); // vsync-paced, only while live + Follow
@@ -145,6 +150,13 @@ fn freeze_at_presented(ui: &Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Comma
 
 /// Map plot input on `resp` (covering `plot`) to viewport commands.
 pub fn interact(ui: &Ui, resp: &Response, plot: Rect, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
+    interact_with(ui, resp, plot, id, vp, out, false);
+}
+
+/// [`interact`] for plots inside a vertical scroll list (`in_list`, Raw
+/// EEG's stacked panes): the plain vertical wheel and vertical drags scroll
+/// the list instead of panning; sideways wheel / drag still pan.
+pub fn interact_with(ui: &Ui, resp: &Response, plot: Rect, id: MonitorId, vp: Viewport, out: &mut Vec<Command>, in_list: bool) {
     if plot.width() <= 1.0 {
         return;
     }
@@ -164,17 +176,63 @@ pub fn interact(ui: &Ui, resp: &Response, plot: Rect, id: MonitorId, vp: Viewpor
         out.push(Command::MonitorViewport { monitor: id, window_s: None, mode: Some(ViewportMode::Follow), end_s: None });
         return;
     }
-    let dx = resp.drag_delta().x;
+    let drag = resp.drag_delta();
+    if in_list && drag.y.abs() > drag.x.abs() {
+        ui.scroll_with_delta(egui::vec2(0.0, drag.y));
+        return;
+    }
+    let dx = drag.x;
     if touch_center.is_none() && dx != 0.0 {
         freeze_at_presented(ui, id, vp, out);
         out.push(Command::MonitorPan { monitor: id, seconds: -f64::from(dx) / w * vp.window_s });
         return;
     }
     // Wheel: sideways always pans; vertical pans once inspecting.
-    let wheel = if vp.following() { scroll.x } else { scroll.x + scroll.y };
+    let wheel = if vp.following() || in_list { scroll.x } else { scroll.x + scroll.y };
     if resp.contains_pointer() && wheel.abs() > 0.5 {
         freeze_at_presented(ui, id, vp, out);
         out.push(Command::MonitorPan { monitor: id, seconds: -f64::from(wheel / WHEEL_PER_WINDOW) * vp.window_s });
+    }
+}
+
+/// Electrode chips (at least one stays on); `apply` turns the chosen names
+/// (empty = all) into the screen's command. Names come from the device.
+pub fn electrode_chips(
+    ui: &mut Ui,
+    channels: &[String],
+    selected: &[usize],
+    hint: &str,
+    out: &mut Vec<Command>,
+    apply: impl Fn(Vec<String>) -> Command,
+) {
+    ui.spacing_mut().item_spacing.x = 2.0;
+    for (i, name) in channels.iter().enumerate() {
+        let on = selected.contains(&i);
+        if ui.selectable_label(on, name).on_hover_text(hint).clicked() {
+            let mut next: Vec<usize> = selected.iter().copied().filter(|&c| c != i).collect();
+            if !on {
+                next.push(i);
+            }
+            if next.is_empty() {
+                continue;
+            }
+            let names = if next.len() == channels.len() {
+                Vec::new()
+            } else {
+                channels.iter().enumerate().filter(|(c, _)| next.contains(c)).map(|(_, n)| n.clone()).collect()
+            };
+            out.push(apply(names));
+        }
+    }
+    ui.spacing_mut().item_spacing.x = 8.0;
+}
+
+/// `start–end` while inspecting.
+pub fn inspect_label(ui: &mut Ui, vp: Viewport, span: m::Span) {
+    if !vp.following() {
+        let (a, b) = vp.range(span);
+        ui.weak(format!("{}–{}", m::mmss(a), m::mmss(b)));
+        ui.add_space(8.0);
     }
 }
 
