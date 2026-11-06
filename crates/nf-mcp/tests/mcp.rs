@@ -175,7 +175,7 @@ fn raw_psd_and_bands_from_dsp() {
     assert_eq!(raw["channels"][0]["samples"].as_array().map(Vec::len), Some(512));
     let unf = run(&s, "raw.get", json!({ "seconds": 0.5, "filtered": false }));
     assert_eq!(unf["channels"][3]["samples"].as_array().map(Vec::len), Some(128));
-    assert!(s.call("command_run", json!({ "id": "raw.get", "params": { "seconds": 11 } })).is_err());
+    assert!(s.call("command_run", json!({ "id": "raw.get", "params": { "seconds": 61 } })).is_err());
 
     let psd = run(&s, "psd.get", json!({ "channel": "TP9", "max_hz": 40 }));
     assert_eq!(psd["channels"].as_array().map(Vec::len), Some(1));

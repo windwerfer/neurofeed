@@ -258,3 +258,6 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 
 ## 2026-11-07 — Raw EEG milestone
 - Raw EEG follows Flutter: stacked full-width panes per device channel, sweep by default (scroll selectable), Y scale Auto / ±50 / ±100 / ±200 µV with one shared Auto scale, `m:ss` axis under the last pane. New command `monitor.raw {mode, scale, electrodes}`; mode and scale persist (`raw_mode`, `raw_scale` in the settings doc). The old card grid, its fixed ±60 µV and the view-local viewport for Raw EEG are gone. In Inspect the sweep becomes a time-ordered hold. Details: `docs/ui-port/monitors.md`.
+
+## 2026-11-07 — signal ring 60 s
+- `signal::BUFFER_S` 10 → 60 s (raw + filtered + flags per channel, ≈1.1 MB for 8 ch at 256 Hz). Raw EEG Inspect pans through it; with 10 s the default 8 s window could only move 2 s, which read as a broken drag. `raw.get` / `histogram.get` accept up to 60 s. DSP windows are unchanged.

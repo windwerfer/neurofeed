@@ -10,8 +10,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-/// Seconds of raw and filtered signal kept per channel.
-pub const BUFFER_S: f64 = 10.0;
+/// Seconds of raw and filtered signal kept per channel (display history:
+/// Raw EEG Inspect pans through it; DSP only reads the last [`WINDOW_S`]).
+/// 60 s × 256 Hz × 8 ch × 9 B ≈ 1.1 MB. It was 10 s, which left a 10 s
+/// window no room and the default 8 s window only 2 s to pan.
+pub const BUFFER_S: f64 = 60.0;
 /// FFT window for bands / PSD / quality (1 s at 256 Hz).
 pub const WINDOW_S: f64 = 1.0;
 /// Band snapshot cadence (matches the legacy 10 Hz band stream).

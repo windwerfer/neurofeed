@@ -325,4 +325,6 @@ can be reviewed against `compare-bands-regular.png`.
   250 ms (Flutter fits min..max; symmetric here so nothing is clipped around the 0 line).
 - Follow uses `FollowClock` with a 0.25 s lead (`RAW_FOLLOW_LEAD_S`) so the cursor glides; vsync repaints only
   while live + Follow. Inspect (drag, wheel, Inspect button) holds a time-ordered window in both modes.
-- Deferred: inspect older than the 10 s RAM ring (file-backed); per-channel Auto; quality numbers (a dot only).
+- 2026-11-07 fix: Inspect drag barely moved because the RAM ring was 10 s (8 s window → 2 s to pan); the ring is
+  now 60 s (`signal::BUFFER_S`).
+- Deferred: inspect older than the 60 s RAM ring (file-backed); per-channel Auto; quality numbers (a dot only).
