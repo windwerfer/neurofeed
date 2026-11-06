@@ -152,10 +152,37 @@ screenshot times out after 5 s, and any other bridge reply after 30 s.
 
 ### UI layout
 
-`settings.set {"layout":"compact"}` forces the phone layout (compact top bar,
-bottom navigation, full-screen Device sheet) on any window; `"regular"`
-forces sidebar + top bar; `"auto"` (default) switches below 600 px width.
-Combine with `screenshot` to capture either mode.
+`settings.set {"layout":"compact"}` forces the phone layout on any window: in
+portrait a compact top bar, a `☰` navigation drawer and a full-screen Device
+sheet; in landscape monitor screens are immersive (graph only). `"regular"`
+forces sidebar + top bar. `"auto"` (default) switches below 600 px width on
+desktop, and by orientation on phones. Start the desktop app with
+`NF_WINDOW=400x850` (or `850x400`) to get a phone-sized window, then combine with
+`screenshot` to capture each mode.
+
+### Monitors (time viewport)
+
+Every live graph has a viewport in the core. In Follow the right edge is the
+newest data. In Inspect the right edge is frozen at `end_s` (session seconds).
+
+```sh
+neurofeed-cli run monitor.get                                    # window, mode, start_s/end_s, presets, min/max per monitor
+neurofeed-cli run monitor.viewport '{"monitor":"bands","window_s":60}'   # saved per monitor
+neurofeed-cli run monitor.zoom '{"monitor":"bands","factor":2,"focal":0.5}'  # pinch / Ctrl+wheel
+neurofeed-cli run monitor.pan '{"monitor":"bands","seconds":-10}'        # drag; enters Inspect
+neurofeed-cli run monitor.viewport '{"monitor":"bands","mode":"follow"}'
+neurofeed-cli run monitor.display '{"electrodes":["AF7","AF8"],"hidden_bands":["gamma"]}'
+neurofeed-cli run scale.set '{"scale":"relative"}'                       # dB | % (saved)
+```
+
+Monitor ids are `bands`, `raw_eeg`, `spectrogram`, `heart_overview`, `heart_detail`
+and `movement`. Today only Bands draws from this viewport (the other screens follow
+in later milestones). Zoom keeps the time under `focal` (0 = left edge, 1 = right
+edge) in place. Zooming at the right edge keeps Follow, while any other focal point
+enters Inspect. The window is clamped to the monitor's range (Bands 5 s to 30 min)
+and the right edge to the available data. In the app, a drag pans, a pinch or
+Ctrl/Cmd+wheel zooms at the pointer, the wheel pans (vertical only while inspecting)
+and a double-click returns to Follow.
 `settings.set {"language":"de"}` switches the UI to German (`"en"`, or
 `"auto"` = system locale, the default); tool and CLI output stay English.
 Contract: [.ai/contracts/i18n.md](../.ai/contracts/i18n.md). Contract:

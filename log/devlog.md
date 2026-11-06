@@ -55,3 +55,11 @@
 - `device.dialog {open:true}` calls `DeviceProvider::watch` (Muse BLE + Crown OSC) and `{open:false}` calls `stop_scan`. `device.scan {seconds}` is unchanged and timed.
 - Muse watch uses btleplug directly and records a headset only while its RSSI is present (BlueZ clears RSSI when discovery stops). Connect still goes through muse-rs, aimed at that advertised name.
 - Open: Android has no control channel, so this dialog behavior is desktop-only.
+
+## 2026-11-06: UI port milestone 1 (monitor foundation + Bands)
+- `nf_core::monitor` holds the Follow/Inspect/zoom/pan viewport per monitor (`monitor.viewport|zoom|pan|display`, `monitor.get`). Windows and hidden bands are persisted. Bands history is 30 min.
+- Bands is rebuilt in the legacy layout: shared toolbar row, full-bleed graph with an `m:ss` grid, floating legend, dB | % (linear averaging over electrodes, relative = share of the visible bands), and legacy palette.
+- Compact navigation is a `☰` drawer (bottom bar removed). Phone landscape is immersive (graph only) on monitor screens. Layout selection uses phone identity + orientation.
+- `NF_WINDOW=WxH` sets the desktop window size for screenshot runs.
+- i18n tests that switch the global language are serialized (removes a flaky race).
+- Plan and next steps: docs/ui-port/monitors.md.

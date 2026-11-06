@@ -155,12 +155,6 @@ meta-subject = Subject
 meta-mains-notch = Mains notch
 meta-sound = Sound
 meta-app-version = App version
-bands-band-powers = Band powers
-bands-relative = Relative %
-bands-absolute-log = Absolute (log)
-bands-over-time = Over time
-bands-bars = Bars
-bands-average-of = Average of
 bands-no-device-connected-use-connect = No device connected. Use Connect device in the top bar.
 bands-waiting-for-data = Waiting for data…
 bands-show-hide-this-band = Show / hide this band
@@ -344,7 +338,6 @@ view-heart-rate = HR+SpO2
 view-movement = Movement
 view-streaming = Streaming
 view-settings = Settings
-bottombar-more = More
 protocol-builder-beta = Beta
 topbar-time = t = { $s } s
 topbar-stop = ⏹ Stop ({ $s } s)
@@ -453,7 +446,6 @@ streaming-samples-dropped = { $n } samples dropped
 streaming-rows-per-message = { $n } rows/message
 nerd-nerd-sheet = Nerd sheet
 movement-axis-caption = accelerometer, g (x, y, z) and |a| − 1 g
-bands-simulated-data = (simulated data)
 import-window-title = Import a recording
 import-path-hint = /path/to/recording.edf
 import-recorded-at = recorded { $time }
@@ -568,3 +560,18 @@ protocol-sleep-guard-title = Sleep Guard
 protocol-sleep-guard-summary = No reward; warns when you drift towards sleep.
 protocol-band-stability-title = Band Stability
 protocol-band-stability-summary = Experimental: rewards steadier alpha than in your calibration.
+
+## Monitor toolbar and gestures (shared by monitor screens)
+monitor-follow = Follow
+monitor-inspect = Inspect
+monitor-follow-hint = Keep the newest data at the right edge
+monitor-inspect-hint = Freeze the graph. Drag to pan, pinch or Ctrl+wheel to zoom, double-click to follow again
+monitor-window-hint = Time window
+monitor-custom = { $s } (custom)
+topbar-menu = Menu
+bands-scale-db = dB
+bands-scale-relative = %
+bands-scale-db-hint = Absolute band power, logarithmic (dB = 10·log10 µV²/Hz)
+bands-scale-relative-hint = Share of the visible bands in percent (from linear power)
+bands-electrode-hint = Include this electrode in the average
+bands-bars-per-electrode = Bars per electrode

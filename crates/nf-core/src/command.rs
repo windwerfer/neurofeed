@@ -30,6 +30,45 @@ pub enum Command {
     /// Bands view scaling.
     #[serde(rename = "scale.set")]
     ScaleSet { scale: BandScale },
+    /// Monitor viewport: window length and/or Follow / Inspect.
+    #[serde(rename = "monitor.viewport")]
+    MonitorViewport {
+        monitor: crate::monitor::MonitorId,
+        /// Window length in seconds (clamped to the monitor's zoom range).
+        #[serde(default)]
+        window_s: Option<f64>,
+        #[serde(default)]
+        mode: Option<crate::monitor::ViewportMode>,
+        /// Inspect: session time of the right edge (default: newest data).
+        #[serde(default)]
+        end_s: Option<f64>,
+    },
+    /// Zoom the time axis around a point (pinch / Ctrl+wheel).
+    #[serde(rename = "monitor.zoom")]
+    MonitorZoom {
+        monitor: crate::monitor::MonitorId,
+        /// > 1 zooms in (shorter window), < 1 zooms out.
+        factor: f64,
+        /// Anchor, 0 = left edge .. 1 = right edge (default 1).
+        #[serde(default)]
+        focal: Option<f64>,
+    },
+    /// Pan the time axis (drag); enters Inspect.
+    #[serde(rename = "monitor.pan")]
+    MonitorPan {
+        monitor: crate::monitor::MonitorId,
+        /// Positive = later, negative = earlier.
+        seconds: f64,
+    },
+    /// Bands display: electrodes in the average and hidden bands.
+    #[serde(rename = "monitor.display")]
+    MonitorDisplay {
+        /// Electrode names in the average; empty = all.
+        #[serde(default)]
+        electrodes: Option<Vec<String>>,
+        #[serde(default)]
+        hidden_bands: Option<Vec<nf_types::Band>>,
+    },
     /// Connect a device by id (`sim:muse`, `sim:crown`, ...).
     #[serde(rename = "device.connect")]
     DeviceConnect { id: String },
@@ -298,6 +337,9 @@ pub enum Query {
         #[serde(default)]
         scale: Option<BandScale>,
     },
+    /// Monitor viewports (window, Follow/Inspect, visible range) and Bands display.
+    #[serde(rename = "monitor.get")]
+    MonitorGet,
     #[serde(rename = "device.list")]
     DeviceList,
     #[serde(rename = "device.status")]
@@ -682,6 +724,11 @@ pub const SPECS: &[CommandSpec] = &[
     spec("stream.resume", "Resume", "stream", false, "Resume incoming band data.", can_resume),
     spec("scale.set", "Band scale", "bands", false, "Absolute (log10) or relative (share of total) scaling.", always),
     spec("bands.get", "Band powers", "bands", true, "Latest band powers per channel (delta..gamma).", always),
+    spec("monitor.get", "Monitor viewports", "monitor", true, "Per monitor: window, Follow/Inspect, visible range; Bands electrodes and hidden bands.", always),
+    spec("monitor.viewport", "Monitor window", "monitor", false, "Set a monitor's window length (saved) and/or Follow / Inspect.", always),
+    spec("monitor.zoom", "Zoom monitor", "monitor", false, "Zoom a monitor's time axis by a factor around a focal point (0 left .. 1 right).", always),
+    spec("monitor.pan", "Pan monitor", "monitor", false, "Move a monitor's time window by seconds; enters Inspect.", always),
+    spec("monitor.display", "Bands display", "monitor", false, "Electrodes in the Bands average (empty = all) and hidden bands.", always),
     spec("device.list", "List devices", "device", true, "Connectable devices (simulators and registered providers).", always),
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
     spec("device.scan", "Scan", "device", false, "Timed discovery (Muse BLE, Crown OSC). The Device dialog watches until it closes instead.", can_scan),
@@ -964,6 +1011,16 @@ fn base_examples() -> Vec<Request> {
         C(Command::StreamPause),
         C(Command::StreamResume),
         C(Command::ScaleSet { scale: BandScale::Relative }),
+        C(Command::MonitorViewport {
+            monitor: crate::monitor::MonitorId::Bands,
+            window_s: Some(60.0),
+            mode: Some(crate::monitor::ViewportMode::Inspect),
+            end_s: None,
+        }),
+        C(Command::MonitorZoom { monitor: crate::monitor::MonitorId::Bands, factor: 2.0, focal: Some(0.5) }),
+        C(Command::MonitorPan { monitor: crate::monitor::MonitorId::Bands, seconds: -5.0 }),
+        C(Command::MonitorDisplay { electrodes: Some(vec!["AF7".into()]), hidden_bands: Some(vec![nf_types::Band::Gamma]) }),
+        Q(Query::MonitorGet),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
         C(Command::DeviceDisconnect),
         C(Command::DeviceDialog { open: true }),

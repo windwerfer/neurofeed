@@ -6,6 +6,12 @@ use nf_core::Band;
 pub const SIDEBAR_WIDTH: f32 = 170.0;
 pub const SIDEBAR_NARROW: f32 = 48.0;
 pub const TOPBAR_HEIGHT: f32 = 44.0;
+/// Compact navigation drawer width (Material: 256..=320 dp).
+pub const DRAWER_WIDTH: f32 = 280.0;
+/// Dim layer behind the navigation drawer.
+pub const SCRIM: Color32 = Color32::from_black_alpha(110);
+/// Monitor toolbar row height (regular; compact uses the touch height).
+pub const MONITOR_TOOLBAR: f32 = 40.0;
 
 pub fn apply(ctx: &egui::Context) {
     ctx.set_visuals(egui::Visuals::dark());
@@ -36,15 +42,29 @@ pub fn follow(ctx: &egui::Context, a: nf_core::settings::Appearance) {
     }
 }
 
+/// Band palette of the legacy app (`charts/band_style.dart`).
 pub fn band_color(band: Band) -> Color32 {
     match band {
-        Band::Delta => Color32::from_rgb(0xE5, 0x73, 0x73),
-        Band::Theta => Color32::from_rgb(0xFF, 0xB7, 0x4D),
-        Band::Alpha => Color32::from_rgb(0x81, 0xC7, 0x84),
-        Band::Beta => Color32::from_rgb(0x64, 0xB5, 0xF6),
-        Band::Gamma => Color32::from_rgb(0xBA, 0x68, 0xC8),
+        Band::Delta => Color32::from_rgb(0x4F, 0xC3, 0xF7),
+        Band::Theta => Color32::from_rgb(0xFF, 0x70, 0x43),
+        Band::Alpha => Color32::from_rgb(0x66, 0xBB, 0x6A),
+        Band::Beta => Color32::from_rgb(0xAB, 0x47, 0xBC),
+        Band::Gamma => Color32::from_rgb(0xFF, 0xA7, 0x26),
     }
 }
+
+/// Graph grid line (both themes).
+pub fn grid(v: &egui::Visuals) -> egui::Stroke {
+    egui::Stroke::new(0.6, v.weak_text_color().gamma_multiply(0.35))
+}
+
+/// Axis label colour.
+pub fn axis_text(v: &egui::Visuals) -> Color32 {
+    v.weak_text_color()
+}
+
+/// Off-scale marker (value clipped at the axis edge).
+pub const CLIPPED: Color32 = Color32::from_rgb(0xEF, 0x53, 0x50);
 
 /// Pad quality colours of the legacy status bar (`_signalColor`):
 /// green ≥ 80, orange ≥ 40, red below.

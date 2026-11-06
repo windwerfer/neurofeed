@@ -27,12 +27,16 @@ pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, layout:
     });
 }
 
-/// Compact top bar: device area (tap opens the Device dialog), error
+/// Compact top bar: ☰ (navigation drawer), device area (tap opens the Device dialog), error
 /// glyph, and icon-only record / pause. Notch lives in Settings → Devices.
 fn compact(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
     let state = session.state();
     egui::Panel::top("topbar").exact_size(TOUCH).show(root, |ui| {
         ui.horizontal_centered(|ui| {
+            if ui.add_sized([TOUCH, TOUCH - 8.0], egui::Button::new("☰")).on_hover_text(t!("topbar-menu")).clicked() {
+                let open = super::sidebar::drawer_open(ui.ctx());
+                super::sidebar::set_drawer(ui.ctx(), !open);
+            }
             device(ui, session, out);
             if let Some(e) = error {
                 ui.colored_label(ui.visuals().error_fg_color, "⚠").on_hover_text(e);

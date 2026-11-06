@@ -1,6 +1,6 @@
 # UI port: monitor screens (Flutter → egui)
 
-Status: **plan only**, no code changed yet. Scope: the live *monitor* screens.
+Status: **milestone 1 landed (2026-11-06)**: the shared monitor foundation, Bands, the hamburger navigation and immersive phone landscape. See *Progress* below. Scope: the live *monitor* screens.
 Feedback, history and settings are out of scope for this pass.
 
 Visual target: Flutter 0.60.0 (tag `pre-rust-port`, `lib/src/monitor/`).
@@ -240,3 +240,71 @@ can be reviewed against `compare-bands-regular.png`.
 - Compact nav: the Flutter drawer or the current Rust bottom bar?
 - Raw EEG: sweep (Flutter) or scrolling (Rust) as the default?
 - Histogram/PSD: averaged single pane (Flutter) as the default, with the per-channel grid as an option?
+
+## Owner decisions (2026-11-06)
+
+1. Bands: a persisted toggle between **log absolute (dB)** and **relative %**.
+2. Compact navigation: **hamburger drawer** (the bottom bar was removed).
+3. Raw EEG: **sweep** by default, stacked plots generated from the device's EEG channel list (never a fixed count).
+4. Histogram/PSD: **one averaged panel**, with the same electrode chips in the toolbar as Bands.
+5. **Phone landscape hides all chrome** on monitor screens (graph only). Portrait brings the controls back.
+   A phone is never classed regular just because it is wide.
+
+### Bands value math (documented contract)
+
+- Inputs: per electrode and band, `log10(µV²/Hz)` from the band snapshots (unchanged DSP).
+- **Electrode aggregation**: convert each selected electrode's value to **linear** power (`10^x`),
+  skip non-finite values, and take the arithmetic mean. No mean of logs.
+- **Absolute (dB)**: `10·log10(mean_linear)`. The Y axis fits the data in 10 dB steps.
+- **Relative (%)**: `mean_linear(band) / Σ mean_linear(visible bands) × 100`. A hidden band is left
+  out of the denominator and is not drawn, so the visible lines always sum to 100 %. A zero, negative or
+  non-finite total yields no value (gap) for every band.
+- Electrodes come from the device's channel list. Selecting none is impossible (the last one stays on),
+  and an empty selection means "all".
+- Implemented in `nf_core::monitor::band_values` with unit tests. Per-electrode bars (`…`) use the same
+  function with one electrode.
+
+## Progress
+
+### Milestone 1: done (2026-11-06)
+
+- **Core viewport** `nf_core::monitor`: per-monitor window presets and zoom limits, Follow/Inspect, zoom
+  anchored at a focal point (right-edge zoom keeps Follow), pan (enters Inspect), clamping to the data,
+  NaN-safe. Commands: `monitor.viewport`, `monitor.zoom`, `monitor.pan`, `monitor.display` and `monitor.get`
+  (CLI/MCP/bridge, documented in `docs/automation.md`). Window lengths and hidden bands are persisted, and
+  disconnect returns every monitor to Follow. Bands history covers 30 min (the legacy zoom cap).
+- **Shared UI** `apps/neurofeed-egui/src/ui/monitor.rs`: a single horizontally scrollable toolbar row
+  (Follow | Inspect, window menu with `custom`, extras slot); plot input (touch pinch and Ctrl/Cmd+wheel zoom
+  anchored at the pointer or pinch centre, drag pan, wheel pan, double-click Follow); and an elapsed `m:ss` time
+  grid. Used by Bands. The later screens reuse it.
+- **Bands**: full-bleed graph, floating band legend (tap hides a band), legacy band palette, dB | % toggle,
+  electrode chips, inspect range label, `…` → per-electrode bars.
+- **Layouts**: Compact uses a `☰` drawer (no bottom bar). Immersive phone landscape hides the top bar,
+  navigation and toolbars on monitor screens (`.ai/contracts/ui-layout.md`). The old Raw EEG, PSD, Histogram and
+  Movement headers and window rows are hidden in immersive too.
+- Tests: viewport zoom anchoring, clamps and Follow/Inspect; relative and absolute math (linear averaging,
+  hidden bands, invalid totals); persistence round trip through the settings doc; command validation;
+  layout selection by orientation and phone identity.
+- Screenshots: `/workspace/ui-shots/monitors/m1-rust-bands-{regular,regular-relative,compact,landscape}.png`.
+
+### Known limits after milestone 1
+
+- Raw EEG, Spectrogram and Movement still use the old view-local viewport (`views/plot.rs::Viewport`).
+  HR+SpO2 has none. Their toolbars are not yet the shared row.
+- Spectrogram and HR+SpO2 still draw their headers in immersive landscape (their own header code).
+- No Follow lead (~1 s) and no smoothed (spline) lines yet. The theme is still stock egui dark, and the
+  Material 3 palette and Roboto are still to come.
+- The drawer and pinch were checked by unit tests and the desktop window, not on a real phone.
+
+### Next milestones (ordered)
+
+1. **Raw EEG** (≈2 d): core viewport `raw_eeg` and the shared toolbar; sweep mode by default; stacked plots
+   from the device channel list; Y-scale menu (Auto, ±50/100/200 µV); wheel pan.
+2. **Histogram + PSD** (≈3 d): one averaged panel with electrode chips (`monitor.display`); 2/4/8 s epoch;
+   Bands context strip (7:3) on the shared plot; PSD band shading, Hz range and tap readout; µV range for
+   the histogram.
+3. **Spectrogram** (≈2 d): averaged electrodes, longer history (300 s), plasma map + colour bar, dB range menu,
+   zoom via the core viewport.
+4. **HR+SpO2** (≈1.5 d): overview (two Y axes) + detail panes on the shared plot, both zoomable.
+5. **Movement** onto the shared toolbar (≈0.5 d).
+6. **Theme** (≈1 d): Material 3 palette light/dark, Roboto, spacing tokens; Follow lead and smoothing.
