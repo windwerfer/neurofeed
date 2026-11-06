@@ -106,7 +106,11 @@ pub fn inspect(live: &egui::Context, session: &Session, last_error: Option<&str>
     let ctx = egui::Context::default();
     ui::theme::apply(&ctx);
     ctx.enable_accesskit();
-    let input = egui::RawInput { screen_rect: Some(live.viewport_rect()), ..Default::default() };
+    let input = egui::RawInput {
+        screen_rect: Some(live.viewport_rect()),
+        safe_area_insets: Some(live.input(egui::InputState::safe_area_insets)),
+        ..Default::default()
+    };
     // Two passes: layouts that size themselves on the first frame settle.
     // Nothing renders these passes; drop their texture uploads explicitly.
     ctx.run_ui(input.clone(), |u| drop(ui::show(u, session, last_error))).textures_delta.clear();

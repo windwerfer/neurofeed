@@ -46,6 +46,15 @@ pub struct NeuroFeedApp {
     store_note: Option<String>,
     /// Last value sent to [`crate::platform::Platform::keep_screen_on`].
     screen_on: bool,
+    /// `NF_SAFE_AREA=l,t,r,b` (points): simulated system-bar insets.
+    fake_insets: Option<[f32; 4]>,
+}
+
+/// `"l,t,r,b"` in points.
+fn parse_insets(s: &str) -> Option<[f32; 4]> {
+    let v: Vec<f32> = s.split(',').map(|x| x.trim().parse().ok()).collect::<Option<_>>()?;
+    let a: [f32; 4] = v.try_into().ok()?;
+    a.iter().all(|x| x.is_finite() && *x >= 0.0).then_some(a)
 }
 
 impl NeuroFeedApp {
@@ -68,8 +77,8 @@ impl NeuroFeedApp {
         if param("bridge").is_some_and(|v| v != "0") {
             app.set_bridge(&cc.egui_ctx, true);
         }
-        // Never auto-connect a simulator on a real build: the remembered device
-        // reconnects on its own (.ai/contracts/device-autoconnect.md rule 9).
+        // Only the remembered device (a simulator too) reconnects on its own,
+        // from `Session::tick` (.ai/contracts/device-autoconnect.md rule 9).
         // Explicit: NF_DEVICE=sim:muse_s (`?device=` on the web). Demo/view
         // screenshot runs and the web build (no hardware) start the simulator.
         if let Some(id) = startup_device() {
@@ -107,6 +116,7 @@ impl NeuroFeedApp {
             no_tour: false,
             store_note: None,
             screen_on: false,
+            fake_insets: param("safe_area").as_deref().and_then(parse_insets),
         }
     }
 
@@ -203,8 +213,15 @@ impl NeuroFeedApp {
 impl eframe::App for NeuroFeedApp {
     /// Keep the UI out from under the status / navigation bars (Android).
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
-        let Some(p) = crate::platform::get() else { return };
-        let [left, top, right, bottom] = crate::platform::insets_pt(p.safe_insets_px(), ctx.pixels_per_point(), p.min_top_inset_pt());
+        let [left, top, right, bottom] = if let Some(p) = crate::platform::get() {
+            let native = raw.viewports.get(&raw.viewport_id).and_then(|v| v.native_pixels_per_point);
+            let ppp = crate::platform::frame_ppp(native, ctx.zoom_factor(), ctx.pixels_per_point());
+            crate::platform::insets_pt(p.safe_insets_px(), ppp, p.min_top_inset_pt())
+        } else if let Some(v) = self.fake_insets {
+            v // NF_SAFE_AREA (desktop screenshots of a phone's system bars)
+        } else {
+            return;
+        };
         raw.safe_area_insets = Some(egui::SafeAreaInsets(egui::epaint::MarginF32 { left, right, top, bottom }));
     }
 
@@ -216,7 +233,7 @@ impl eframe::App for NeuroFeedApp {
         }
     }
 
-    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = &root.ctx().clone();
         self.session.tick(ctx.input(|i| i.time));
         for e in self.session.drain_events() {
@@ -242,7 +259,13 @@ impl eframe::App for NeuroFeedApp {
         let bridge = Some(self.bridge.as_ref().map(crate::bridge::Bridge::addr));
         #[cfg(target_arch = "wasm32")]
         let bridge: Option<Option<String>> = None;
-        let mut shell = ui::Shell { bridge, no_tour: self.no_tour, store_note: self.store_note.clone(), ..Default::default() };
+        let mut shell = ui::Shell {
+            bridge,
+            no_tour: self.no_tour,
+            store_note: self.store_note.clone(),
+            cpu_s: frame.info().cpu_usage,
+            ..Default::default()
+        };
         for cmd in ui::show_with(root, &self.session, self.last_error.as_deref(), &mut shell) {
             self.run(cmd);
         }
@@ -279,4 +302,15 @@ impl NeuroFeedApp {
 
 fn wall_ms() -> Option<f64> {
     web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).ok().map(|d| d.as_secs_f64() * 1000.0)
+}
+
+#[cfg(test)]
+mod inset_tests {
+    #[test]
+    fn safe_area_param() {
+        assert_eq!(super::parse_insets("0, 24,0,16"), Some([0.0, 24.0, 0.0, 16.0]));
+        assert_eq!(super::parse_insets("1,2,3"), None);
+        assert_eq!(super::parse_insets("1,-2,3,4"), None);
+        assert_eq!(super::parse_insets("a,b,c,d"), None);
+    }
 }

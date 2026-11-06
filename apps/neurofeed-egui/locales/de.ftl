@@ -575,3 +575,6 @@ bands-scale-db-hint = Absolute Bandleistung, logarithmisch (dB = 10·log10 µV²
 bands-scale-relative-hint = Anteil der sichtbaren Bänder in Prozent (aus linearer Leistung)
 bands-electrode-hint = Diese Elektrode in den Mittelwert aufnehmen
 bands-bars-per-electrode = Balken pro Elektrode
+settings-perf-overlay = Bildrate einblenden
+settings-perf-overlay-hint = FPS, Frame-Abstand (Zeit zwischen zwei gezeichneten Frames) und CPU-Zeit des letzten Frames in einer Bildschirmecke. Die App zeichnet nur bei Änderungen neu; eine niedrige FPS bei ruhigem Bild ist normal.
+perf-overlay = { $fps } fps · { $interval } ms · CPU { $cpu } ms

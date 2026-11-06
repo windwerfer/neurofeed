@@ -21,10 +21,10 @@ pub const DIALOG_REARM_S: f64 = 5.0;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, JsonSchema)]
 pub struct AutoReconnect {
-    /// Last real (non-simulated) device that streamed. Persisted.
+    /// Last device that streamed (real or simulator). Persisted.
     pub target: Option<String>,
     /// The user pressed Disconnect: no auto-reconnect until the user connects
-    /// again or the app restarts. Not persisted.
+    /// again. Persisted, so a restart does not undo the Disconnect.
     pub suspended: bool,
     /// Session time the background search started (`None` = not searching).
     pub searching_since: Option<f64>,

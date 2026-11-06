@@ -575,3 +575,6 @@ bands-scale-db-hint = Absolute band power, logarithmic (dB = 10·log10 µV²/Hz)
 bands-scale-relative-hint = Share of the visible bands in percent (from linear power)
 bands-electrode-hint = Include this electrode in the average
 bands-bars-per-electrode = Bars per electrode
+settings-perf-overlay = Show frame rate overlay
+settings-perf-overlay-hint = FPS, frame interval (time between two drawn frames) and the CPU time of the last frame, in a screen corner. The app only redraws when something changes, so a low FPS on a still screen is normal.
+perf-overlay = { $fps } fps · { $interval } ms · CPU { $cpu } ms

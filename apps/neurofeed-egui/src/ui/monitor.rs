@@ -74,12 +74,12 @@ pub fn toolbar(ui: &mut Ui, state: &AppState, id: MonitorId, out: &mut Vec<Comma
 
 fn follow_inspect(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
     ui.spacing_mut().item_spacing.x = 0.0;
-    let mut set = |mode| out.push(Command::MonitorViewport { monitor: id, window_s: None, mode: Some(mode), end_s: None });
     if ui.selectable_label(vp.following(), t!("monitor-follow")).on_hover_text(t!("monitor-follow-hint")).clicked() && !vp.following() {
-        set(ViewportMode::Follow);
+        out.push(Command::MonitorViewport { monitor: id, window_s: None, mode: Some(ViewportMode::Follow), end_s: None });
     }
     if ui.selectable_label(!vp.following(), t!("monitor-inspect")).on_hover_text(t!("monitor-inspect-hint")).clicked() && vp.following() {
-        set(ViewportMode::Inspect);
+        let end_s = presented_end(ui, id, vp);
+        out.push(Command::MonitorViewport { monitor: id, window_s: None, mode: Some(ViewportMode::Inspect), end_s });
     }
 }
 
@@ -101,6 +101,48 @@ fn window_menu(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>)
         .on_hover_text(t!("monitor-window-hint"));
 }
 
+fn follow_id(id: MonitorId) -> egui::Id {
+    egui::Id::unique(("nf_follow_clock", id.name()))
+}
+
+/// The live stream is advancing (connected, streaming, not paused).
+pub fn live(state: &AppState) -> bool {
+    !state.paused && matches!(state.link, Some(nf_core::LinkState::Streaming))
+}
+
+/// Visible `(start, end)` as drawn. Follow while live: the right edge glides
+/// with presentation time ([`m::FollowClock`], ~1 s behind the newest
+/// snapshot) and the next frame is requested. Otherwise the core range.
+pub fn presented_range(ui: &Ui, state: &AppState, id: MonitorId, vp: Viewport, span: m::Span) -> (f64, f64) {
+    let ctx = ui.ctx();
+    if !vp.following() || !live(state) {
+        ctx.data_mut(|d| d.remove::<m::FollowClock>(follow_id(id)));
+        return vp.range(span);
+    }
+    let now = ui.input(|i| i.time);
+    let mut clock = ctx.data_mut(|d| d.get_temp::<m::FollowClock>(follow_id(id))).unwrap_or_default();
+    let end = clock.end(span.newest_s, now, m::FOLLOW_LEAD_S);
+    ctx.data_mut(|d| d.insert_temp(follow_id(id), clock));
+    ctx.data_mut(|d| d.insert_temp(follow_id(id).with("end"), end));
+    ctx.request_repaint(); // vsync-paced, only while live + Follow
+    (end - vp.window_s, end)
+}
+
+/// The glide's current right edge, when Follow is gliding.
+fn presented_end(ui: &Ui, id: MonitorId, vp: Viewport) -> Option<f64> {
+    if !vp.following() {
+        return None;
+    }
+    ui.ctx().data(|d| d.get_temp::<m::FollowClock>(follow_id(id)).and(d.get_temp::<f64>(follow_id(id).with("end"))))
+}
+
+/// Leaving Follow freezes where the user sees the graph, not 1 s later.
+fn freeze_at_presented(ui: &Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
+    if let Some(end) = presented_end(ui, id, vp) {
+        out.push(Command::MonitorViewport { monitor: id, window_s: None, mode: Some(ViewportMode::Inspect), end_s: Some(end) });
+    }
+}
+
 /// Map plot input on `resp` (covering `plot`) to viewport commands.
 pub fn interact(ui: &Ui, resp: &Response, plot: Rect, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
     if plot.width() <= 1.0 {
@@ -112,6 +154,9 @@ pub fn interact(ui: &Ui, resp: &Response, plot: Rect, id: MonitorId, vp: Viewpor
     if over && (zoom - 1.0).abs() > ZOOM_EPS {
         let at = touch_center.or_else(|| resp.hover_pos()).unwrap_or(plot.right_center());
         let focal = f64::from((at.x - plot.left()) / plot.width()).clamp(0.0, 1.0);
+        if focal < 0.999 {
+            freeze_at_presented(ui, id, vp, out);
+        }
         out.push(Command::MonitorZoom { monitor: id, factor: f64::from(zoom), focal: Some(focal) });
         return;
     }
@@ -121,12 +166,14 @@ pub fn interact(ui: &Ui, resp: &Response, plot: Rect, id: MonitorId, vp: Viewpor
     }
     let dx = resp.drag_delta().x;
     if touch_center.is_none() && dx != 0.0 {
+        freeze_at_presented(ui, id, vp, out);
         out.push(Command::MonitorPan { monitor: id, seconds: -f64::from(dx) / w * vp.window_s });
         return;
     }
     // Wheel: sideways always pans; vertical pans once inspecting.
     let wheel = if vp.following() { scroll.x } else { scroll.x + scroll.y };
     if resp.contains_pointer() && wheel.abs() > 0.5 {
+        freeze_at_presented(ui, id, vp, out);
         out.push(Command::MonitorPan { monitor: id, seconds: -f64::from(wheel / WHEEL_PER_WINDOW) * vp.window_s });
     }
 }
