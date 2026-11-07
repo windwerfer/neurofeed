@@ -85,6 +85,8 @@ fn big(ui: &mut egui::Ui, title: &str, text: Option<String>, e: Option<Estimate>
 }
 
 fn trend(p: &egui::Painter, r: Rect, h: &VecDeque<Estimate>, now: f32, range: (f32, f32), color: Color32) {
-    let pts = h.iter().map(|e| plot::to_screen(r, (now - 120.0, now), range, e.time as f32, e.value as f32)).collect();
+    // Only the shown 2 min of the hour-long history (sorted by time).
+    let from = h.partition_point(|e| (e.time as f32) < now - 120.0);
+    let pts = h.range(from..).map(|e| plot::to_screen(r, (now - 120.0, now), range, e.time as f32, e.value as f32)).collect();
     plot::trace(p, pts, color);
 }

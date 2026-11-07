@@ -65,7 +65,7 @@ fn full_session_via_tools_with_manual_clock() {
 
     let t = ok(&s, "clock_advance", json!({ "seconds": 3 }));
     assert!((t["time"].as_f64().unwrap_or_default() - 3.0).abs() < 1e-6);
-    assert!(run(&s, "device.status", json!({}))["snapshots"].as_u64().unwrap_or_default() >= 19, "first band snapshot needs a 1 s window");
+    assert!(run(&s, "device.status", json!({}))["snapshots"].as_u64().unwrap_or_default() >= 8, "first band snapshot needs a 1 s window");
 
     let abs = ok(&s, "bands_get", json!({}));
     let ch = &abs["channels"];

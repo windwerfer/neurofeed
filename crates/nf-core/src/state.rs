@@ -84,15 +84,27 @@ pub struct BandHistory {
 }
 
 impl BandHistory {
-    pub const CAPACITY: usize = 18_000; // ~30 min at 10 Hz
-    /// Seconds the history covers (the longest Bands zoom window).
-    pub const SECONDS: f64 = 1800.0;
+    /// Seconds the history covers (live, in memory; the longest Bands zoom).
+    pub const SECONDS: f64 = 3600.0;
+    /// One snapshot every `BAND_INTERVAL_S` (4 Hz): 14 400 for the hour.
+    pub const CAPACITY: usize = 14_400;
 
+    /// Append; evicts by age (older than [`Self::SECONDS`] before the newest)
+    /// and by count. The ring is allocated once at its full size.
     pub fn push(&mut self, s: BandSnapshot) {
-        if self.snapshots.len() >= Self::CAPACITY {
+        if self.snapshots.capacity() < Self::CAPACITY {
+            self.snapshots.reserve_exact(Self::CAPACITY - self.snapshots.len());
+        }
+        while self.snapshots.len() >= Self::CAPACITY || self.snapshots.front().is_some_and(|f| f.time < s.time - Self::SECONDS) {
             self.snapshots.pop_front();
         }
         self.snapshots.push_back(s);
+    }
+
+    /// Heap bytes: the ring slots plus each snapshot's per-channel powers.
+    pub fn heap_bytes(&self) -> usize {
+        self.snapshots.capacity() * std::mem::size_of::<BandSnapshot>()
+            + self.snapshots.iter().map(|s| s.powers.capacity() * std::mem::size_of::<[f32; 5]>()).sum::<usize>()
     }
 
     /// Oldest first.

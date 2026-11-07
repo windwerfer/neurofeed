@@ -64,11 +64,19 @@ fn drowsy_guard_warns_mutes_reward_and_chimes() {
     assert!(a["cue"]["pct"].is_number() && a["guard"]["threshold"].is_number(), "{a}");
     run(&s, "events.drain", Value::Null);
     run(&s, "sim.fault", json!({ "drowsy": true }));
-    adv(&s, 25.0);
+    // Chime times in 1 s steps over 45 s: the warning chimes, rate-limited
+    // to one per 20 s (independent of the band snapshot phase; a chime just
+    // before the fault can delay the first one).
+    let mut chimes = Vec::new();
+    for i in 0..45 {
+        adv(&s, 1.0);
+        let n = run(&s, "events.drain", Value::Null).to_string().matches("guard_chime").count();
+        chimes.extend(std::iter::repeat_n(i, n));
+    }
     let a = audio(&s);
     assert_eq!((a["cue"]["warning"].as_bool(), a["cue"]["muffle"].as_bool()), (Some(true), Some(true)), "{a}");
-    let ev = run(&s, "events.drain", Value::Null).to_string();
-    assert_eq!(ev.matches("guard_chime").count(), 2, "20 s cooldown: {ev}");
+    assert!((2..=3).contains(&chimes.len()), "{chimes:?}");
+    assert!(chimes.windows(2).all(|w| w[1] - w[0] >= 20), "20 s cooldown: {chimes:?}");
     let last = run(&s, "feedback.result.get", json!({ "last": 1 })).to_string();
     assert!(last.contains("sleep guard") || last.contains("\"in_target\":false"), "{last}");
     run(&s, "sim.fault", json!({}));

@@ -9,8 +9,8 @@ fn connect_advance_and_read_bands() {
     s.call("clock.advance", json!({ "seconds": 2.0 })).unwrap_or_default();
     let bands = s.call("bands.get", json!({})).unwrap_or_default();
     assert_eq!(bands["channels"].as_array().map(Vec::len), Some(4));
-    // First snapshot needs a full 1 s window, then 10 Hz.
-    assert!((9..=11).contains(&s.state().bands.len()), "{}", s.state().bands.len());
+    // First snapshot needs a full 1 s window, then 4 Hz.
+    assert!((4..=6).contains(&s.state().bands.len()), "{}", s.state().bands.len());
 }
 
 #[test]

@@ -22,8 +22,14 @@ pub const BUFFER_S: f64 = 300.0;
 pub const RAW_GET_MAX_S: f64 = 60.0;
 /// FFT window for bands / PSD / quality (1 s at 256 Hz).
 pub const WINDOW_S: f64 = 1.0;
-/// Band snapshot cadence (matches the legacy 10 Hz band stream).
-pub const BAND_INTERVAL_S: f64 = 0.1;
+/// Band snapshot cadence: at most one per 0.25 s (4 Hz, the Crown's own
+/// band rate; owner 2026-11-07), on a grid in **source (sample) time**
+/// starting at the first full window, so bands and spectrogram columns
+/// (`SPEC_HOP_S`) fire on the same ticks. A packet burst that jumps several
+/// ticks yields one snapshot (newest window), never a backlog. The 1 s
+/// analysis window, filters and PSD are unchanged; only how often it runs.
+/// Was 0.1 s (10 Hz), which the DSP produced, not the headset.
+pub const BAND_INTERVAL_S: f64 = 0.25;
 /// Spectrogram hop (legacy STFT hop 64 samples at 256 Hz).
 pub const SPEC_HOP_S: f64 = 0.25;
 /// Spectrogram columns kept per channel (30 s).
@@ -74,6 +80,9 @@ pub struct Signal {
     /// Time of the newest sample.
     pub time: Option<f64>,
     next_band: Option<f64>,
+    /// Band snapshot interval ([`BAND_INTERVAL_S`] by default; 1 s via
+    /// [`Signal::with_band_interval`]). The 1 s analysis window does not change.
+    band_interval_s: f64,
     next_spec: Option<f64>,
     detector: MainsDetector,
     mode: MainsMode,
@@ -107,6 +116,7 @@ impl Signal {
             last_t: vec![None; n],
             time: None,
             next_band: None,
+            band_interval_s: BAND_INTERVAL_S,
             next_spec: None,
             detector: MainsDetector::new(rate, n),
             mode,
@@ -249,7 +259,7 @@ impl Signal {
         if due(&mut self.next_spec, p.time, SPEC_HOP_S) {
             self.spectrogram_column();
         }
-        if !due(&mut self.next_band, p.time, BAND_INTERVAL_S) {
+        if !due(&mut self.next_band, p.time, self.band_interval_s) {
             return None;
         }
         let w = self.window_len();
@@ -316,6 +326,18 @@ impl Signal {
         let start = end.saturating_sub(n);
         let fe = end.min(f.len());
         (b.range(start..end).copied().collect(), f.range(start.min(fe)..fe).copied().collect())
+    }
+
+    /// Same signal with band snapshots every `interval_s` (clamped to
+    /// 0.25..=1 s: 4 Hz default, 1 Hz supported). Internal configuration.
+    #[must_use]
+    pub fn with_band_interval(mut self, interval_s: f64) -> Self {
+        self.band_interval_s = if interval_s.is_finite() { interval_s.clamp(BAND_INTERVAL_S, 1.0) } else { BAND_INTERVAL_S };
+        self
+    }
+
+    pub fn band_interval_s(&self) -> f64 {
+        self.band_interval_s
     }
 
     /// Samples per channel ring.

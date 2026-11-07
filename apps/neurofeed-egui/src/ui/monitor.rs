@@ -66,10 +66,28 @@ pub fn toolbar(ui: &mut Ui, state: &AppState, id: MonitorId, out: &mut Vec<Comma
                     window_menu(ui, id, vp, out);
                     ui.add_space(8.0);
                     extras(ui, out);
+                    ui.add_space(12.0);
+                    history_hint(ui, id);
                 });
             });
     });
     ui.separator();
+}
+
+/// `5 min`, `1 h`: the live history span.
+pub fn history_label(s: f64) -> String {
+    if s >= 3600.0 && (s % 3600.0).abs() < 1e-6 {
+        t!("monitor-hours", n = format!("{:.0}", s / 3600.0))
+    } else if s >= 60.0 {
+        t!("monitor-minutes", n = format!("{:.0}", (s / 60.0).round()))
+    } else {
+        t!("monitor-seconds", n = format!("{s:.0}"))
+    }
+}
+
+/// Unobtrusive retention note: memory only, bounded; Record keeps longer.
+fn history_hint(ui: &mut Ui, id: MonitorId) {
+    ui.weak(t!("monitor-history-hint", span = history_label(id.history_s()))).on_hover_text(t!("monitor-history-hover"));
 }
 
 fn follow_inspect(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
