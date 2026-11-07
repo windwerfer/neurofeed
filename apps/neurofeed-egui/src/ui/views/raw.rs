@@ -62,6 +62,8 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
             scale: None,
             electrodes: Some(names),
         });
+        ui.add_space(8.0);
+        crate::ui::overview::toggle(ui, state, id, out);
     });
     let (Some((dev, sig)), Some(span)) = (live, span) else {
         ui.label(if live.is_none() { t!("plot-no-device-connected-use-connect") } else { t!("raw-waiting-for-data") });
@@ -113,7 +115,24 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
     // Leaving the sweep (button, drag, wheel, zoom) freezes on its slot.
     monitor::set_freeze_end(ui.ctx(), id, map.freeze_end());
     let half = half_range(ui, state.monitors.raw.scale, &panes, map);
-    stack(ui, &panes, map, half, vp, out);
+    let ov_h = crate::ui::overview::height(ui, state, id, ui.available_height());
+    let main = egui::vec2(ui.available_width(), ui.available_height() - ov_h);
+    ui.allocate_ui_with_layout(main, egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_min_size(main);
+        stack(ui, &panes, map, half, vp, out);
+    });
+    if ov_h > 0.0 {
+        // Overview: band history (Bands' eligible selection); the shade is
+        // the raw window, detail only inside the 5 min ring.
+        let chans = state.analysis.eligible_of(&dev.channels, &state.monitors.bands.selected(&dev.channels));
+        let host = crate::ui::overview::Host {
+            id,
+            range: (range.1 - vp.window_s, range.1),
+            detail_oldest: (span.newest_s - nf_core::signal::BUFFER_S).max(0.0),
+            no_detail: t!("overview-no-raw"),
+        };
+        crate::ui::overview::show(ui, state, &chans, &host, ov_h, out);
+    }
 }
 
 /// Sweep only while following; Inspect holds a time-ordered window.

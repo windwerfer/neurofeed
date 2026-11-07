@@ -89,6 +89,32 @@ pub enum Command {
         #[serde(default)]
         electrodes: Option<Vec<String>>,
     },
+    /// Show or hide a view's overview timeline (saved per view). Views:
+    /// bands, raw_eeg, histogram, psd, spectrogram.
+    #[serde(rename = "monitor.overview")]
+    MonitorOverview { monitor: crate::monitor::MonitorId, on: bool },
+    /// Histogram display: µV range (50 | 100 | 200) and electrodes pooled
+    /// (empty = all). Display only: analysis exclusions still apply.
+    #[serde(rename = "monitor.histogram")]
+    MonitorHistogram {
+        #[serde(default)]
+        range: Option<crate::monitor::HistRange>,
+        #[serde(default)]
+        electrodes: Option<Vec<String>>,
+    },
+    /// Spectrogram display: electrodes averaged (empty = all) and colour
+    /// range: `db_min` + `db_max` lock it, `auto: true` unlocks.
+    #[serde(rename = "monitor.spectrogram")]
+    MonitorSpectrogram {
+        #[serde(default)]
+        electrodes: Option<Vec<String>>,
+        #[serde(default)]
+        db_min: Option<f32>,
+        #[serde(default)]
+        db_max: Option<f32>,
+        #[serde(default)]
+        auto: Option<bool>,
+    },
     /// Exclude one channel from **all** analysis (feedback, every derived
     /// graph, features, AI input) for this connection; raw data, recordings
     /// and Raw EEG keep it. `confirm` must be true (the UI asks first);
@@ -460,13 +486,21 @@ pub enum Query {
         /// Range ±µV around the mean, 1..=10000; default 100.
         #[serde(default)]
         half_range_uv: Option<f64>,
+        /// Window end (session s); default the newest sample.
+        #[serde(default)]
+        end_s: Option<f64>,
     },
-    /// Spectrogram columns (oldest first, every 0.25 s, last 30 s) for one channel.
+    /// Spectrogram columns (oldest first, every 0.25 s, up to 300 s) in dB:
+    /// one channel, or (no channel) the linear-power average of the
+    /// Spectrogram display's eligible electrodes.
     #[serde(rename = "spectrogram.get")]
     SpectrogramGet {
-        /// Channel name; default the selected channel.
+        /// Channel name; default the averaged display selection.
         #[serde(default)]
         channel: Option<String>,
+        /// Seconds back from the newest column, 0 < s <= 300; default 30.
+        #[serde(default)]
+        seconds: Option<f64>,
         /// Upper frequency, 1..=64 Hz; default 50.
         #[serde(default)]
         max_hz: Option<f64>,
@@ -793,6 +827,9 @@ pub const SPECS: &[CommandSpec] = &[
     spec("monitor.display", "Bands display", "monitor", false, "Electrodes in the Bands average (empty = all) and hidden bands.", always),
     spec("monitor.raw", "Raw EEG display", "monitor", false, "Raw EEG: sweep or scroll traces, Y scale (auto, ±50/100/200 µV) and shown electrodes (empty = all).", always),
     spec("monitor.psd", "PSD display", "monitor", false, "PSD: frequency range (60 or 100 Hz) and electrodes in the average (empty = all).", always),
+    spec("monitor.overview", "Overview timeline", "monitor", false, "Show/hide a view's overview timeline (saved per view; default on for psd and spectrogram).", always),
+    spec("monitor.histogram", "Histogram display", "monitor", false, "Histogram: µV range (50/100/200) and electrodes pooled (empty = all).", always),
+    spec("monitor.spectrogram", "Spectrogram display", "monitor", false, "Spectrogram: electrodes averaged (empty = all); lock the dB colour range (db_min, db_max) or auto.", always),
     spec("analysis.get", "Analysis channels", "analysis", true, "Per channel: excluded from analysis, remembered for this device, eligible; restored notice and quality hint.", always),
     spec("analysis.exclude", "Exclude channel", "analysis", false, "Exclude a channel from feedback and all derived graphs (raw/recording keep it). Needs confirm=true; remember=true stores it for this device.", needs_device),
     spec("analysis.include", "Include channel", "analysis", false, "Use a channel in analysis again; forgets a remembered exclusion.", needs_device),
@@ -837,8 +874,8 @@ pub const SPECS: &[CommandSpec] = &[
     ),
     spec("signal.status", "Signal status", "signal", true, "Mains detected/applied, notch lock, per-pad quality and usability.", always),
     spec("features.get", "Features", "signal", true, "Band ratio features averaged over usable pads.", has_signal),
-    spec("histogram.get", "Histogram", "signal", true, "Amplitude histogram of the conditioned signal per channel.", has_signal),
-    spec("spectrogram.get", "Spectrogram", "signal", true, "PSD dB columns every 0.25 s for one channel (last 30 s).", has_signal),
+    spec("histogram.get", "Histogram", "signal", true, "Amplitude histogram of the conditioned signal per channel, plus the pooled histogram of the display selection.", has_signal),
+    spec("spectrogram.get", "Spectrogram", "signal", true, "PSD dB columns every 0.25 s (up to 300 s): one channel or the averaged display selection.", has_signal),
     spec("mains.set", "Set notch", "signal", false, "Notch mode: auto, 50, 60 or off.", always),
     spec("channel.set", "Select channel", "signal", false, "Channel for single-channel views.", needs_device),
     spec(
@@ -1097,6 +1134,9 @@ fn base_examples() -> Vec<Request> {
         }),
         Q(Query::MonitorGet),
         C(Command::MonitorPsd { range: Some(crate::monitor::PsdRange::Hz100), electrodes: Some(vec!["AF7".into(), "AF8".into()]) }),
+        C(Command::MonitorOverview { monitor: crate::monitor::MonitorId::Bands, on: true }),
+        C(Command::MonitorHistogram { range: Some(crate::monitor::HistRange::Uv200), electrodes: Some(vec!["AF7".into()]) }),
+        C(Command::MonitorSpectrogram { electrodes: None, db_min: Some(-20.0), db_max: Some(30.0), auto: None }),
         Q(Query::AnalysisGet),
         C(Command::AnalysisExclude { channel: "AF7".into(), confirm: true, remember: false }),
         C(Command::AnalysisInclude { channel: "AF7".into() }),
@@ -1193,8 +1233,8 @@ fn base_examples() -> Vec<Request> {
         Q(Query::Spo2Get),
         Q(Query::PpgGet { seconds: Some(3.0) }),
         Q(Query::FeaturesGet),
-        Q(Query::HistogramGet { seconds: Some(1.0), bins: Some(32), half_range_uv: None }),
-        Q(Query::SpectrogramGet { channel: None, max_hz: Some(40.0) }),
+        Q(Query::HistogramGet { seconds: Some(1.0), bins: Some(32), half_range_uv: None, end_s: None }),
+        Q(Query::SpectrogramGet { channel: None, seconds: Some(30.0), max_hz: Some(40.0) }),
         Q(Query::AppStatus),
         Q(Query::ViewList),
         Q(Query::BandsGet { scale: None }),

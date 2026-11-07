@@ -348,8 +348,10 @@ fn histogram_and_spectrogram_queries() {
     assert_eq!(counts.len(), 32);
     assert_eq!(counts.iter().filter_map(Value::as_u64).sum::<u64>(), 512);
     run(&s, "channel.set", json!({ "channel": "AF7" }));
-    let sp = run(&s, "spectrogram.get", json!({ "max_hz": 40.0 }));
-    assert_eq!(sp["channel"], "AF7");
+    let sp = run(&s, "spectrogram.get", json!({ "channel": "AF7", "max_hz": 40.0 }));
+    assert_eq!(sp["channels"], json!(["AF7"]));
+    let avg = run(&s, "spectrogram.get", json!({ "max_hz": 40.0 }));
+    assert_eq!(avg["channels"].as_array().map(Vec::len), Some(4), "no channel: averaged display selection");
     let cols = sp["columns"].as_array().cloned().unwrap_or_default();
     assert!((14..=18).contains(&cols.len()), "{}", cols.len()); // 4 s of 1 s windows at 4 Hz
     let col: Vec<f64> = cols[cols.len() - 1].as_array().map(|c| c.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();

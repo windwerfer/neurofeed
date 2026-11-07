@@ -2,9 +2,7 @@
 //! conditioning (nf-dsp) → rolling buffers → band snapshots every
 //! `BAND_INTERVAL_S`, pad quality, and spectrogram columns every `SPEC_HOP_S`.
 
-use nf_dsp::{
-    band_powers_linear, line_noise_fraction, pad_quality, psd, psd_db, sample_std, EegFilter, Mains, MainsDetector, USABLE_QUALITY,
-};
+use nf_dsp::{band_powers_linear, line_noise_fraction, pad_quality, psd, sample_std, EegFilter, Mains, MainsDetector, USABLE_QUALITY};
 use nf_types::{BandSnapshot, DeviceInfo, EegPacket};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -32,8 +30,10 @@ pub const WINDOW_S: f64 = 1.0;
 pub const BAND_INTERVAL_S: f64 = 0.25;
 /// Spectrogram hop (legacy STFT hop 64 samples at 256 Hz).
 pub const SPEC_HOP_S: f64 = 0.25;
-/// Spectrogram columns kept per channel (30 s).
-pub const SPEC_COLUMNS: usize = 120;
+/// Spectrogram columns kept per channel (300 s at `SPEC_HOP_S`).
+pub const SPEC_COLUMNS: usize = 1200;
+/// Spectrogram bins kept: 0..=`SPEC_MAX_HZ` (the display range is 0–60 Hz).
+pub const SPEC_MAX_HZ: f64 = 64.0;
 
 /// User notch choice. `Auto` follows the detector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
@@ -95,8 +95,16 @@ pub struct Signal {
     pub line_noise: Vec<f32>,
     /// Per channel, linear band powers (µV²) of the last snapshot.
     pub bands_linear: Vec<[f64; 5]>,
-    /// Per channel, columns of PSD dB (0..=`MAX_PSD_HZ`, df = 1/WINDOW_S).
-    pub spectrogram: Vec<VecDeque<Vec<f32>>>,
+    /// Spectrogram history: column end times (session s, source clock),
+    /// one per `SPEC_HOP_S` tick whose 1 s window had no dropout. A window
+    /// spanning a gap yields no column (the gap stays visible).
+    pub spec_times: VecDeque<f64>,
+    /// Per channel, one entry per `spec_times` column: **linear** PSD
+    /// (µV²/Hz, bins 0..=`SPEC_MAX_HZ`, spacing `spec_df`); empty when that
+    /// channel's window had a bad sample. Per channel so an excluded
+    /// channel can be left out of every column, old ones included.
+    pub spectrogram: Vec<VecDeque<Box<[f32]>>>,
+    pub spec_df: f64,
 }
 
 impl Signal {
@@ -125,7 +133,9 @@ impl Signal {
             quality: vec![0.0; n],
             line_noise: vec![0.0; n],
             bands_linear: vec![[0.0; 5]; n],
-            spectrogram: vec![VecDeque::new(); n],
+            spec_times: VecDeque::with_capacity(SPEC_COLUMNS),
+            spectrogram: (0..n).map(|_| VecDeque::with_capacity(SPEC_COLUMNS)).collect(),
+            spec_df: 0.0,
         };
         s.applied = s.wanted();
         s.filters = vec![EegFilter::new(rate, s.applied); n];
@@ -291,14 +301,36 @@ impl Signal {
 
     fn spectrogram_column(&mut self) {
         let w = self.window_len();
-        for i in 0..self.filtered.len() {
-            let Some(col) = tail(&self.filtered[i], w).and_then(|t| psd(&t, self.rate)).map(|p| psd_db(&p)) else { continue };
-            let s = &mut self.spectrogram[i];
-            if s.len() >= SPEC_COLUMNS {
-                s.pop_front();
-            }
-            s.push_back(col);
+        let Some(t) = self.time else { return };
+        if self.flags.iter().any(|f| f.len() < w || f.iter().rev().take(w).any(|x| *x == FLAG_GAP)) {
+            return;
         }
+        if self.spec_times.len() >= SPEC_COLUMNS {
+            self.spec_times.pop_front();
+            self.spectrogram.iter_mut().for_each(|s| {
+                s.pop_front();
+            });
+        }
+        self.spec_times.push_back(t);
+        for i in 0..self.filtered.len() {
+            let bad = self.flags[i].iter().rev().take(w).any(|x| *x != FLAG_OK);
+            let col: Box<[f32]> = match tail(&self.filtered[i], w).and_then(|t| psd(&t, self.rate)) {
+                Some(p) if !bad => {
+                    self.spec_df = p.df;
+                    let keep = ((SPEC_MAX_HZ / p.df).floor() as usize + 1).min(p.power.len());
+                    p.power[..keep].iter().map(|&v| v as f32).collect()
+                }
+                _ => Box::new([]),
+            };
+            self.spectrogram[i].push_back(col);
+        }
+    }
+
+    /// Heap bytes of the spectrogram history (allocated, incl. columns).
+    pub fn spectrogram_bytes(&self) -> usize {
+        let cols: usize = self.spectrogram.iter().flat_map(|c| c.iter().map(|b| b.len() * 4)).sum();
+        let slots: usize = self.spectrogram.iter().map(|c| c.capacity() * std::mem::size_of::<Box<[f32]>>()).sum();
+        cols + slots + self.spec_times.capacity() * 8
     }
 
     /// Time of channel `ch`'s newest buffered sample (gap padding included).

@@ -5,6 +5,7 @@ pub(crate) mod device_dialog;
 pub mod layout;
 pub(crate) mod monitor;
 mod onboarding;
+pub mod overview;
 mod perf;
 mod quality;
 mod sidebar;

@@ -177,7 +177,7 @@ fn presented_end(ui: &Ui, id: MonitorId, vp: Viewport) -> Option<f64> {
 }
 
 /// Leaving Follow freezes where the user sees the graph, not 1 s later.
-fn freeze_at_presented(ui: &Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
+pub fn freeze_at_presented(ui: &Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
     if let Some(end) = presented_end(ui, id, vp) {
         out.push(Command::MonitorViewport { monitor: id, window_s: None, mode: Some(ViewportMode::Inspect), end_s: Some(end) });
     }
