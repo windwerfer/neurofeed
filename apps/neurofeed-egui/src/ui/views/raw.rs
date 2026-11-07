@@ -9,7 +9,7 @@
 use crate::ui::layout::{self, Layout};
 use crate::ui::{monitor, theme};
 use egui::{Align2, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
-use nf_core::monitor::{self as m, MonitorId, RawMode, RawScale, Span, Viewport};
+use nf_core::monitor::{self as m, MonitorId, RawMode, RawScale, Viewport};
 use nf_core::rawtrace::{self as rt, Channel, Mapping};
 use nf_core::signal::{FLAG_BAD, FLAG_GAP};
 use nf_core::{AppState, Command, Session};
@@ -47,7 +47,7 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
     let vp = state.monitors.viewport(id);
     let live = session.live_signal();
     let channels: Vec<String> = live.map(|(d, _)| d.channels.clone()).unwrap_or_default();
-    let span = live.and_then(|(_, sig)| sig.time).map(|t| Span { oldest_s: (t - nf_core::signal::BUFFER_S).max(0.0), newest_s: t });
+    let span = live.and_then(|(_, sig)| sig.time).map(|t| rt::raw_span(t, state.monitors.raw.mode, vp.window_s));
     monitor::toolbar(ui, state, id, out, |ui, out| {
         if let Some(span) = span {
             monitor::inspect_label(ui, vp, span);
@@ -105,6 +105,8 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
         }
     }
     let map = mapping(state.monitors.raw.mode, vp, range);
+    // Leaving the sweep (button, drag, wheel, zoom) freezes on its slot.
+    monitor::set_freeze_end(ui.ctx(), id, map.freeze_end());
     let half = half_range(ui, state.monitors.raw.scale, &panes, map);
     stack(ui, &panes, map, half, vp, out);
 }
@@ -398,5 +400,53 @@ mod tests {
         let steps = vec![Vec2::new(3.0, -25.0); 8];
         assert_eq!(drag(&mut s, &steps, Vec2::new(1000.0, 700.0)), 0.0);
         assert!((end(&s) - e0).abs() < 1e-9);
+    }
+
+    fn follow_session(dev: &str, mode: &str) -> Session {
+        let mut s = Session::new();
+        for c in [
+            json_cmd("settings.set", serde_json::json!({ "onboarded": true, "layout": "regular" })),
+            json_cmd("device.connect", serde_json::json!({ "id": dev })),
+            json_cmd("view.set", serde_json::json!({ "view": "raw_eeg" })),
+            json_cmd("monitor.raw", serde_json::json!({ "mode": mode })),
+            json_cmd("clock.advance", serde_json::json!({ "seconds": 43.0 })),
+        ] {
+            s.execute(c).unwrap();
+        }
+        s
+    }
+
+    #[test]
+    fn drag_out_of_sweep_freezes_on_the_slot_and_pans_by_the_finger_only() {
+        for (dev, size) in [("sim:muse", Vec2::new(1000.0, 900.0)), ("sim:crown", Vec2::new(1000.0, 700.0))] {
+            let mut s = follow_session(dev, "sweep");
+            let newest = s.live_signal().and_then(|(_, g)| g.time).unwrap();
+            let steps = vec![Vec2::new(-20.0, 0.0); 5]; // left = later (into the blank)
+            let panned = drag(&mut s, &steps, size);
+            let e = end(&s);
+            let frozen = e - panned;
+            // The freeze point is a sweep slot end: no sample changed x.
+            let k = (frozen / 8.0).round();
+            assert!((frozen - k * 8.0).abs() < 1e-6, "{dev}: froze at {frozen}, not a slot end");
+            assert!(frozen >= newest - 1.0 && frozen <= newest + 8.0, "{dev}: {frozen} vs newest {newest}");
+            let plot_w = 1000.0 - crate::ui::theme::SIDEBAR_WIDTH - 2.0 * 8.0 - 4.0 - RIGHT_GUTTER;
+            let want = 100.0 / f64::from(plot_w) * 8.0;
+            assert!((panned - want).abs() < 0.25, "{dev}: only the finger delta: {panned} vs {want}");
+            // Live data keeps arriving; the frozen view stays put.
+            s.execute(json_cmd("clock.advance", serde_json::json!({ "seconds": 2.0 }))).unwrap();
+            assert!((end(&s) - e).abs() < 1e-9);
+            // Back to Follow.
+            s.execute(json_cmd("monitor.viewport", serde_json::json!({ "monitor": "raw_eeg", "mode": "follow" }))).unwrap();
+            assert!(s.state().monitors.viewport(MonitorId::RawEeg).following());
+        }
+    }
+
+    #[test]
+    fn drag_out_of_scroll_follow_freezes_at_the_presented_edge() {
+        let mut s = follow_session("sim:muse", "scroll");
+        let newest = s.live_signal().and_then(|(_, g)| g.time).unwrap();
+        let panned = drag(&mut s, &[Vec2::new(30.0, 0.0); 4], Vec2::new(1000.0, 900.0));
+        let frozen = end(&s) - panned;
+        assert!(frozen <= newest + 1e-9 && frozen > newest - 1.0, "{frozen} vs {newest}");
     }
 }

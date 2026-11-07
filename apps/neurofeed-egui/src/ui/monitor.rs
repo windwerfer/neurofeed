@@ -119,6 +119,20 @@ fn window_menu(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>)
         .on_hover_text(t!("monitor-window-hint"));
 }
 
+/// A view-specific right edge for leaving Follow (Raw EEG's sweep slot);
+/// `None` = freeze at the presented edge. Set by the view each frame.
+pub fn set_freeze_end(ctx: &egui::Context, id: MonitorId, end: Option<f64>) {
+    let key = follow_id(id).with("freeze");
+    ctx.data_mut(|d| match end {
+        Some(e) => {
+            d.insert_temp(key, e);
+        }
+        None => {
+            d.remove::<f64>(key);
+        }
+    });
+}
+
 fn follow_id(id: MonitorId) -> egui::Id {
     egui::Id::unique(("nf_follow_clock", id.name()))
 }
@@ -155,6 +169,9 @@ pub fn presented_range_lead(ui: &Ui, state: &AppState, id: MonitorId, vp: Viewpo
 fn presented_end(ui: &Ui, id: MonitorId, vp: Viewport) -> Option<f64> {
     if !vp.following() {
         return None;
+    }
+    if let Some(e) = ui.ctx().data(|d| d.get_temp::<f64>(follow_id(id).with("freeze"))) {
+        return Some(e);
     }
     ui.ctx().data(|d| d.get_temp::<m::FollowClock>(follow_id(id)).and(d.get_temp::<f64>(follow_id(id).with("end"))))
 }

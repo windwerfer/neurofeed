@@ -27,6 +27,16 @@ pub const AUTO_EMPTY_UV: f32 = 200.0;
 /// Headroom above the largest visible |µV|.
 pub const AUTO_PAD: f32 = 0.15;
 
+/// Raw EEG data span ending at `newest`: the 300 s ring, plus one window of
+/// blank room in Sweep mode (see [`Mapping::freeze_end`]).
+pub fn raw_span(newest: f64, mode: crate::monitor::RawMode, window_s: f64) -> crate::monitor::Span {
+    let mut s = crate::monitor::Span::new((newest - crate::signal::BUFFER_S).max(0.0), newest);
+    if mode == crate::monitor::RawMode::Sweep {
+        s.ahead_s = window_s.max(0.0);
+    }
+    s
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mapping {
     /// Time-ordered window `[start, end]`.
@@ -52,6 +62,21 @@ impl Mapping {
                 let w = window.max(1e-9);
                 let k = (t / w).floor();
                 ((t - k * w) / w, k as i64)
+            }
+        }
+    }
+
+    /// Right edge for freezing this view into Inspect without moving any
+    /// sample: a sweep freezes on its current slot `[k·w, (k+1)·w]`, where
+    /// the time-ordered x of every slot sample equals its sweep x. The
+    /// previous slot's data right of the cursor is dropped (blank, filled
+    /// only by real later samples). `None` when scrolling (freeze as drawn).
+    pub fn freeze_end(&self) -> Option<f64> {
+        match *self {
+            Mapping::Scroll { .. } => None,
+            Mapping::Sweep { now, window } => {
+                let (_, k) = self.x(now);
+                Some((k + 1) as f64 * window.max(1e-9))
             }
         }
     }
@@ -271,6 +296,60 @@ pub fn elapsed_label(t: f64, step_s: f64) -> String {
 mod tests {
     #![allow(clippy::unwrap_used, clippy::float_cmp)]
     use super::*;
+
+    #[test]
+    fn freezing_a_sweep_keeps_every_x_and_blanks_right_of_cursor() {
+        let rate = 256.0;
+        let w = 8.0;
+        // Cursor near the slot start, middle and end; slot k = 5.
+        for frac in [0.01, 0.5, 0.995] {
+            let now = 5.0 * w + frac * w;
+            let n = (40.0 * rate) as usize;
+            let values: Vec<f32> = (0..n).map(|i| ((i as f32) * 0.37).sin() * 30.0 + if i % 97 == 0 { 150.0 } else { 0.0 }).collect();
+            let flags = vec![0u8; n];
+            let ch = Channel { end_t: now, rate, values: &values, flags: &flags };
+            let sweep = Mapping::Sweep { now, window: w };
+            let end = sweep.freeze_end().unwrap();
+            assert!((end - 6.0 * w).abs() < 1e-9, "{frac}: slot end");
+            let frozen = Mapping::Scroll { start: end - w, end };
+            // Same sample, same x. (The one sample exactly on the slot start
+            // belongs to the slot in a sweep and to the left edge, excluded,
+            // when frozen; it sits at x = 0 either way.)
+            for t in [5.0 * w + 1e-6, 5.0 * w + frac * w * 0.5, now] {
+                assert!((sweep.x(t).0 - frozen.x(t).0).abs() < 1e-9, "{frac} t={t}");
+            }
+            let cx = sweep.cursor().unwrap();
+            let cols = 2000;
+            let a = trace(&ch, sweep, cols);
+            let b = trace(&ch, frozen, cols);
+            // Near the slot end the sweep's blank gap also hides the slot start;
+            // frozen, those real samples appear at the left edge (nothing moves).
+            let lo = if sweep.visible().0 > end - w { sweep.x(sweep.visible().0).0 + 2.0 / cols as f64 } else { 0.0 };
+            let left = |tr: &Trace| -> Vec<[f32; 2]> {
+                let mut v: Vec<[f32; 2]> = tr
+                    .runs
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .filter(|p| f64::from(p[0]) > lo && f64::from(p[0]) <= cx - 2.0 / cols as f64)
+                    .collect();
+                v.sort_by(|p, q| p[0].total_cmp(&q[0]).then(p[1].total_cmp(&q[1])));
+                v
+            };
+            assert_eq!(left(&a), left(&b), "{frac}: traces left of the cursor are identical");
+            // Old sweep data right of the cursor is gone (no fabricated data).
+            let tol = 1.5 / cols as f64;
+            assert!(b.runs.iter().flatten().all(|p| f64::from(p[0]) <= cx + tol), "{frac}: blank right of cursor");
+            if (0.4..0.9).contains(&frac) {
+                assert!(a.runs.iter().flatten().any(|p| f64::from(p[0]) > cx + 0.05), "sweep did show the previous slot");
+            }
+        }
+    }
+
+    #[test]
+    fn scroll_mapping_has_no_freeze_override() {
+        assert_eq!(Mapping::Scroll { start: 0.0, end: 8.0 }.freeze_end(), None);
+    }
 
     fn ch<'a>(end_t: f64, values: &'a [f32], flags: &'a [u8]) -> Channel<'a> {
         Channel { end_t, rate: 10.0, values, flags }

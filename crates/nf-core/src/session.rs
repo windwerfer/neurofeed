@@ -1938,13 +1938,13 @@ impl Session {
     fn monitor_span(&self, id: crate::monitor::MonitorId) -> crate::monitor::Span {
         let s = &self.state;
         match (id, s.bands.oldest(), s.bands.latest()) {
-            (crate::monitor::MonitorId::Bands, Some(a), Some(b)) => crate::monitor::Span { oldest_s: a.time, newest_s: b.time },
+            (crate::monitor::MonitorId::Bands, Some(a), Some(b)) => crate::monitor::Span::new(a.time, b.time),
             // Raw EEG: the signal ring (`BUFFER_S`), ending at its newest sample.
             (crate::monitor::MonitorId::RawEeg, _, _) => {
                 let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
-                crate::monitor::Span { oldest_s: (newest - crate::signal::BUFFER_S).max(0.0), newest_s: newest }
+                crate::rawtrace::raw_span(newest, s.monitors.raw.mode, s.monitors.viewport(id).window_s)
             }
-            _ => crate::monitor::Span { oldest_s: (s.time - id.spec().max_s).max(0.0), newest_s: s.time },
+            _ => crate::monitor::Span::new((s.time - id.spec().max_s).max(0.0), s.time),
         }
     }
 

@@ -55,7 +55,7 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
 }
 
 fn span(state: &AppState) -> Option<Span> {
-    Some(Span { oldest_s: state.bands.oldest()?.time, newest_s: state.bands.latest()?.time })
+    Some(Span::new(state.bands.oldest()?.time, state.bands.latest()?.time))
 }
 
 fn relative(state: &AppState) -> bool {

@@ -248,3 +248,23 @@ fn monitor_get_reports_live_history() {
     s.call("monitor.zoom", json!({ "monitor": "bands", "factor": 0.0001 })).unwrap();
     assert_eq!(s.call("monitor.get", json!({})).unwrap()["monitors"]["bands"]["window_s"], 3600.0);
 }
+
+#[test]
+fn sweep_inspect_room_right_of_newest_is_bounded_and_frozen() {
+    use nf_core::monitor::{MonitorId, Viewport};
+    let spec = MonitorId::RawEeg.spec();
+    let mut v = Viewport::new(spec);
+    let sweep = nf_core::rawtrace::raw_span(43.0, nf_core::monitor::RawMode::Sweep, v.window_s);
+    v.inspect(sweep, Some(48.0)); // slot end, 5 s past the newest sample
+    assert_eq!(v.end_s, Some(48.0));
+    assert_eq!(v.range(sweep), (40.0, 48.0));
+    // New samples arrive: the frozen window does not move.
+    let later = nf_core::rawtrace::raw_span(47.0, nf_core::monitor::RawMode::Sweep, v.window_s);
+    assert_eq!(v.range(later), (40.0, 48.0));
+    // At most one window of blank room; Scroll mode has none.
+    v.pan(sweep, 100.0);
+    assert_eq!(v.end_s, Some(51.0));
+    let scroll = nf_core::rawtrace::raw_span(43.0, nf_core::monitor::RawMode::Scroll, v.window_s);
+    v.inspect(scroll, Some(48.0));
+    assert_eq!(v.end_s, Some(43.0));
+}

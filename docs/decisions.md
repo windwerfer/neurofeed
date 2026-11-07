@@ -278,3 +278,8 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
   cadence (not resampled). HR/SpO2 estimates keep their own ~1 Hz cadence;
   render FPS is independent (FollowClock).
 - 1 h band history: 14,400 snapshots cap + 3600 s age eviction.
+
+## 2026-11-07 — Raw Sweep freezes on its slot
+Sweep → Inspect keeps sample x positions (freeze at slot end, blank right of
+the cursor) instead of re-anchoring the newest sample at the right edge.
+`monitor::Span` gained `ahead_s` (Raw Sweep: one window; others 0).

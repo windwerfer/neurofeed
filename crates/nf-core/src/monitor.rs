@@ -102,6 +102,21 @@ pub struct Viewport {
 pub struct Span {
     pub oldest_s: f64,
     pub newest_s: f64,
+    /// Blank room right of the newest sample a frozen view may keep (0 for
+    /// most monitors). Raw EEG in Sweep mode uses one window so Inspect can
+    /// freeze on the current sweep slot: samples keep their x, the part
+    /// right of the cursor is empty and fills as live data arrives.
+    pub ahead_s: f64,
+}
+
+impl Span {
+    pub fn new(oldest_s: f64, newest_s: f64) -> Self {
+        Self { oldest_s, newest_s, ahead_s: 0.0 }
+    }
+
+    fn max_end(&self) -> f64 {
+        self.newest_s + self.ahead_s.max(0.0)
+    }
 }
 
 fn finite_or(v: f64, d: f64) -> f64 {
@@ -123,7 +138,7 @@ impl Viewport {
 
     /// Visible `(start, end)` in session seconds.
     pub fn range(&self, span: Span) -> (f64, f64) {
-        let end = self.end_s.map_or(span.newest_s, |e| e.min(span.newest_s));
+        let end = self.end_s.map_or(span.newest_s, |e| e.min(span.max_end()));
         (end - self.window_s, end)
     }
 
@@ -173,7 +188,7 @@ impl Viewport {
 /// when there is less data than one window).
 fn clamp_end(end: f64, window_s: f64, span: Span) -> f64 {
     let lo = (span.oldest_s + window_s).min(span.newest_s);
-    end.clamp(lo, span.newest_s)
+    end.clamp(lo, span.max_end())
 }
 
 /// One step of an elapsed-time axis: tick spacing for about `target` ticks.
@@ -415,7 +430,7 @@ impl FollowClock {
 mod tests {
     use super::*;
 
-    const SPAN: Span = Span { oldest_s: 0.0, newest_s: 100.0 };
+    const SPAN: Span = Span { oldest_s: 0.0, newest_s: 100.0, ahead_s: 0.0 };
 
     fn bands() -> WindowSpec {
         MonitorId::Bands.spec()
