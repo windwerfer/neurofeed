@@ -123,18 +123,91 @@ fn current(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
             ui.label(t!("device-dialog-signal"));
             quality::row(ui, &q, d.channels.len(), shown_aux(session, d));
         });
-        egui::Grid::new("pad-quality").num_columns(4).spacing([14.0, 2.0]).show(ui, |ui| {
-            for (i, ch) in d.channels.iter().enumerate() {
-                let s = q.get(i).copied();
-                let col = s.map_or(theme::QUALITY_NONE, theme::quality_color);
-                ui.label(egui::RichText::new(format!("• {ch}")).color(col));
-                ui.weak(s.map_or("—".to_owned(), |s| format!("{s:.0}")));
-                if i % 2 == 1 {
-                    ui.end_row();
+        analysis_rows(ui, session, d, &q, out);
+    });
+    confirm_exclude(ui.ctx(), out);
+}
+
+/// Pending "exclude?" confirmation: (channel, remember).
+fn pending_id() -> egui::Id {
+    egui::Id::unique("nf-exclude-pending")
+}
+
+/// Ask the device dialog to highlight a channel's exclusion control (the
+/// quality hint's tap target).
+pub fn highlight(ctx: &egui::Context, channel: &str) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("nf-exclude-highlight"), channel.to_owned()));
+}
+
+/// Per pad: quality, the "use in analysis" switch, remembered tag.
+fn analysis_rows(ui: &mut egui::Ui, session: &Session, d: &DeviceInfo, q: &[f32], out: &mut Vec<Command>) {
+    let a = &session.state().analysis;
+    if !a.restored.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            ui.colored_label(ui.visuals().warn_fg_color, t!("analysis-restored", channels = a.restored.join(", ")));
+            if ui.small_button(t!("analysis-ok")).clicked() {
+                out.push(Command::AnalysisAckRestored);
+            }
+        });
+    }
+    let hl: Option<String> = ui.ctx().data(|m| m.get_temp(egui::Id::unique("nf-exclude-highlight")));
+    ui.weak(t!("analysis-use-caption"));
+    egui::Grid::new("pad-quality").num_columns(3).spacing([14.0, 4.0]).show(ui, |ui| {
+        for (i, ch) in d.channels.iter().enumerate() {
+            let s = q.get(i).copied();
+            let col = s.map_or(theme::QUALITY_NONE, theme::quality_color);
+            let row = ui.label(egui::RichText::new(format!("• {ch}  {}", s.map_or("—".to_owned(), |s| format!("{s:.0}")))).color(col));
+            if hl.as_deref() == Some(ch.as_str()) {
+                ui.painter().rect_stroke(
+                    row.rect.expand(3.0),
+                    3.0,
+                    egui::Stroke::new(2.0, ui.visuals().warn_fg_color),
+                    egui::StrokeKind::Outside,
+                );
+            }
+            let mut on = !a.is_excluded(ch);
+            if ui.checkbox(&mut on, t!("analysis-use")).on_hover_text(t!("analysis-use-hint")).changed() {
+                if on {
+                    out.push(Command::AnalysisInclude { channel: ch.clone() });
+                } else {
+                    let c = ch.clone();
+                    ui.ctx().data_mut(|m| m.insert_temp(pending_id(), (c, false)));
                 }
+            }
+            if a.is_remembered(ch) {
+                ui.weak(t!("analysis-remembered"));
+            } else {
+                ui.label("");
+            }
+            ui.end_row();
+        }
+    });
+}
+
+/// The confirmation: applies only on Confirm; Cancel changes nothing.
+fn confirm_exclude(ctx: &egui::Context, out: &mut Vec<Command>) {
+    let Some((ch, mut remember)) = ctx.data(|m| m.get_temp::<(String, bool)>(pending_id())) else { return };
+    let mut done = false;
+    let r = egui::Modal::new(egui::Id::unique("nf-exclude-confirm")).show(ctx, |ui| {
+        ui.set_max_width(340.0);
+        ui.strong(t!("analysis-confirm-title", channel = ch.clone()));
+        ui.label(t!("analysis-confirm-body"));
+        ui.checkbox(&mut remember, t!("analysis-confirm-remember"));
+        ui.horizontal(|ui| {
+            if ui.button(t!("analysis-cancel")).clicked() {
+                done = true;
+            }
+            if ui.button(t!("analysis-exclude")).clicked() {
+                out.push(Command::AnalysisExclude { channel: ch.clone(), confirm: true, remember });
+                done = true;
             }
         });
     });
+    if done || r.should_close() {
+        ctx.data_mut(|m| m.remove::<(String, bool)>(pending_id()));
+    } else {
+        ctx.data_mut(|m| m.insert_temp(pending_id(), (ch, remember)));
+    }
 }
 
 /// Scan-list group: title and membership test.
@@ -270,5 +343,46 @@ mod tests {
     #[test]
     fn rssi_bars() {
         assert_eq!([-40, -60, -65, -75, -90].map(bars), [4, 4, 3, 2, 1]);
+    }
+}
+
+#[cfg(test)]
+mod exclusion_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use serde_json::json;
+
+    fn run(ctx: &egui::Context, s: &mut Session, events: Vec<egui::Event>, t: f64) -> Vec<Command> {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 800.0))),
+            time: Some(t),
+            events,
+            ..Default::default()
+        };
+        let mut cmds = Vec::new();
+        ctx.run_ui(input, |u| cmds = crate::ui::show(u, s, None)).textures_delta.clear();
+        cmds
+    }
+
+    #[test]
+    fn exclusion_applies_only_on_confirm_escape_cancels() {
+        let _lang = crate::i18n::lang_lock();
+        let mut s = Session::new();
+        s.call("settings.set", json!({ "onboarded": true, "layout": "regular" })).unwrap();
+        s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
+        s.call("device.dialog", json!({ "open": true })).unwrap();
+        let ctx = egui::Context::default();
+        run(&ctx, &mut s, vec![], 0.0);
+        ctx.data_mut(|m| m.insert_temp(pending_id(), ("AF7".to_owned(), false)));
+        for i in 1..4 {
+            let out = run(&ctx, &mut s, vec![], f64::from(i) / 60.0);
+            assert!(!out.iter().any(|c| matches!(c, Command::AnalysisExclude { .. })), "no change while asking");
+        }
+        let key =
+            egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
+        let out = run(&ctx, &mut s, vec![key], 0.1);
+        assert!(!out.iter().any(|c| matches!(c, Command::AnalysisExclude { .. })));
+        assert!(ctx.data(|m| m.get_temp::<(String, bool)>(pending_id())).is_none(), "cancelled");
+        assert!(s.state().analysis.excluded.is_empty());
     }
 }

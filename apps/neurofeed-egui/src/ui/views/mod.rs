@@ -34,7 +34,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell:
         View::History => history::show(ui, session, out),
         View::Bands => bands::show(ui, state, out),
         View::RawEeg => raw::show(ui, session, out),
-        View::Psd => psd::show(ui, session),
+        View::Psd => psd::show(ui, session, out),
         View::HeartRate => heart::show(ui, session),
         View::Movement => movement::show(ui, session),
         View::Histogram => histogram::show(ui, session),

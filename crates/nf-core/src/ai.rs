@@ -96,6 +96,9 @@ pub struct AiState {
     pub live: Option<AiLive>,
     pub clear_anchor: bool,
     pub sleep_anchor: bool,
+    /// The model's fixed input channels include an analysis-excluded one:
+    /// no windows are scored (the channel schema is never changed).
+    pub blocked: Option<String>,
 }
 
 impl Default for AiState {
@@ -107,6 +110,7 @@ impl Default for AiState {
             live: None,
             clear_anchor: false,
             sleep_anchor: false,
+            blocked: None,
         }
     }
 }
@@ -226,6 +230,7 @@ pub fn status_json(a: &AiState) -> Value {
         "models": a.models,
         "live": a.live,
         "anchors": { "clear": a.clear_anchor, "sleep": a.sleep_anchor },
+        "blocked_reason": a.blocked,
     })
 }
 

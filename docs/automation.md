@@ -177,8 +177,36 @@ neurofeed-cli run monitor.raw '{"mode":"scroll","scale":"100"}'           # Raw 
 neurofeed-cli run monitor.raw '{"electrodes":["TP9","TP10"]}'             # shown panes (empty = all; session only)
 ```
 
-Monitor ids are `bands`, `raw_eeg`, `spectrogram`, `heart_overview`, `heart_detail`
-and `movement`. Bands and Raw EEG draw from this viewport (Raw EEG: the 5 min signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
+PSD (display only; analysis exclusions still apply):
+
+```sh
+neurofeed-cli run monitor.psd '{"range":"100","electrodes":["AF7","AF8"]}'  # 0–60|0–100 Hz, average of (saved)
+neurofeed-cli run monitor.viewport '{"monitor":"psd","window_s":8}'        # epoch 2|4|8 s; mode follow|inspect, end_s
+neurofeed-cli run psd.average '{"window_s":4,"end_s":120}'                  # Welch: linear mean over eligible selected pads, then dB
+```
+
+Analysis exclusion (global: feedback and every derived graph/endpoint;
+`raw.get`, recordings, exports and streaming keep all channels):
+
+```sh
+neurofeed-cli run analysis.get                                             # per channel: excluded, remembered, eligible; restored; hint
+neurofeed-cli run analysis.exclude '{"channel":"AF7","confirm":true}'       # session only; confirm is required
+neurofeed-cli run analysis.exclude '{"channel":"AF7","confirm":true,"remember":true}'  # + remembered for this device id
+neurofeed-cli run analysis.include '{"channel":"AF7"}'                     # immediate; forgets a remembered exclusion
+neurofeed-cli run analysis.hint_dismiss                                    # contact-quality hint off for this connection
+neurofeed-cli run analysis.ack_restored                                    # hide the "restored" notice
+```
+
+Derived endpoints and exclusion: `bands.get` (excluded channel: `{"excluded":true}`, no
+values), `psd.get` / `psd.average` / `histogram.get` (excluded left out, listed under
+`excluded`), `spectrogram.get` (error for an excluded channel), `features.get`
+(eligible usable pads only), `signal.status` (per pad `excluded`), AI scoring
+(`blocked_reason` in `ai.status` when a model input channel is excluded; no windows are
+scored, the model's channel schema never changes). Raw endpoints: `raw.get`,
+recordings/exports, LSL/OSC streaming: unchanged.
+
+Monitor ids are `bands`, `raw_eeg`, `spectrogram`, `heart_overview`, `heart_detail`,
+`movement`, `psd` (epoch) and `psd_strip` (its Bands strip). Bands and Raw EEG draw from this viewport (Raw EEG: the 5 min signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
 in later milestones). Zoom keeps the time under `focal` (0 = left edge, 1 = right
 edge) in place. Zooming at the right edge keeps Follow, while any other focal point
 enters Inspect. The window is clamped to the monitor's range (Bands 5 s to 30 min)

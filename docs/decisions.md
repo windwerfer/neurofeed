@@ -283,3 +283,28 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 Sweep → Inspect keeps sample x positions (freeze at slot end, blank right of
 the cursor) instead of re-anchoring the newest sample at the right edge.
 `monitor::Span` gained `ahead_s` (Raw Sweep: one window; others 0).
+
+## 2026-11-07 — Analysis exclusion, shared channel selector, PSD
+- Global analysis exclusion (contract `.ai/contracts/analysis-exclusion.md`),
+  core module `nf_core::analysis`; persisted `excluded_channels` (device id →
+  names). Artifact (blink/jaw) detectors still read all frontal/temporal pads
+  (they can only flag more, never invent signal) — known limitation.
+- Shared `monitor::channel_selector`: chips while they fit (~45 % of the
+  row), one "Channels n/m" dropdown in compact layout or narrow windows.
+- PSD: Welch 1 s Hamming, 50 % hop over the epoch (2/4/8 s, default 4,
+  Flutter), linear mean over (channel, gap-free segment) then dB. Flutter
+  averaged the *signals* before the FFT; we average spectra (correct for
+  power). Bands strip 7:3, epoch shaded, strip time older than the 5 min raw
+  ring dimmed ("no spectrum").
+- Quality hint thresholds: reuse the existing usable gate 80 (Muse: 1 s
+  conditioned std 1–15 µV, little mains; Crown: signalQuality ≥ 0.75) and the
+  score's own 50 tier; heuristic contact scores, not validated clinical
+  measures — the hint says "contact", never "clean EEG".
+- Top bar: notch selector removed (Settings → Devices only; MCP `mains.set`
+  unchanged). Record is a red dot; Pause sits left of it and shows only while
+  recording or paused. Pause semantics unchanged: `stream.pause` freezes the
+  views' incoming band data — it does **not** pause the recording or
+  acquisition (mismatch with "pause recording" wording noted). The `t = …`
+  label left the normal UI: `AppState::time` is the session clock since app
+  start (frame dt capped at 1 s, so not wall uptime; manual in MCP tests);
+  now in the debug overlay as "session clock".

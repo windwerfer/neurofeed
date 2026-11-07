@@ -86,7 +86,7 @@ fn scale_toggle(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
 /// Electrodes in the average (at least one stays on). Names come from the device.
 fn electrode_chips(ui: &mut egui::Ui, state: &AppState, device: &DeviceInfo, out: &mut Vec<Command>) {
     let sel = state.monitors.bands.selected(&device.channels);
-    monitor::electrode_chips(ui, &device.channels, &sel, &t!("bands-electrode-hint"), out, |names| Command::MonitorDisplay {
+    monitor::channel_selector(ui, &device.channels, &sel, &state.analysis, true, out, |names| Command::MonitorDisplay {
         electrodes: Some(names),
         hidden_bands: None,
     });
@@ -101,7 +101,12 @@ fn over_time(ui: &mut egui::Ui, state: &AppState, device: &DeviceInfo, span: Spa
     let vp = state.monitors.viewport(MonitorId::Bands);
     monitor::interact(ui, &resp, plot, MonitorId::Bands, vp, out);
     let range = monitor::presented_range(ui, state, MonitorId::Bands, vp, span);
-    let chans = state.monitors.bands.selected(&device.channels);
+    // Display choice ∩ analysis-eligible; empty = a message, never all.
+    let chans = state.analysis.eligible_of(&device.channels, &state.monitors.bands.selected(&device.channels));
+    if chans.is_empty() {
+        monitor::no_eligible(ui, plot);
+        return;
+    }
     let pts = series(state, &chans, plot, range);
     let (y0, y1) = y_range(relative(state), &pts);
     let v = ui.visuals().clone();
@@ -113,6 +118,22 @@ fn over_time(ui: &mut egui::Ui, state: &AppState, device: &DeviceInfo, span: Spa
         draw_band(&lines, plot, &pts, band, (y0, y1));
     }
     legend(ui, state, plot, out);
+}
+
+/// The Bands mini strip (PSD context strip): grid, axis and band lines of
+/// `chans` (already eligibility-filtered) over `range`. Reads only the
+/// snapshots in range (binary search), decimated per pixel column.
+pub fn strip(p: &egui::Painter, state: &AppState, chans: &[usize], plot: Rect, range: (f64, f64)) {
+    let pts = series(state, chans, plot, range);
+    let rel = relative(state);
+    let (y0, y1) = y_range(rel, &pts);
+    let v = p.ctx().global_style().visuals.clone();
+    y_axis(p, plot, (y0, y1), rel, &v);
+    monitor::time_grid(p, plot, range, &v);
+    let lines = p.with_clip_rect(plot.expand(2.0));
+    for band in Band::ALL.into_iter().filter(|b| state.monitors.bands.visible(*b)) {
+        draw_band(&lines, plot, &pts, band, (y0, y1));
+    }
 }
 
 /// Points in the visible range, at most ~one per pixel column (mean).

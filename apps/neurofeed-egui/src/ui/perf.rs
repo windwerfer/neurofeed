@@ -44,7 +44,9 @@ impl Stats {
 }
 
 /// Small label in the bottom-left corner of the safe area.
-pub fn show(ctx: &egui::Context, cpu_s: Option<f32>) {
+/// `session_s`: the session clock (`AppState::time`, seconds since the app
+/// started ticking; not wall time, not reset by connect).
+pub fn show(ctx: &egui::Context, cpu_s: Option<f32>, session_s: f64) {
     let id = egui::Id::unique("nf_perf_stats");
     let now = ctx.input(|i| i.time);
     let stats = ctx.data(|d| d.get_temp::<Stats>(id)).unwrap_or_default().frame(now);
@@ -54,7 +56,7 @@ pub fn show(ctx: &egui::Context, cpu_s: Option<f32>) {
         fps = stats.fps().map_or_else(|| "–".to_owned(), |f| format!("{f:.0}")),
         interval = stats.interval_s.map_or_else(|| "–".to_owned(), |s| format!("{:.1}", s * 1e3)),
         cpu = cpu_s.map_or_else(|| "–".to_owned(), |s| format!("{:.1}", f64::from(s) * 1e3))
-    );
+    ) + &t!("perf-session-clock", s = format!("{session_s:.0}"));
     let corner = ctx.content_rect().left_bottom() + egui::vec2(6.0, -6.0);
     egui::Area::new(id.with("area"))
         .order(egui::Order::Tooltip)

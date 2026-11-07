@@ -100,4 +100,6 @@ pub fn quality_color(score: f32) -> Color32 {
 /// A pad with no score yet (AUX before data).
 pub const QUALITY_NONE: Color32 = Color32::from_rgb(0x75, 0x75, 0x75);
 /// The "streaming server running" dot.
+/// Record button dot.
+pub const RECORD_RED: Color32 = Color32::from_rgb(0xE5, 0x39, 0x35);
 pub const STREAM_ON: Color32 = Color32::from_rgb(0x4C, 0xAF, 0x50);

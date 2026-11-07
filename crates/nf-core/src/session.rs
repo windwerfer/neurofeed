@@ -123,6 +123,8 @@ struct Live {
     last_data: Option<f64>,
     /// Session time of the next feedback second.
     fb_next: f64,
+    /// Next whole second of the contact-quality hint.
+    hint_next: f64,
     /// The recording was started by `feedback.start` (stops with it).
     auto_recording: bool,
     streamer: crate::streaming::Streamer,
@@ -654,6 +656,27 @@ impl Session {
         self.auto_reconnect(now);
         self.ai_tick();
         self.feedback_tick(now);
+        self.hint_tick(now);
+    }
+
+    /// Contact-quality hint, once per second (suggests; never excludes).
+    fn hint_tick(&mut self, now: f64) {
+        if now + 1e-9 < self.live.hint_next {
+            return;
+        }
+        self.live.hint_next = now.floor() + 1.0;
+        let (Some(dev), Some(sig)) = (&self.state.device, &self.live.signal) else { return };
+        let live = !crate::replay::is_replay(&dev.id) && matches!(self.state.link, Some(LinkState::Streaming));
+        let fresh = live && self.live.last_data.is_some_and(|t| now - t <= STALE_S);
+        let movement = self.live.artifacts.as_ref().and_then(crate::artifacts::Artifacts::movement_score);
+        let before = self.state.analysis.hint.active.clone();
+        let input = crate::analysis::HintInput { t: now, channels: &dev.channels, quality: fresh.then_some(&sig.quality[..]), movement };
+        let mut h = std::mem::take(&mut self.state.analysis.hint);
+        h.step(&self.state.analysis, &input);
+        self.state.analysis.hint = h;
+        if self.state.analysis.hint.active != before {
+            self.state.revision += 1;
+        }
     }
 
     /// Keep the latest device-reported pad quality (Crown), averaged over
@@ -1073,7 +1096,11 @@ impl Session {
             .iter()
             .find_map(|pair| pair.iter().map(|n| dev.channels.iter().position(|c| c == n)).collect::<Option<Vec<_>>>())
             .unwrap_or_else(|| (0..dev.channels.len()).collect());
+        let an = &self.state.analysis;
+        let excluded: Vec<String> = idx.iter().map(|&i| dev.channels[i].clone()).filter(|n| an.is_excluded(n)).collect();
+        let idx: Vec<usize> = idx.into_iter().filter(|&i| !an.is_excluded(&dev.channels[i])).collect();
         Observation {
+            excluded,
             connected: fresh,
             names: idx.iter().map(|&i| dev.channels[i].clone()).collect(),
             pads: idx.iter().map(|&i| sig.bands_linear.get(i).copied().unwrap_or_default()).collect(),
@@ -1231,6 +1258,42 @@ impl Session {
                 }
                 self.persist_settings();
             }
+            Command::MonitorPsd { range, electrodes } => {
+                let d = &mut self.state.monitors.psd;
+                d.range = range.unwrap_or(d.range);
+                if let Some(e) = electrodes {
+                    d.electrodes = e.into_iter().take(64).collect();
+                }
+                self.persist_settings();
+            }
+            Command::AnalysisExclude { channel, confirm, remember } => {
+                let dev = self.state.device.as_ref().ok_or_else(|| CoreError::Device("no device connected".into()))?;
+                if !dev.channels.contains(&channel) {
+                    return Err(CoreError::InvalidArgs(format!("unknown channel `{channel}`")));
+                }
+                if !confirm {
+                    return Err(CoreError::InvalidArgs(format!(
+                        "excluding {channel} affects feedback and all derived graphs (its raw signal is still recorded); pass confirm=true"
+                    )));
+                }
+                self.state.analysis.exclude(&channel, remember);
+                self.persist_settings();
+            }
+            Command::AnalysisInclude { channel } => {
+                let dev = self.state.device.as_ref().ok_or_else(|| CoreError::Device("no device connected".into()))?;
+                if !dev.channels.contains(&channel) {
+                    return Err(CoreError::InvalidArgs(format!("unknown channel `{channel}`")));
+                }
+                let forgot = self.state.analysis.include(&channel);
+                self.persist_settings();
+                return Ok(json!({ "channel": channel, "forgot_remembered": forgot }));
+            }
+            Command::AnalysisHintDismiss => {
+                if let Some(n) = self.state.analysis.hint.active.clone() {
+                    self.state.analysis.hint.dismiss(&n);
+                }
+            }
+            Command::AnalysisAckRestored => self.state.analysis.restored.clear(),
             Command::DeviceConnect { id } => {
                 self.connect(&id)?;
                 self.state.auto.suspended = false;
@@ -1519,6 +1582,7 @@ impl Session {
         self.live.side = Some(crate::side::Side::new(&info));
         self.emit(Event::Connected { id: info.id.clone() });
         self.state.link = Some(src.link());
+        self.state.analysis.connect(&info.id, &info.channels);
         self.state.device = Some(info);
         self.source = Some(src);
         Ok(())
@@ -1614,6 +1678,8 @@ impl Session {
         self.live.side = None;
         self.state.bands.clear();
         self.state.monitors.follow_all();
+        self.state.analysis.disconnect();
+        self.state.ai.blocked = None;
         if let Some(d) = self.state.device.take() {
             self.emit(Event::Disconnected { id: d.id });
         }
@@ -1721,6 +1787,10 @@ impl Session {
                 "paused": s.paused,
             }),
             Query::RawGet { seconds, filtered } => self.raw_json(seconds.unwrap_or(1.0), filtered.unwrap_or(true))?,
+            Query::AnalysisGet => self.analysis_json(),
+            Query::PsdAverage { window_s, end_s, electrodes, max_hz } => {
+                self.psd_average_json(*window_s, *end_s, electrodes.as_deref(), *max_hz)?
+            }
             Query::PsdGet { channel, max_hz } => self.psd_json(channel.as_deref(), max_hz.unwrap_or(50.0))?,
             Query::HrGet => self.estimate_json(true)?,
             Query::Spo2Get => self.estimate_json(false)?,
@@ -1834,7 +1904,7 @@ impl Session {
             .channels
             .iter()
             .enumerate()
-            .map(|(i, n)| json!({ "channel": n, "quality": sig.quality[i], "usable": sig.usable(i), "line_noise": sig.line_noise[i] }))
+            .map(|(i, n)| json!({ "channel": n, "quality": sig.quality[i], "usable": sig.usable(i), "line_noise": sig.line_noise[i], "excluded": self.state.analysis.is_excluded(n) }))
             .collect();
         json!({
             "connected": true,
@@ -1850,7 +1920,7 @@ impl Session {
 
     fn features_json(&self) -> Result<Reply, CoreError> {
         let (dev, sig) = self.signal()?;
-        let usable: Vec<usize> = (0..dev.channels.len()).filter(|&i| sig.usable(i)).collect();
+        let usable: Vec<usize> = self.state.analysis.eligible(&dev.channels).into_iter().filter(|&i| sig.usable(i)).collect();
         let mut out = serde_json::Map::new();
         for id in nf_dsp::FEATURE_IDS {
             let vals: Vec<f64> = usable.iter().filter_map(|&i| nf_dsp::band_feature(id, &sig.bands_linear[i])).collect();
@@ -1874,9 +1944,11 @@ impl Session {
             .channels
             .iter()
             .enumerate()
+            .filter(|(_, name)| !self.state.analysis.is_excluded(name))
             .map(|(i, name)| json!({ "channel": name, "counts": nf_dsp::histogram(&sig.last(i, n, true), bins, half_range) }))
             .collect();
-        Ok(json!({ "time": sig.time, "bins": bins, "half_range_uv": half_range, "unit": "uV", "channels": channels }))
+        let excluded: Vec<_> = self.state.analysis.excluded.iter().collect();
+        Ok(json!({ "time": sig.time, "bins": bins, "half_range_uv": half_range, "unit": "uV", "channels": channels, "excluded": excluded }))
     }
 
     fn spectrogram_json(&self, channel: Option<&str>, max_hz: f64) -> Result<Reply, CoreError> {
@@ -1885,6 +1957,9 @@ impl Session {
         }
         let (dev, sig) = self.signal()?;
         let i = Self::channel_index(dev, channel)?.unwrap_or(self.state.channel);
+        if self.state.analysis.is_excluded(&dev.channels[i]) {
+            return Err(CoreError::InvalidArgs(format!("{} is excluded from analysis (raw.get still has it)", dev.channels[i])));
+        }
         let df = 1.0 / crate::signal::WINDOW_S;
         let keep = (max_hz / df).floor() as usize + 1;
         let cols: Vec<_> = sig.spectrogram[i].iter().map(|c| &c[..keep.min(c.len())]).collect();
@@ -1920,7 +1995,12 @@ impl Session {
         let w = sig.window_len();
         let mut df = None;
         let mut out = Vec::new();
-        for (i, name) in dev.channels.iter().enumerate().filter(|(_, n)| channel.is_none_or(|c| c == n.as_str())) {
+        if let Some(c) = channel.filter(|c| self.state.analysis.is_excluded(c)) {
+            return Err(CoreError::InvalidArgs(format!("{c} is excluded from analysis (raw.get still has it)")));
+        }
+        for (i, name) in
+            dev.channels.iter().enumerate().filter(|(_, n)| channel.is_none_or(|c| c == n.as_str()) && !self.state.analysis.is_excluded(n))
+        {
             let Some(p) = nf_dsp::psd(&sig.last(i, w, true), sig.rate) else { continue };
             let keep = ((max_hz / p.df).floor() as usize + 1).min(p.power.len());
             df = Some(p.df);
@@ -1930,7 +2010,7 @@ impl Session {
                 "power": &p.power[..keep],
             }));
         }
-        Ok(json!({ "time": sig.time, "df_hz": df, "unit": "uV^2/Hz", "channels": out }))
+        Ok(json!({ "time": sig.time, "df_hz": df, "unit": "uV^2/Hz", "channels": out, "excluded": self.state.analysis.excluded }))
     }
 
     /// Data range of a monitor: band history for Bands, else the monitor's
@@ -1943,6 +2023,11 @@ impl Session {
             (crate::monitor::MonitorId::RawEeg, _, _) => {
                 let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
                 crate::rawtrace::raw_span(newest, s.monitors.raw.mode, s.monitors.viewport(id).window_s)
+            }
+            (crate::monitor::MonitorId::PsdStrip, Some(a), Some(b)) => crate::monitor::Span::new(a.time, b.time),
+            (crate::monitor::MonitorId::Psd, _, _) => {
+                let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
+                crate::monitor::Span::new((newest - crate::signal::BUFFER_S).max(0.0), newest)
             }
             _ => crate::monitor::Span::new((s.time - id.spec().max_s).max(0.0), s.time),
         }
@@ -1990,7 +2075,85 @@ impl Session {
                 )
             })
             .collect();
-        serde_json::json!({ "monitors": views, "bands": m.bands, "raw": m.raw, "scale": self.state.band_scale })
+        serde_json::json!({ "monitors": views, "bands": m.bands, "raw": m.raw, "psd": m.psd, "scale": self.state.band_scale })
+    }
+
+    fn analysis_json(&self) -> Reply {
+        let a = &self.state.analysis;
+        let chans = self.state.device.as_ref().map(|d| d.channels.clone()).unwrap_or_default();
+        let rows: Vec<_> = chans
+            .iter()
+            .map(|n| json!({ "channel": n, "excluded": a.is_excluded(n), "remembered": a.is_remembered(n), "eligible": !a.is_excluded(n) }))
+            .collect();
+        json!({
+            "device": a.device,
+            "channels": rows,
+            "excluded_count": a.excluded.len(),
+            "eligible_count": chans.len() - a.excluded.len(),
+            "restored": a.restored,
+            "hint": a.hint.active,
+            "raw_keeps_all_channels": true,
+        })
+    }
+
+    /// Visible PSD epoch `(start, end)` for the core (MCP/CLI): the PSD
+    /// viewport (Inspect end or newest sample).
+    pub fn psd_epoch(&self) -> Option<(f64, f64)> {
+        let id = crate::monitor::MonitorId::Psd;
+        self.live.signal.as_ref()?.time?;
+        Some(self.state.monitors.viewport(id).range(self.monitor_span(id)))
+    }
+
+    fn psd_average_json(
+        &self,
+        window_s: Option<f64>,
+        end_s: Option<f64>,
+        electrodes: Option<&[String]>,
+        max_hz: Option<f64>,
+    ) -> Result<Reply, CoreError> {
+        let (dev, sig) = self.signal()?;
+        let spec = crate::monitor::MonitorId::Psd.spec();
+        if window_s.is_some_and(|w| !(w.is_finite() && (spec.min_s..=spec.max_s).contains(&w))) {
+            return Err(CoreError::InvalidArgs(format!("window_s must be in [{}, {}]", spec.min_s, spec.max_s)));
+        }
+        let max_hz = max_hz.unwrap_or(self.state.monitors.psd.range.max_hz());
+        if !(max_hz.is_finite() && (1.0..=100.0).contains(&max_hz)) {
+            return Err(CoreError::InvalidArgs("max_hz must be in [1, 100]".into()));
+        }
+        let (start, end) = self.psd_epoch().unwrap_or_default();
+        let end = end_s.filter(|e| e.is_finite()).unwrap_or(end);
+        let w = window_s.unwrap_or(end - start);
+        let sel = match electrodes {
+            Some(e) if !e.is_empty() => {
+                for n in e {
+                    if !dev.channels.contains(n) {
+                        return Err(CoreError::InvalidArgs(format!("unknown channel `{n}`")));
+                    }
+                }
+                crate::monitor::select(e, &dev.channels)
+            }
+            _ => self.state.monitors.psd.selected(&dev.channels),
+        };
+        let use_ch = self.state.analysis.eligible_of(&dev.channels, &sel);
+        let names = |v: &[usize]| v.iter().map(|&i| dev.channels[i].clone()).collect::<Vec<_>>();
+        let excluded: Vec<_> = sel.iter().filter(|i| !use_ch.contains(i)).map(|&i| dev.channels[i].clone()).collect();
+        let base = json!({ "start_s": end - w, "end_s": end, "selected": names(&sel), "excluded": excluded, "unit": "dB re 1 uV^2/Hz (10*log10 of the mean linear PSD)" });
+        let Some(a) = crate::spectrum::average(sig, &use_ch, end - w, end) else {
+            let reason =
+                if use_ch.is_empty() { "no eligible electrode selected" } else { "no complete gap-free 1 s segment in this window" };
+            let mut b = base;
+            b["unavailable"] = json!(reason);
+            return Ok(b);
+        };
+        let keep = ((max_hz / a.df).floor() as usize + 1).min(a.power.len());
+        let mut b = base;
+        b["df_hz"] = json!(a.df);
+        b["segments"] = json!(a.segments);
+        b["channels"] = json!(names(&a.channels));
+        b["db"] = json!(&a.db()[..keep]);
+        b["power_uv2_hz"] = json!(&a.power[..keep]);
+        b["peak_hz"] = json!(a.peak(8.0, 13.0));
+        Ok(b)
     }
 
     fn bands_json(&self, scale: BandScale) -> Reply {
@@ -2004,6 +2167,10 @@ impl Session {
             .map(|(i, name)| {
                 let mut m = serde_json::Map::new();
                 m.insert("channel".into(), json!(name));
+                if self.state.analysis.is_excluded(name) {
+                    m.insert("excluded".into(), json!(true));
+                    return serde_json::Value::Object(m);
+                }
                 for b in Band::ALL {
                     let v = match scale {
                         BandScale::Absolute => snap.power(i, b),

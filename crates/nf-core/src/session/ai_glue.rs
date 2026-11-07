@@ -91,8 +91,21 @@ impl Session {
         if !self.state.ai.ready() || self.state.time + 1e-9 < self.live.ai_next {
             return;
         }
-        let (Some(dev), Some(sig), Some(rt)) = (&self.state.device, &self.live.signal, self.ai.as_mut()) else { return };
+        let Some(dev) = &self.state.device else { return };
         let Some(rows) = crate::ai::model_rows(&dev.channels) else { return };
+        // Excluded input channel: unavailable, never a different schema.
+        let ex: Vec<&str> = rows.iter().map(|&i| dev.channels[i].as_str()).filter(|n| self.state.analysis.is_excluded(n)).collect();
+        let blocked = (!ex.is_empty()).then(|| {
+            format!("the model needs {} and {} is excluded from analysis", rows.map(|i| dev.channels[i].as_str()).join(", "), ex.join(", "))
+        });
+        if self.state.ai.blocked != blocked {
+            self.state.ai.blocked = blocked;
+            self.state.revision += 1;
+        }
+        if self.state.ai.blocked.is_some() {
+            return;
+        }
+        let (Some(sig), Some(rt)) = (&self.live.signal, self.ai.as_mut()) else { return };
         let model = self.state.ai.settings.model();
         let n = model.window_samples();
         let mut signal = Vec::with_capacity(4 * n);

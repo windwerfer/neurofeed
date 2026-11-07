@@ -73,3 +73,8 @@
 ## 2026-11-07 — 4 Hz bands, 1 h low-rate history
 - BAND_INTERVAL_S 0.25; `Signal::with_band_interval` (1 Hz tested). BandHistory 3600 s/14,400; HR/SpO2 3600 s.
 - audio guard test made phase-independent (chime times + ≥20 s cooldown).
+
+## 2026-11-07 — Analysis exclusion + PSD milestone
+- nf_core::analysis (exclude/include/remember/hint), nf_core::spectrum (Welch average), commands analysis.* / monitor.psd / psd.average.
+- Device dialog "Use in analysis" switches + confirm; top bar exclusion count + hint; notch removed; Pause/Record reorder.
+- PSD view: spectrum widget (ui/spectrum.rs) + Bands strip.
