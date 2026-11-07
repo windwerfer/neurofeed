@@ -1232,13 +1232,46 @@ impl Session {
                 self.state.band_scale = scale;
                 self.emit(Event::ScaleChanged { scale });
             }
-            Command::MonitorViewport { monitor, window_s, mode, end_s } => self.monitor_viewport(monitor, window_s, mode, end_s),
+            Command::MonitorViewport { monitor, window_s, mode, end_s } => {
+                self.monitor_viewport(monitor, window_s, mode, end_s);
+                self.sync_overview(monitor);
+            }
             Command::MonitorZoom { monitor, factor, focal } => {
                 if !(factor.is_finite() && factor > 0.0) {
                     return Err(CoreError::InvalidArgs("factor must be a positive number".into()));
                 }
                 let (spec, span) = (monitor.spec(), self.monitor_span(monitor));
                 self.with_viewport(monitor, |v| v.zoom(spec, span, factor, focal.unwrap_or(1.0)));
+                self.sync_overview(monitor);
+            }
+            Command::MonitorBookmarkAdd { monitor, end_s, window_s } => {
+                if monitor.overview().is_none() {
+                    return Err(CoreError::InvalidArgs(format!("{} has no overview bookmarks", monitor.name())));
+                }
+                let (v, span) = (self.state.monitors.viewport(monitor), self.monitor_span(monitor));
+                let (_, shown_end) = v.range(span);
+                let end = end_s.unwrap_or(shown_end);
+                let spec = monitor.spec();
+                let window = window_s.unwrap_or(v.window_s);
+                if !(end.is_finite() && window.is_finite() && (spec.min_s..=spec.max_s).contains(&window)) {
+                    return Err(CoreError::InvalidArgs(format!("end_s finite, window_s in [{}, {}]", spec.min_s, spec.max_s)));
+                }
+                let id = self.state.monitors.bookmark_add(monitor, end, window);
+                return Ok(json!({ "id": id }));
+            }
+            Command::MonitorBookmarkGo { monitor, id } => {
+                let b = self.state.monitors.bookmark(monitor, id).ok_or_else(|| CoreError::InvalidArgs(format!("no bookmark {id}")))?;
+                if !b.available(self.monitor_span(monitor)) {
+                    return Err(CoreError::InvalidArgs(format!("bookmark {id} is older than the retained data of {}", monitor.name())));
+                }
+                self.monitor_viewport(monitor, Some(b.window_s), Some(crate::monitor::ViewportMode::Inspect), Some(b.end_s));
+                self.sync_overview(monitor);
+                self.reveal_in_overview(monitor);
+            }
+            Command::MonitorBookmarkRemove { monitor, id } => {
+                if !self.state.monitors.bookmark_remove(monitor, id) {
+                    return Err(CoreError::InvalidArgs(format!("no bookmark {id}")));
+                }
             }
             Command::MonitorPan { monitor, seconds } => {
                 let span = self.monitor_span(monitor);
@@ -1618,6 +1651,7 @@ impl Session {
         self.emit(Event::Connected { id: info.id.clone() });
         self.state.link = Some(src.link());
         self.state.analysis.connect(&info.id, &info.channels);
+        self.state.monitors.clear_bookmarks();
         self.state.device = Some(info);
         self.source = Some(src);
         Ok(())
@@ -1714,6 +1748,7 @@ impl Session {
         self.state.bands.clear();
         self.state.monitors.follow_all();
         self.state.analysis.disconnect();
+        self.state.monitors.clear_bookmarks();
         self.state.ai.blocked = None;
         if let Some(d) = self.state.device.take() {
             self.emit(Event::Disconnected { id: d.id });
@@ -2118,6 +2153,39 @@ impl Session {
         });
     }
 
+    /// Keep a host and its overview coherent: an explicit host Follow also
+    /// re-engages the overview's Follow (the shade cannot walk off the
+    /// right edge), and the overview is never narrower than the host
+    /// window. Only this host's overview is touched.
+    fn sync_overview(&mut self, host: crate::monitor::MonitorId) {
+        let Some(oid) = host.overview() else { return };
+        let hv = self.state.monitors.viewport(host);
+        let ospec = oid.spec();
+        self.with_viewport(oid, |o| {
+            if hv.following() {
+                o.follow();
+            }
+            if o.window_s < hv.window_s {
+                o.set_window(ospec, hv.window_s * 1.5);
+            }
+        });
+    }
+
+    /// After a jump: pan the host's overview so the jumped-to window shows.
+    fn reveal_in_overview(&mut self, host: crate::monitor::MonitorId) {
+        let Some(oid) = host.overview() else { return };
+        let (hv, hspan) = (self.state.monitors.viewport(host), self.monitor_span(host));
+        let (hs, he) = hv.range(hspan);
+        let ospan = self.monitor_span(oid);
+        let ov = self.state.monitors.viewport(oid);
+        let (os, oe) = ov.range(ospan);
+        if hs >= os && he <= oe {
+            return;
+        }
+        let end = he + (ov.window_s - (he - hs)).max(0.0) / 2.0;
+        self.with_viewport(oid, |o| o.inspect(ospan, Some(end)));
+    }
+
     fn monitor_json(&self) -> Reply {
         let m = &self.state.monitors;
         let views: serde_json::Map<String, serde_json::Value> = crate::monitor::MonitorId::ALL
@@ -2135,7 +2203,19 @@ impl Session {
             .collect();
         let overview: serde_json::Map<String, serde_json::Value> =
             crate::monitor::MonitorId::WITH_OVERVIEW.into_iter().map(|id| (id.name().to_owned(), m.overview_on(id).into())).collect();
-        serde_json::json!({ "monitors": views, "bands": m.bands, "raw": m.raw, "psd": m.psd, "histogram": m.histogram,
+        let bookmarks: serde_json::Map<String, serde_json::Value> = crate::monitor::MonitorId::WITH_OVERVIEW
+            .into_iter()
+            .map(|id| {
+                let span = self.monitor_span(id);
+                let list: Vec<_> = m
+                    .bookmarks_of(id)
+                    .iter()
+                    .map(|b| serde_json::json!({ "id": b.id, "end_s": b.end_s, "window_s": b.window_s, "available": b.available(span) }))
+                    .collect();
+                (id.name().to_owned(), list.into())
+            })
+            .collect();
+        serde_json::json!({ "monitors": views, "bookmarks": bookmarks, "bands": m.bands, "raw": m.raw, "psd": m.psd, "histogram": m.histogram,
             "spectrogram": m.spectrogram, "overview": overview, "scale": self.state.band_scale })
     }
 

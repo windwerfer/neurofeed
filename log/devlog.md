@@ -90,3 +90,6 @@
 - Histogram: pooled eligible pads, 2/4/8 s epoch Follow/Inspect, ±50/100/200 µV, readout.
 - Spectrogram: 300 s linear per-channel history, averaged eligible pads, plasma + colour bar, dB auto/lock, readout.
 - Tests: tests/overview.rs (core), ui overview gestures, histogram/spectrogram UI.
+
+## 2026-11-07 – Overview refinements
+- Bookmarks (long press / desktop icon + ×), in-graph span menu, no "(custom)", Follow resets overview.
