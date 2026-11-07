@@ -68,20 +68,27 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
         return;
     };
     let range = monitor::presented_range_lead(ui, state, id, vp, span, rt::RAW_FOLLOW_LEAD_S);
-    // Only the samples the window needs (the ring holds up to 60 s).
-    let need = (((span.newest_s - range.0).max(0.0) + 1.0) * sig.rate).ceil() as usize;
+    // Only the samples of the visible window (+1 s margin) are copied, from
+    // wherever it sits in the 300 s ring.
+    let rate = sig.rate.max(1.0);
+    let need = (((range.1 - range.0).max(0.0) + 1.0) * rate).ceil() as usize;
     let mut panes: Vec<Pane> = state
         .monitors
         .raw
         .selected(&dev.channels)
         .into_iter()
-        .map(|ch| Pane {
-            name: dev.channels[ch].clone(),
-            end_t: sig.channel_time(ch).unwrap_or(span.newest_s),
-            rate: sig.rate,
-            values: sig.last(ch, need, true),
-            flags: sig.last_flags(ch, need),
-            quality: Some(sig.quality[ch]),
+        .map(|ch| {
+            let ch_t = sig.channel_time(ch).unwrap_or(span.newest_s);
+            let skip = ((ch_t - range.1 - 0.5).max(0.0) * rate).floor() as usize;
+            let (values, flags) = sig.slice(ch, skip, need, true);
+            Pane {
+                name: dev.channels[ch].clone(),
+                end_t: ch_t - skip as f64 / rate,
+                rate: sig.rate,
+                values,
+                flags,
+                quality: Some(sig.quality[ch]),
+            }
         })
         .collect();
     if let Some(side) = session.side() {
@@ -91,7 +98,7 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
                 name: t!("raw-aux", name = name),
                 end_t: span.newest_s,
                 rate: side.aux_rate,
-                values: buf.iter().skip(buf.len().saturating_sub(need)).copied().collect(),
+                values: buf.range(buf.len().saturating_sub(need)..).copied().collect(),
                 flags: Vec::new(),
                 quality: None,
             });

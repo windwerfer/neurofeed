@@ -11,10 +11,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 /// Seconds of raw and filtered signal kept per channel (display history:
-/// Raw EEG Inspect pans through it; DSP only reads the last [`WINDOW_S`]).
-/// 60 s × 256 Hz × 8 ch × 9 B ≈ 1.1 MB. It was 10 s, which left a 10 s
-/// window no room and the default 8 s window only 2 s to pan.
-pub const BUFFER_S: f64 = 60.0;
+/// Raw EEG Inspect pans through it; DSP only reads the last [`WINDOW_S`],
+/// filter re-warm the last 2 s). Per channel and sample: raw f32 + filtered
+/// f32 + flag u8 = 9 B, preallocated exactly ([`Signal::heap_bytes`]):
+/// 300 s × 256 Hz = 76 800 samples → 691 200 B per channel, ≈ 2.8 MB for a
+/// Muse (4 ch), ≈ 5.5 MB for a Crown (8 ch).
+pub const BUFFER_S: f64 = 300.0;
+/// Largest `raw.get` request (seconds): bounds the JSON payload
+/// (60 s × 256 Hz × 8 ch ≈ 123 k numbers).
+pub const RAW_GET_MAX_S: f64 = 60.0;
 /// FFT window for bands / PSD / quality (1 s at 256 Hz).
 pub const WINDOW_S: f64 = 1.0;
 /// Band snapshot cadence (matches the legacy 10 Hz band stream).
@@ -94,9 +99,11 @@ impl Signal {
             rate,
             cap,
             filters: Vec::new(),
-            raw: vec![VecDeque::with_capacity(cap); n],
-            filtered: vec![VecDeque::with_capacity(cap); n],
-            flags: vec![VecDeque::with_capacity(cap); n],
+            // One exact allocation per ring (`vec![x; n]` clones would start
+            // empty and grow by doubling past `cap`).
+            raw: (0..n).map(|_| VecDeque::with_capacity(cap)).collect(),
+            filtered: (0..n).map(|_| VecDeque::with_capacity(cap)).collect(),
+            flags: (0..n).map(|_| VecDeque::with_capacity(cap)).collect(),
             last_t: vec![None; n],
             time: None,
             next_band: None,
@@ -154,7 +161,7 @@ impl Signal {
             .iter()
             .map(|r| {
                 let mut f = EegFilter::new(self.rate, want);
-                r.iter().skip(r.len().saturating_sub(warm)).for_each(|&x| {
+                r.range(r.len().saturating_sub(warm)..).for_each(|&x| {
                     f.process(f64::from(x));
                 });
                 f
@@ -291,13 +298,35 @@ impl Signal {
 
     /// Flags of the last `n` samples of channel `ch`.
     pub fn last_flags(&self, ch: usize, n: usize) -> Vec<u8> {
-        self.flags.get(ch).map(|b| b.iter().skip(b.len().saturating_sub(n)).copied().collect()).unwrap_or_default()
+        self.flags.get(ch).map(|b| b.range(b.len().saturating_sub(n)..).copied().collect()).unwrap_or_default()
     }
 
     /// Last `n` samples of channel `ch` (fewer if not buffered yet).
     pub fn last(&self, ch: usize, n: usize, filtered: bool) -> Vec<f32> {
         let buf = if filtered { &self.filtered } else { &self.raw };
-        buf.get(ch).map(|b| b.iter().skip(b.len().saturating_sub(n)).copied().collect()).unwrap_or_default()
+        buf.get(ch).map(|b| b.range(b.len().saturating_sub(n)..).copied().collect()).unwrap_or_default()
+    }
+
+    /// `n` samples of channel `ch` ending `skip` samples before the newest,
+    /// with their flags (fewer at the old end of the ring). O(n), no scan.
+    pub fn slice(&self, ch: usize, skip: usize, n: usize, filtered: bool) -> (Vec<f32>, Vec<u8>) {
+        let buf = if filtered { &self.filtered } else { &self.raw };
+        let (Some(b), Some(f)) = (buf.get(ch), self.flags.get(ch)) else { return (Vec::new(), Vec::new()) };
+        let end = b.len().saturating_sub(skip);
+        let start = end.saturating_sub(n);
+        let fe = end.min(f.len());
+        (b.range(start..end).copied().collect(), f.range(start.min(fe)..fe).copied().collect())
+    }
+
+    /// Samples per channel ring.
+    pub fn capacity_samples(&self) -> usize {
+        self.cap
+    }
+
+    /// Heap bytes held by the sample rings (allocated capacity, not length).
+    pub fn heap_bytes(&self) -> usize {
+        let f = |b: &Vec<VecDeque<f32>>| b.iter().map(|d| d.capacity() * std::mem::size_of::<f32>()).sum::<usize>();
+        f(&self.raw) + f(&self.filtered) + self.flags.iter().map(VecDeque::capacity).sum::<usize>()
     }
 }
 
@@ -319,7 +348,7 @@ fn push_capped<T>(b: &mut VecDeque<T>, x: T, cap: usize) {
 }
 
 fn tail(b: &VecDeque<f32>, n: usize) -> Option<Vec<f32>> {
-    (b.len() >= n).then(|| b.iter().skip(b.len() - n).copied().collect())
+    (b.len() >= n).then(|| b.range(b.len() - n..).copied().collect())
 }
 
 /// Crown `signalQuality` that counts as adequate (legacy crown_quality.rs).

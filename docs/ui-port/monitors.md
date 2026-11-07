@@ -327,4 +327,21 @@ can be reviewed against `compare-bands-regular.png`.
   while live + Follow. Inspect (drag, wheel, Inspect button) holds a time-ordered window in both modes.
 - 2026-11-07 fix: Inspect drag barely moved because the RAM ring was 10 s (8 s window → 2 s to pan); the ring is
   now 60 s (`signal::BUFFER_S`).
-- Deferred: inspect older than the 60 s RAM ring (file-backed); per-channel Auto; quality numbers (a dot only).
+- 2026-11-07: ring raised to 5 min (300 s, owner).
+- Deferred: inspect older than the 5 min RAM ring (file-backed); per-channel Auto; quality numbers (a dot only).
+
+### Future work: Inspect beyond the 5 min ring (not built; needs owner approval)
+What exists: only an explicit recording (Record button / `recording.start`, or a training, which always
+records) writes samples. The body is NFEDBIN: a header, then `[u32 len][zstd frame]` frames flushed every 1 s
+(`recording.rs` `FLUSH_S`), held in memory while recording; every 10 s the new bytes are appended to the store
+(`blob_chunks`, crash recovery) and the whole body is saved on stop. There is no time index and no range-read
+API (`parse_body` decodes everything). Without a recording, samples older than the ring are gone.
+
+Proposal (≈3–4 d): (1) at each frame flush record `(first_t, last_t, byte_offset)` in a frame index kept with
+the recording (old files: build it once by walking the length prefixes, decompressing only to read times);
+(2) a `history` reader in nf-core that decodes the frames overlapping `[t0, t1]` for the current device's
+recording (live: from the in-memory body; saved: from the store blob, native thread / web async), returning
+true timestamps and gap flags; (3) the Raw view asks for the visible window when it lies before the ring, shows
+"loading" meanwhile, keeps a small LRU (≈8 windows), drops stale requests by generation id, optionally prefetches
+one window each side; (4) min/max decimation as now. Never starts a recording by itself; outside recorded
+spans the panes say "not recorded".

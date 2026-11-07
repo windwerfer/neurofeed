@@ -261,3 +261,6 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 
 ## 2026-11-07 — signal ring 60 s
 - `signal::BUFFER_S` 10 → 60 s (raw + filtered + flags per channel, ≈1.1 MB for 8 ch at 256 Hz). Raw EEG Inspect pans through it; with 10 s the default 8 s window could only move 2 s, which read as a broken drag. `raw.get` / `histogram.get` accept up to 60 s. DSP windows are unchanged.
+
+## 2026-11-07 — signal ring 5 min
+- Owner: keep 5 min. `signal::BUFFER_S` = 300 s, preallocated exactly per ring (raw f32 + filtered f32 + flag u8 = 9 B/sample/channel): 691 200 B per channel at 256 Hz, ≈2.8 MB Muse (4 ch), ≈5.5 MB Crown (8 ch), measured by `Signal::heap_bytes` in `tests/monitor.rs`. Before, `vec![VecDeque::with_capacity(cap); n]` gave clones without capacity that grew by doubling past the cap. Ring reads use `VecDeque::range` (no skip scans); Raw EEG copies only the visible window via `Signal::slice`. `raw.get` is capped at `RAW_GET_MAX_S` = 60 s (payload); `histogram.get` reads up to 300 s (transient copy ≤ 300 KB per channel). Muse AUX and accelerometer stay at 30 s (`side::SIDE_S`). DSP windows are unchanged (1 s bands/PSD, 2 s filter re-warm).
