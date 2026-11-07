@@ -345,3 +345,18 @@ true timestamps and gap flags; (3) the Raw view asks for the visible window when
 "loading" meanwhile, keeps a small LRU (≈8 windows), drops stale requests by generation id, optionally prefetches
 one window each side; (4) min/max decimation as now. Never starts a recording by itself; outside recorded
 spans the panes say "not recorded".
+
+### Raw EEG: Sweep → Inspect without a jump (2026-11-07)
+Leaving a Sweep (Inspect button, drag, sideways wheel, pinch/Ctrl+wheel
+zoom) freezes on the current sweep slot `[k·w, (k+1)·w]`
+(`rawtrace::Mapping::freeze_end`). Every sample keeps its x; the previous
+sweep's data right of the cursor is cleared. That right region is real
+future time: empty until live samples arrive and fill it (no fabricated
+data, the frozen window never moves). In Sweep mode the Raw span allows one
+window of such blank room past the newest sample (`Span::ahead_s`), so
+panning right can reach at most one window of empty time; Scroll mode has
+none and freezes at the presented edge as before. Limits: the one sample
+exactly on the slot start leaves the window (x = 0); with the cursor in the
+last ~2 % of the slot, real slot-start samples hidden under the sweep's
+blank gap reappear at the left edge; samples newer than the presented
+cursor (≤ 0.25 s follow lead) appear right of it right away.
