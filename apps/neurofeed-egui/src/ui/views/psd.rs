@@ -1,19 +1,14 @@
 //! PSD monitor (Flutter `psd_view.dart`): one averaged spectrum of the
 //! selected, analysis-eligible electrodes over the epoch (2/4/8 s, Follow /
-//! Inspect), and the Bands context strip below it (7:3) with the epoch
-//! shaded. Drag the shade to move the epoch, drag elsewhere to pan the
-//! strip, tap to put the epoch there. Spectra exist only for the raw ring
-//! (last 5 min); older strip time is dimmed and cannot be selected.
+//! Inspect), and the shared overview timeline below it (7:3, on by
+//! default) with the epoch shaded (`ui::overview`). Spectra exist only for
+//! the raw ring (last 5 min); older overview time is shaded.
 
-use super::bands;
-use crate::ui::{monitor, spectrum, theme};
-use egui::{Align2, FontId, Pos2, Rect, Sense, Ui};
-use nf_core::monitor::{MonitorId, PsdRange, Span, ViewportMode};
+use crate::ui::{monitor, overview, spectrum};
+use egui::{Pos2, Rect, Sense, Ui};
+use nf_core::monitor::{MonitorId, PsdRange, Span};
 use nf_core::rawtrace as rt;
 use nf_core::{Command, Session};
-
-/// Spectrum share of the height (Flutter 7:3 split).
-pub const SPLIT: f32 = 0.7;
 
 #[derive(Clone)]
 struct Cached {
@@ -46,6 +41,8 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
         }
         range_menu(ui, state.monitors.psd.range, out);
         ui.add_space(8.0);
+        overview::toggle(ui, state, id, out);
+        ui.add_space(8.0);
         let sel = state.monitors.psd.selected(&channels);
         monitor::channel_selector(ui, &channels, &sel, &state.analysis, true, out, |names| Command::MonitorPsd {
             range: None,
@@ -60,9 +57,8 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
     let chans = state.analysis.eligible_of(&dev.channels, &state.monitors.psd.selected(&dev.channels));
     let max_hz = state.monitors.psd.range.max_hz();
     let full = ui.available_rect_before_wrap();
-    let spec_h = (full.height() * SPLIT).max(120.0).min(full.height());
-    let top = Rect::from_min_size(full.min, egui::vec2(full.width(), spec_h));
-    let bottom = Rect::from_min_max(Pos2::new(full.left(), top.bottom()), full.max);
+    let ov_h = overview::height(ui, state, id, full.height());
+    let top = Rect::from_min_max(full.min, Pos2::new(full.right(), full.bottom() - ov_h));
     let avg = if chans.is_empty() { None } else { cached(ui, sig, &chans, epoch) };
     let db = avg.as_ref().map(nf_core::spectrum::Averaged::db);
     let curve = avg.as_ref().zip(db.as_ref()).map(|(a, db)| spectrum::Curve { db, df: a.df, peak_hz: a.peak(8.0, 13.0) });
@@ -72,10 +68,11 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
     if let Some(h) = spectrum::plot(ui, top, max_hz, curve.as_ref(), hair, &empty) {
         ui.data_mut(|d| d.insert_temp(hid, h));
     }
-    if bottom.height() > 40.0 {
-        strip(ui, session, &chans, bottom, epoch, span, out);
+    ui.allocate_rect(top, Sense::hover());
+    if ov_h > 0.0 {
+        let host = overview::Host { id, range: epoch, detail_oldest: span.oldest_s, no_detail: t!("psd-strip-no-raw") };
+        overview::show(ui, state, &chans, &host, ov_h, out);
     }
-    ui.allocate_rect(full, Sense::hover());
 }
 
 fn range_menu(ui: &mut Ui, cur: PsdRange, out: &mut Vec<Command>) {
@@ -87,77 +84,6 @@ fn range_menu(ui: &mut Ui, cur: PsdRange, out: &mut Vec<Command>) {
             }
         }
     });
-}
-
-/// Bands context strip with the epoch shaded; dims time without raw data.
-fn strip(ui: &mut Ui, session: &Session, chans: &[usize], rect: Rect, epoch: (f64, f64), raw: Span, out: &mut Vec<Command>) {
-    let state = session.state();
-    let (Some(a), Some(b)) = (state.bands.oldest(), state.bands.latest()) else { return };
-    let sid = MonitorId::PsdStrip;
-    let svp = state.monitors.viewport(sid);
-    let span = Span::new(a.time, b.time);
-    let range = monitor::presented_range(ui, state, sid, svp, span);
-    let resp = ui.allocate_rect(rect, Sense::click_and_drag());
-    let plot = Rect::from_min_max(rect.left_top() + egui::vec2(40.0, 16.0), rect.right_bottom() - egui::vec2(8.0, 18.0));
-    let p = ui.painter_at(rect);
-    let v = ui.visuals().clone();
-    if chans.is_empty() {
-        monitor::no_eligible(ui, plot);
-    } else {
-        bands::strip(&p, state, chans, plot, range);
-    }
-    let x = |t: f64| monitor::x_of(plot, range, t).clamp(plot.left(), plot.right());
-    // Band history older than the raw ring: no spectrum can be computed there.
-    if raw.oldest_s > range.0.max(a.time) {
-        let r = Rect::from_x_y_ranges(x(range.0.max(a.time))..=x(raw.oldest_s), plot.y_range());
-        p.rect_filled(r, 0.0, theme::GAP_SHADE);
-        if r.width() > 120.0 {
-            p.text(r.center(), Align2::CENTER_CENTER, t!("psd-strip-no-raw"), FontId::proportional(10.0), theme::axis_text(&v));
-        }
-    }
-    let shade = Rect::from_x_y_ranges(x(epoch.0)..=x(epoch.1).max(x(epoch.0) + 2.0), plot.y_range());
-    p.rect_filled(shade, 0.0, theme::band_color(nf_core::Band::Alpha).gamma_multiply(0.22));
-    p.rect_stroke(shade, 0.0, egui::Stroke::new(1.0, theme::band_color(nf_core::Band::Alpha)), egui::StrokeKind::Inside);
-    // Gestures: drag the shade = move the epoch; else pan/zoom the strip.
-    let grab = egui::Id::unique("nf-psd-grab");
-    if resp.drag_started() {
-        let on = resp.interact_pointer_pos().is_some_and(|q| shade.expand2(egui::vec2(8.0, 0.0)).contains(q));
-        ui.data_mut(|d| d.insert_temp(grab, on));
-    }
-    let grabbed = ui.data(|d| d.get_temp::<bool>(grab)).unwrap_or(false) && resp.dragged();
-    let w = f64::from(plot.width().max(1.0));
-    if grabbed {
-        let dx = f64::from(resp.drag_delta().x);
-        if dx != 0.0 {
-            freeze_epoch(state, epoch, out);
-            out.push(Command::MonitorPan { monitor: MonitorId::Psd, seconds: dx / w * (range.1 - range.0) });
-        }
-    } else if resp.clicked() {
-        if let Some(q) = resp.interact_pointer_pos() {
-            let t = range.0 + f64::from(q.x - plot.left()) / w * (range.1 - range.0);
-            let half = (epoch.1 - epoch.0) / 2.0;
-            out.push(Command::MonitorViewport {
-                monitor: MonitorId::Psd,
-                window_s: None,
-                mode: Some(ViewportMode::Inspect),
-                end_s: Some(t + half),
-            });
-        }
-    } else {
-        monitor::interact(ui, &resp, plot, sid, svp, out);
-    }
-}
-
-/// Leaving Follow by moving the shade freezes where it is drawn.
-fn freeze_epoch(state: &nf_core::AppState, epoch: (f64, f64), out: &mut Vec<Command>) {
-    if state.monitors.viewport(MonitorId::Psd).following() {
-        out.push(Command::MonitorViewport {
-            monitor: MonitorId::Psd,
-            window_s: None,
-            mode: Some(ViewportMode::Inspect),
-            end_s: Some(epoch.1),
-        });
-    }
 }
 
 #[cfg(test)]
@@ -214,10 +140,5 @@ mod tests {
             assert_eq!(s.state().monitors.psd.electrodes, vec![first.clone()]);
             assert_eq!(s.state().analysis.excluded.len(), 1);
         }
-    }
-
-    #[test]
-    fn split_is_seventy_thirty() {
-        assert!((SPLIT - 0.7).abs() < 1e-6);
     }
 }

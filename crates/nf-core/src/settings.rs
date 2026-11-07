@@ -230,6 +230,13 @@ pub struct Persisted {
     /// PSD monitor: frequency range and electrodes shown.
     #[serde(default)]
     pub psd: crate::monitor::PsdDisplay,
+    /// Histogram / Spectrogram displays and the overview toggle per view.
+    #[serde(default)]
+    pub histogram: crate::monitor::HistogramDisplay,
+    #[serde(default)]
+    pub spectrogram: crate::monitor::SpectrogramDisplay,
+    #[serde(default)]
+    pub overview: std::collections::BTreeMap<crate::monitor::MonitorId, bool>,
 }
 
 impl Default for Persisted {
@@ -259,6 +266,9 @@ impl Persisted {
             raw_scale: s.monitors.raw.scale,
             excluded_channels: s.analysis.remembered.clone(),
             psd: s.monitors.psd.clone(),
+            histogram: s.monitors.histogram.clone(),
+            spectrogram: s.monitors.spectrogram.clone(),
+            overview: s.monitors.overview.clone(),
         }
     }
 
@@ -280,6 +290,10 @@ impl Persisted {
         s.monitors.raw.scale = self.raw_scale;
         s.analysis.remembered = self.excluded_channels;
         s.monitors.psd = self.psd;
+        s.monitors.histogram = self.histogram;
+        s.monitors.spectrogram.electrodes = self.spectrogram.electrodes;
+        s.monitors.spectrogram.db_lock = self.spectrogram.db_lock.filter(|(a, b)| crate::monitor::db_range_ok(*a, *b));
+        s.monitors.overview = self.overview.into_iter().filter(|(k, _)| k.overview().is_some()).collect();
     }
 }
 

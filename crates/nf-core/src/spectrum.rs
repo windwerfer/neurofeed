@@ -135,3 +135,99 @@ mod tests {
         assert!(average(&s, &[], t - 4.0, t).is_none(), "no channel, no spectrum");
     }
 }
+
+/// Spectrogram of `channels` over `(start, end]`: per stored column, the
+/// mean **linear** power of the channels valid in that column, then dB.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SpecAverage {
+    pub df: f64,
+    /// Column end times (session s), ascending; gaps are missing columns.
+    pub times: Vec<f64>,
+    /// dB re 1 µV²/Hz per column; empty = no selected channel valid there.
+    pub cols: Vec<Vec<f32>>,
+    /// Bins kept per column (0..=max_hz).
+    pub bins: usize,
+}
+
+/// Averaged spectrogram columns in `(start, end]`, bins `0..=max_hz`.
+/// Copies only the requested columns (never the whole 300 s history).
+pub fn spectrogram_average(sig: &Signal, channels: &[usize], start: f64, end: f64, max_hz: f64) -> SpecAverage {
+    let df = sig.spec_df;
+    if df <= 0.0 || channels.is_empty() {
+        return SpecAverage { df, ..SpecAverage::default() };
+    }
+    let bins = (max_hz / df).floor() as usize + 1;
+    let times = &sig.spec_times;
+    let first = times.partition_point(|&t| t <= start);
+    let last = times.partition_point(|&t| t <= end);
+    let mut out = SpecAverage { df, bins, times: Vec::with_capacity(last - first), cols: Vec::with_capacity(last - first) };
+    let mut acc = vec![0f64; bins];
+    for (k, &t) in times.iter().enumerate().take(last).skip(first) {
+        acc.iter_mut().for_each(|a| *a = 0.0);
+        let mut n = 0usize;
+        for &ch in channels {
+            let Some(col) = sig.spectrogram.get(ch).and_then(|c| c.get(k)) else { continue };
+            if col.is_empty() {
+                continue;
+            }
+            acc.iter_mut().zip(col.iter()).for_each(|(a, &v)| *a += f64::from(v));
+            n += 1;
+        }
+        out.times.push(t);
+        out.cols.push(if n == 0 { Vec::new() } else { acc.iter().map(|&v| (10.0 * (v / n as f64).max(1e-12).log10()) as f32).collect() });
+    }
+    out
+}
+
+/// Pooled amplitude histogram of `channels` over `[start, end]`.
+///
+/// Semantics (decisions 2026-11-07): every valid sample of every selected
+/// channel is counted, each channel's window mean removed first. The
+/// waveforms are **not** averaged (Flutter averaged them sample by sample,
+/// which silently cancels opposite-phase signals and shrinks σ); this is the
+/// distribution of amplitudes on the selected pads. Gap / bad samples are
+/// skipped; out-of-range samples land in the edge bins.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Pooled {
+    pub counts: Vec<u32>,
+    pub samples: usize,
+    /// σ of the pooled mean-removed samples (µV).
+    pub std_uv: f64,
+    pub channels: Vec<usize>,
+    pub start: f64,
+    pub end: f64,
+}
+
+pub fn histogram_pooled(sig: &Signal, channels: &[usize], start: f64, end: f64, bins: usize, half_range: f64) -> Option<Pooled> {
+    if end.partial_cmp(&start) != Some(std::cmp::Ordering::Greater) || bins < 2 || half_range <= 0.0 {
+        return None;
+    }
+    let rate = sig.rate;
+    let mut out = Pooled { counts: vec![0; bins], start, end, ..Pooled::default() };
+    let mut sq = 0.0;
+    let w = 2.0 * half_range / bins as f64;
+    for &ch in channels {
+        let Some(t_last) = sig.channel_time(ch) else { continue };
+        let skip = ((t_last - end) * rate).round().max(0.0) as usize;
+        let n = ((end.min(t_last) - start) * rate).round().max(0.0) as usize;
+        let (x, f) = sig.slice(ch, skip, n, true);
+        let ok: Vec<f64> = x.iter().zip(&f).filter(|(_, g)| **g == FLAG_OK).map(|(v, _)| f64::from(*v)).collect();
+        if ok.is_empty() {
+            continue;
+        }
+        let mean = ok.iter().sum::<f64>() / ok.len() as f64;
+        for v in &ok {
+            let d = v - mean;
+            sq += d * d;
+            let b = ((d + half_range) / w).floor().clamp(0.0, (bins - 1) as f64) as usize;
+            out.counts[b] += 1;
+        }
+        out.samples += ok.len();
+        out.channels.push(ch);
+    }
+    if out.samples == 0 {
+        return None;
+    }
+    out.std_uv = (sq / out.samples as f64).sqrt();
+    Some(out)
+}

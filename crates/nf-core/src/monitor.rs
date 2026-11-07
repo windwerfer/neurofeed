@@ -23,8 +23,16 @@ pub enum MonitorId {
     Movement,
     /// PSD analysis epoch (2/4/8 s of raw EEG).
     Psd,
-    /// Bands context strip under the PSD.
+    /// Bands context strip under the PSD (the PSD view's overview).
     PsdStrip,
+    /// Histogram analysis epoch (2/4/8 s of raw EEG).
+    Histogram,
+    /// Overview timelines (Bands history minimap) of the other views; each
+    /// has its own pan/zoom, independent of every other view.
+    BandsOverview,
+    RawOverview,
+    HistogramOverview,
+    SpectrogramOverview,
 }
 
 /// Window presets and zoom limits of one monitor (seconds).
@@ -37,7 +45,7 @@ pub struct WindowSpec {
 }
 
 impl MonitorId {
-    pub const ALL: [MonitorId; 8] = [
+    pub const ALL: [MonitorId; 13] = [
         MonitorId::Bands,
         MonitorId::RawEeg,
         MonitorId::Spectrogram,
@@ -46,20 +54,59 @@ impl MonitorId {
         MonitorId::Movement,
         MonitorId::Psd,
         MonitorId::PsdStrip,
+        MonitorId::Histogram,
+        MonitorId::BandsOverview,
+        MonitorId::RawOverview,
+        MonitorId::HistogramOverview,
+        MonitorId::SpectrogramOverview,
     ];
+
+    /// Views that can show an overview timeline, with its viewport.
+    pub const WITH_OVERVIEW: [MonitorId; 5] =
+        [MonitorId::Bands, MonitorId::RawEeg, MonitorId::Histogram, MonitorId::Psd, MonitorId::Spectrogram];
+
+    /// The overview timeline viewport of a view (`None`: no overview).
+    pub fn overview(self) -> Option<MonitorId> {
+        match self {
+            MonitorId::Bands => Some(MonitorId::BandsOverview),
+            MonitorId::RawEeg => Some(MonitorId::RawOverview),
+            MonitorId::Histogram => Some(MonitorId::HistogramOverview),
+            MonitorId::Psd => Some(MonitorId::PsdStrip),
+            MonitorId::Spectrogram => Some(MonitorId::SpectrogramOverview),
+            _ => None,
+        }
+    }
+
+    /// The view an overview viewport belongs to.
+    pub fn overview_host(self) -> Option<MonitorId> {
+        Self::WITH_OVERVIEW.into_iter().find(|h| h.overview() == Some(self))
+    }
+
+    /// Overview shown by default: PSD and Spectrogram only (owner 2026-11-07).
+    pub fn overview_default(self) -> bool {
+        matches!(self, MonitorId::Psd | MonitorId::Spectrogram)
+    }
 
     /// Presets and limits follow the legacy app (`viewport_controller.dart`).
     pub fn spec(self) -> WindowSpec {
         match self {
             MonitorId::Bands => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 3600.0 },
             MonitorId::RawEeg => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 8.0, min_s: 1.0, max_s: 10.0 },
-            MonitorId::Spectrogram => WindowSpec { presets: &[10.0, 20.0, 30.0], default_s: 20.0, min_s: 5.0, max_s: 30.0 },
+            // Flutter spectrogram windows; 300 s of spectral history.
+            MonitorId::Spectrogram => WindowSpec { presets: &[10.0, 20.0, 30.0, 120.0, 300.0], default_s: 30.0, min_s: 5.0, max_s: 300.0 },
             MonitorId::HeartOverview => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 120.0 },
             MonitorId::HeartDetail => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 10.0, min_s: 2.0, max_s: 120.0 },
             MonitorId::Movement => WindowSpec { presets: &[15.0, 30.0, 60.0], default_s: 30.0, min_s: 5.0, max_s: 60.0 },
             // Flutter `histogramPsdWindowOptions` / `psdDefaultWindowSeconds`.
             MonitorId::Psd => WindowSpec { presets: &[2.0, 4.0, 8.0], default_s: 4.0, min_s: 2.0, max_s: 8.0 },
-            MonitorId::PsdStrip => WindowSpec { presets: &[30.0, 60.0, 90.0, 120.0, 300.0], default_s: 90.0, min_s: 10.0, max_s: 3600.0 },
+            MonitorId::Histogram => WindowSpec { presets: &[2.0, 4.0, 8.0], default_s: 4.0, min_s: 2.0, max_s: 8.0 },
+            MonitorId::PsdStrip
+            | MonitorId::BandsOverview
+            | MonitorId::RawOverview
+            | MonitorId::HistogramOverview
+            | MonitorId::SpectrogramOverview => {
+                WindowSpec { presets: &[30.0, 60.0, 90.0, 120.0, 300.0], default_s: 90.0, min_s: 10.0, max_s: 3600.0 }
+            }
         }
     }
 
@@ -74,7 +121,12 @@ impl MonitorId {
             MonitorId::HeartDetail => crate::optics::PPG_BUFFER_S,
             MonitorId::Movement => crate::side::SIDE_S,
             MonitorId::Psd => crate::signal::BUFFER_S,
-            MonitorId::PsdStrip => crate::state::BandHistory::SECONDS,
+            MonitorId::Histogram => crate::signal::BUFFER_S,
+            MonitorId::PsdStrip
+            | MonitorId::BandsOverview
+            | MonitorId::RawOverview
+            | MonitorId::HistogramOverview
+            | MonitorId::SpectrogramOverview => crate::state::BandHistory::SECONDS,
         }
     }
 
@@ -88,6 +140,11 @@ impl MonitorId {
             MonitorId::Movement => "movement",
             MonitorId::Psd => "psd",
             MonitorId::PsdStrip => "psd_strip",
+            MonitorId::Histogram => "histogram",
+            MonitorId::BandsOverview => "bands_overview",
+            MonitorId::RawOverview => "raw_overview",
+            MonitorId::HistogramOverview => "histogram_overview",
+            MonitorId::SpectrogramOverview => "spectrogram_overview",
         }
     }
 }
@@ -354,15 +411,84 @@ impl BandsDisplay {
 }
 
 /// Monitor state kept in `AppState`.
+/// Histogram amplitude range (± µV around each channel's mean).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+pub enum HistRange {
+    #[serde(rename = "50")]
+    Uv50,
+    #[default]
+    #[serde(rename = "100")]
+    Uv100,
+    #[serde(rename = "200")]
+    Uv200,
+}
+
+impl HistRange {
+    pub const ALL: [HistRange; 3] = [HistRange::Uv50, HistRange::Uv100, HistRange::Uv200];
+
+    pub fn half_uv(self) -> f64 {
+        match self {
+            HistRange::Uv50 => 50.0,
+            HistRange::Uv100 => 100.0,
+            HistRange::Uv200 => 200.0,
+        }
+    }
+}
+
+/// Histogram display: electrodes pooled (empty = all) and µV range.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct HistogramDisplay {
+    #[serde(default)]
+    pub electrodes: Vec<String>,
+    #[serde(default)]
+    pub range: HistRange,
+}
+
+impl HistogramDisplay {
+    pub fn selected(&self, channels: &[String]) -> Vec<usize> {
+        select(&self.electrodes, channels)
+    }
+}
+
+/// Spectrogram display: electrodes averaged (empty = all) and the colour
+/// range: `None` = auto (fitted to the visible data), `Some` = locked dB.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct SpectrogramDisplay {
+    #[serde(default)]
+    pub electrodes: Vec<String>,
+    #[serde(default)]
+    pub db_lock: Option<(f32, f32)>,
+}
+
+impl SpectrogramDisplay {
+    pub fn selected(&self, channels: &[String]) -> Vec<usize> {
+        select(&self.electrodes, channels)
+    }
+}
+
+/// Valid locked dB range (finite, min < max, within ±200 dB).
+pub fn db_range_ok(lo: f32, hi: f32) -> bool {
+    lo.is_finite() && hi.is_finite() && lo < hi && lo >= -200.0 && hi <= 200.0
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Monitors {
     viewports: BTreeMap<MonitorId, Viewport>,
     pub bands: BandsDisplay,
     pub raw: RawDisplay,
     pub psd: PsdDisplay,
+    pub histogram: HistogramDisplay,
+    pub spectrogram: SpectrogramDisplay,
+    /// Overview shown per view; missing = [`MonitorId::overview_default`].
+    pub overview: BTreeMap<MonitorId, bool>,
 }
 
 impl Monitors {
+    /// Is the overview timeline of view `id` on?
+    pub fn overview_on(&self, id: MonitorId) -> bool {
+        id.overview().is_some() && self.overview.get(&id).copied().unwrap_or_else(|| id.overview_default())
+    }
+
     pub fn viewport(&self, id: MonitorId) -> Viewport {
         self.viewports.get(&id).copied().unwrap_or_else(|| Viewport::new(id.spec()))
     }

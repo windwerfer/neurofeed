@@ -185,6 +185,26 @@ neurofeed-cli run monitor.viewport '{"monitor":"psd","window_s":8}'        # epo
 neurofeed-cli run psd.average '{"window_s":4,"end_s":120}'                  # Welch: linear mean over eligible selected pads, then dB
 ```
 
+Histogram, Spectrogram and the overview timeline (display only; exclusions apply):
+
+```sh
+neurofeed-cli run monitor.histogram '{"range":"200","electrodes":["AF7","AF8"]}'  # ±50|100|200 µV, pads pooled (saved)
+neurofeed-cli run monitor.viewport '{"monitor":"histogram","window_s":8,"mode":"inspect","end_s":120}'  # epoch 2|4|8 s
+neurofeed-cli run histogram.get '{"seconds":4,"end_s":120}'                # per channel + "pooled" (display selection)
+neurofeed-cli run monitor.spectrogram '{"electrodes":["AF7","AF8"]}'       # averaged pads (linear power, then dB)
+neurofeed-cli run monitor.spectrogram '{"db_min":-20,"db_max":30}'          # lock the colour range; '{"auto":true}' unlocks
+neurofeed-cli run monitor.viewport '{"monitor":"spectrogram","window_s":120}'  # 10|20|30|120|300 s, zoom 5..300 s
+neurofeed-cli run spectrogram.get '{"seconds":60,"max_hz":60}'             # averaged selection; '{"channel":"AF8"}' = one pad
+neurofeed-cli run monitor.overview '{"monitor":"bands","on":true}'          # per view: bands|raw_eeg|histogram|psd|spectrogram
+neurofeed-cli run monitor.pan '{"monitor":"bands_overview","seconds":-60}'  # an overview's own pan/zoom
+```
+
+Histogram pooling: every valid sample of every selected eligible pad, each pad's
+window mean removed; waveforms are never averaged (anti-phase pads would cancel).
+Overview defaults: on for PSD and Spectrogram, off elsewhere; `monitor.get` lists
+`overview`. Overview viewports: `"bands_overview"`, `raw_overview`,
+`histogram_overview`, `psd_strip` (PSD), `spectrogram_overview`; each only moves its own view.
+
 Analysis exclusion (global: feedback and every derived graph/endpoint;
 `raw.get`, recordings, exports and streaming keep all channels):
 
@@ -199,14 +219,15 @@ neurofeed-cli run analysis.ack_restored                                    # hid
 
 Derived endpoints and exclusion: `bands.get` (excluded channel: `{"excluded":true}`, no
 values), `psd.get` / `psd.average` / `histogram.get` (excluded left out, listed under
-`excluded`), `spectrogram.get` (error for an excluded channel), `features.get`
+`excluded`), `spectrogram.get` (error for an excluded channel; the average leaves excluded pads out of every column, old ones included), `features.get`
 (eligible usable pads only), `signal.status` (per pad `excluded`), AI scoring
 (`blocked_reason` in `ai.status` when a model input channel is excluded; no windows are
 scored, the model's channel schema never changes). Raw endpoints: `raw.get`,
 recordings/exports, LSL/OSC streaming: unchanged.
 
 Monitor ids are `bands`, `raw_eeg`, `spectrogram`, `heart_overview`, `heart_detail`,
-`movement`, `psd` (epoch) and `psd_strip` (its Bands strip). Bands and Raw EEG draw from this viewport (Raw EEG: the 5 min signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
+`movement`, `psd` (epoch), `psd_strip` (its overview), `histogram` (epoch) and the
+overviews `"bands_overview"`, `raw_overview`, `histogram_overview`, `spectrogram_overview`. Bands and Raw EEG draw from this viewport (Raw EEG: the 5 min signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
 in later milestones). Zoom keeps the time under `focal` (0 = left edge, 1 = right
 edge) in place. Zooming at the right edge keeps Follow, while any other focal point
 enters Inspect. The window is clamped to the monitor's range (Bands 5 s to 30 min)

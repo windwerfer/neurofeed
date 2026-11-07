@@ -1269,6 +1269,38 @@ impl Session {
                 }
                 self.persist_settings();
             }
+            Command::MonitorOverview { monitor, on } => {
+                if monitor.overview().is_none() {
+                    return Err(CoreError::InvalidArgs(format!(
+                        "{} has no overview (bands, raw_eeg, histogram, psd, spectrogram)",
+                        monitor.name()
+                    )));
+                }
+                self.state.monitors.overview.insert(monitor, on);
+                self.persist_settings();
+            }
+            Command::MonitorHistogram { range, electrodes } => {
+                let d = &mut self.state.monitors.histogram;
+                d.range = range.unwrap_or(d.range);
+                if let Some(e) = electrodes {
+                    d.electrodes = e.into_iter().take(64).collect();
+                }
+                self.persist_settings();
+            }
+            Command::MonitorSpectrogram { electrodes, db_min, db_max, auto } => {
+                let lock = match (db_min, db_max, auto) {
+                    (_, _, Some(true)) => None,
+                    (Some(a), Some(b), _) if crate::monitor::db_range_ok(a, b) => Some((a, b)),
+                    (None, None, _) => self.state.monitors.spectrogram.db_lock,
+                    _ => return Err(CoreError::InvalidArgs("db_min < db_max, both finite in [-200, 200] (or auto=true)".into())),
+                };
+                let d = &mut self.state.monitors.spectrogram;
+                d.db_lock = lock;
+                if let Some(e) = electrodes {
+                    d.electrodes = e.into_iter().take(64).collect();
+                }
+                self.persist_settings();
+            }
             Command::AnalysisExclude { channel, confirm, remember } => {
                 let dev = self.state.device.as_ref().ok_or_else(|| CoreError::Device("no device connected".into()))?;
                 if !dev.channels.contains(&channel) {
@@ -1803,10 +1835,12 @@ impl Session {
                 json!({ "connected": self.live.artifacts.is_some(), "status": self.live.artifacts.as_ref().map(|a| &a.status) })
             }
             Query::FeaturesGet => self.features_json()?,
-            Query::HistogramGet { seconds, bins, half_range_uv } => {
-                self.histogram_json(seconds.unwrap_or(2.0), bins.unwrap_or(64), half_range_uv.unwrap_or(100.0))?
+            Query::HistogramGet { seconds, bins, half_range_uv, end_s } => {
+                self.histogram_json(seconds.unwrap_or(2.0), bins.unwrap_or(64), half_range_uv.unwrap_or(100.0), *end_s)?
             }
-            Query::SpectrogramGet { channel, max_hz } => self.spectrogram_json(channel.as_deref(), max_hz.unwrap_or(50.0))?,
+            Query::SpectrogramGet { channel, seconds, max_hz } => {
+                self.spectrogram_json(channel.as_deref(), seconds.unwrap_or(30.0), max_hz.unwrap_or(50.0))?
+            }
             Query::RecordingStatus => json!({ "recording": s.recording }),
             Query::HistoryList => json!({ "location": self.state.history_location, "sessions": self.state.history }),
             Query::HistoryGet { id } => {
@@ -1934,7 +1968,7 @@ impl Session {
         Ok(json!({ "time": sig.time, "usable_pads": names, "features": out }))
     }
 
-    fn histogram_json(&self, seconds: f64, bins: usize, half_range: f64) -> Result<Reply, CoreError> {
+    fn histogram_json(&self, seconds: f64, bins: usize, half_range: f64, end_s: Option<f64>) -> Result<Reply, CoreError> {
         if !(seconds.is_finite() && seconds > 0.0 && seconds <= crate::signal::BUFFER_S) {
             return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {}]", crate::signal::BUFFER_S)));
         }
@@ -1951,24 +1985,39 @@ impl Session {
             .map(|(i, name)| json!({ "channel": name, "counts": nf_dsp::histogram(&sig.last(i, n, true), bins, half_range) }))
             .collect();
         let excluded: Vec<_> = self.state.analysis.excluded.iter().collect();
-        Ok(json!({ "time": sig.time, "bins": bins, "half_range_uv": half_range, "unit": "uV", "channels": channels, "excluded": excluded }))
+        let newest = sig.time.unwrap_or(0.0);
+        let end = end_s.filter(|e| e.is_finite()).map_or(newest, |e| e.min(newest));
+        let sel = self.state.analysis.eligible_of(&dev.channels, &self.state.monitors.histogram.selected(&dev.channels));
+        let pooled = crate::spectrum::histogram_pooled(sig, &sel, end - seconds, end, bins, half_range).map(|p| {
+            json!({ "start_s": p.start, "end_s": p.end, "counts": p.counts, "samples": p.samples, "std_uv": p.std_uv,
+                "channels": p.channels.iter().map(|&i| &dev.channels[i]).collect::<Vec<_>>() })
+        });
+        Ok(json!({ "time": sig.time, "bins": bins, "half_range_uv": half_range, "unit": "uV", "channels": channels,
+            "pooled": pooled, "pooling": "samples of all selected eligible channels (each mean-removed); waveforms are not averaged",
+            "excluded": excluded }))
     }
 
-    fn spectrogram_json(&self, channel: Option<&str>, max_hz: f64) -> Result<Reply, CoreError> {
-        if !(max_hz.is_finite() && (1.0..=nf_dsp::MAX_PSD_HZ).contains(&max_hz)) {
-            return Err(CoreError::InvalidArgs(format!("max_hz must be in [1, {}]", nf_dsp::MAX_PSD_HZ)));
+    fn spectrogram_json(&self, channel: Option<&str>, seconds: f64, max_hz: f64) -> Result<Reply, CoreError> {
+        if !(max_hz.is_finite() && (1.0..=crate::signal::SPEC_MAX_HZ).contains(&max_hz)) {
+            return Err(CoreError::InvalidArgs(format!("max_hz must be in [1, {}]", crate::signal::SPEC_MAX_HZ)));
+        }
+        let hist = crate::monitor::MonitorId::Spectrogram.history_s();
+        if !(seconds.is_finite() && seconds > 0.0 && seconds <= hist) {
+            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {hist}]")));
         }
         let (dev, sig) = self.signal()?;
-        let i = Self::channel_index(dev, channel)?.unwrap_or(self.state.channel);
-        if self.state.analysis.is_excluded(&dev.channels[i]) {
-            return Err(CoreError::InvalidArgs(format!("{} is excluded from analysis (raw.get still has it)", dev.channels[i])));
-        }
-        let df = 1.0 / crate::signal::WINDOW_S;
-        let keep = (max_hz / df).floor() as usize + 1;
-        let cols: Vec<_> = sig.spectrogram[i].iter().map(|c| &c[..keep.min(c.len())]).collect();
-        Ok(
-            json!({ "time": sig.time, "channel": dev.channels[i], "hop_s": SPEC_HOP_S, "df_hz": df, "unit": "dB re uV^2/Hz", "columns": cols }),
-        )
+        let chans = match Self::channel_index(dev, channel)? {
+            Some(i) if self.state.analysis.is_excluded(&dev.channels[i]) => {
+                return Err(CoreError::InvalidArgs(format!("{} is excluded from analysis (raw.get still has it)", dev.channels[i])));
+            }
+            Some(i) => vec![i],
+            None => self.state.analysis.eligible_of(&dev.channels, &self.state.monitors.spectrogram.selected(&dev.channels)),
+        };
+        let end = sig.spec_times.back().copied().unwrap_or(0.0);
+        let a = crate::spectrum::spectrogram_average(sig, &chans, end - seconds, end, max_hz);
+        let names: Vec<_> = chans.iter().map(|&i| &dev.channels[i]).collect();
+        Ok(json!({ "time": sig.time, "channels": names, "averaged": "linear power, then dB", "hop_s": SPEC_HOP_S, "df_hz": a.df,
+            "unit": "dB re uV^2/Hz", "times": a.times, "columns": a.cols, "excluded": self.state.analysis.excluded }))
     }
 
     fn signal(&self) -> Result<(&nf_types::DeviceInfo, &Signal), CoreError> {
@@ -2027,8 +2076,14 @@ impl Session {
                 let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
                 crate::rawtrace::raw_span(newest, s.monitors.raw.mode, s.monitors.viewport(id).window_s)
             }
-            (crate::monitor::MonitorId::PsdStrip, Some(a), Some(b)) => crate::monitor::Span::new(a.time, b.time),
-            (crate::monitor::MonitorId::Psd, _, _) => {
+            (id, Some(a), Some(b)) if id.overview_host().is_some() => crate::monitor::Span::new(a.time, b.time),
+            (crate::monitor::MonitorId::Spectrogram, _, _) => {
+                let g = self.live.signal.as_ref();
+                let newest = g.and_then(|g| g.spec_times.back().copied()).unwrap_or(s.time);
+                let oldest = g.and_then(|g| g.spec_times.front().copied()).unwrap_or(newest);
+                crate::monitor::Span::new(oldest, newest)
+            }
+            (crate::monitor::MonitorId::Psd | crate::monitor::MonitorId::Histogram, _, _) => {
                 let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
                 crate::monitor::Span::new((newest - crate::signal::BUFFER_S).max(0.0), newest)
             }
@@ -2078,7 +2133,10 @@ impl Session {
                 )
             })
             .collect();
-        serde_json::json!({ "monitors": views, "bands": m.bands, "raw": m.raw, "psd": m.psd, "scale": self.state.band_scale })
+        let overview: serde_json::Map<String, serde_json::Value> =
+            crate::monitor::MonitorId::WITH_OVERVIEW.into_iter().map(|id| (id.name().to_owned(), m.overview_on(id).into())).collect();
+        serde_json::json!({ "monitors": views, "bands": m.bands, "raw": m.raw, "psd": m.psd, "histogram": m.histogram,
+            "spectrogram": m.spectrogram, "overview": overview, "scale": self.state.band_scale })
     }
 
     fn analysis_json(&self) -> Reply {

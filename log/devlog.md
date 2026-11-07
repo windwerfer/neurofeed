@@ -84,3 +84,9 @@
 - Pause tooltip states the meaning: freezes live graphs only; recording and acquisition continue (open user decision).
 - Histogram/Spectrogram honor analysis exclusion; artifact detectors skip excluded pads; tests for blink contamination and no target-pair substitution.
 - Time axis: no ticks before t=0 (duplicate "0:00" in early PSD strip fixed).
+
+## 2026-11-07 – Overview + Histogram + Spectrogram
+- Shared overview widget (PSD strip refactored into it); toggles per view, defaults PSD+Spectrogram on.
+- Histogram: pooled eligible pads, 2/4/8 s epoch Follow/Inspect, ±50/100/200 µV, readout.
+- Spectrogram: 300 s linear per-channel history, averaged eligible pads, plasma + colour bar, dB auto/lock, readout.
+- Tests: tests/overview.rs (core), ui overview gestures, histogram/spectrogram UI.

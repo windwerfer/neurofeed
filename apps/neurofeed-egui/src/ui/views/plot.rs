@@ -1,31 +1,8 @@
 //! Shared drawing helpers: a grid of per-channel cards and an axis frame.
 
 use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Stroke, Vec2};
-use nf_core::{DeviceInfo, Session, Signal};
 
-/// Heading plus the live signal, or a hint when nothing is connected.
-pub fn header<'a>(ui: &mut egui::Ui, session: &'a Session, title: &str, note: &str) -> Option<(&'a DeviceInfo, &'a Signal)> {
-    if crate::ui::monitor::immersive(ui) {
-        return session.live_signal();
-    }
-    ui.horizontal(|ui| {
-        ui.heading(title);
-        ui.weak(note);
-    });
-    ui.separator();
-    let live = session.live_signal();
-    if live.is_none() {
-        ui.label(t!("plot-no-device-connected-use-connect"));
-    }
-    live
-}
-
-/// Lay out one card per channel and call `draw(painter, plot_rect, channel)`.
-pub fn cards(ui: &mut egui::Ui, names: &[String], draw: impl FnMut(&Painter, Rect, usize)) {
-    let _ = cards_resp(ui, names, draw);
-}
-
-/// [`cards`] that also returns the union of the card responses (drag sense).
+/// One card per channel calling `draw(painter, plot_rect, channel)`; returns the union of the card responses (drag sense).
 pub fn cards_resp(ui: &mut egui::Ui, names: &[String], mut draw: impl FnMut(&Painter, Rect, usize)) -> Option<egui::Response> {
     let mut all: Option<egui::Response> = None;
     let n = names.len().max(1);

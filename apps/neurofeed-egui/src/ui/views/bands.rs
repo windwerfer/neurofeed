@@ -37,6 +37,8 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
         scale_toggle(ui, state, out);
         ui.add_space(8.0);
         electrode_chips(ui, state, device, out);
+        ui.add_space(8.0);
+        crate::ui::overview::toggle(ui, state, MonitorId::Bands, out);
         ui.add_space(4.0);
         ui.menu_button("…", |ui| {
             ui.checkbox(&mut bars, t!("bands-bars-per-electrode"));
@@ -96,13 +98,20 @@ fn electrode_chips(ui: &mut egui::Ui, state: &AppState, device: &DeviceInfo, out
 type Pt = (f32, [Option<f32>; 5], bool);
 
 fn over_time(ui: &mut egui::Ui, state: &AppState, device: &DeviceInfo, span: Span, out: &mut Vec<Command>) {
-    let (rect, resp) = ui.allocate_exact_size(ui.available_size().max(Vec2::new(160.0, 120.0)), Sense::click_and_drag());
+    let ov_h = crate::ui::overview::height(ui, state, MonitorId::Bands, ui.available_height());
+    let (rect, resp) =
+        ui.allocate_exact_size((ui.available_size() - Vec2::new(0.0, ov_h)).max(Vec2::new(160.0, 120.0)), Sense::click_and_drag());
     let plot = Rect::from_min_max(rect.left_top() + Vec2::new(40.0, 16.0), rect.right_bottom() - Vec2::new(8.0, 18.0));
     let vp = state.monitors.viewport(MonitorId::Bands);
     monitor::interact(ui, &resp, plot, MonitorId::Bands, vp, out);
     let range = monitor::presented_range(ui, state, MonitorId::Bands, vp, span);
     // Display choice ∩ analysis-eligible; empty = a message, never all.
     let chans = state.analysis.eligible_of(&device.channels, &state.monitors.bands.selected(&device.channels));
+    if ov_h > 0.0 {
+        // Bands has full detail over its whole history: nothing shaded.
+        let host = crate::ui::overview::Host { id: MonitorId::Bands, range, detail_oldest: span.oldest_s, no_detail: String::new() };
+        crate::ui::overview::show(ui, state, &chans, &host, ov_h, out);
+    }
     if chans.is_empty() {
         monitor::no_eligible(ui, plot);
         return;
