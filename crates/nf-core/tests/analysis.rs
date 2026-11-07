@@ -157,3 +157,41 @@ fn quality_hint_appears_for_a_sustained_bad_pad_and_dismisses() {
     s.call("clock.advance", json!({ "seconds": 120.0 })).unwrap();
     assert_eq!(s.call("analysis.get", json!({})).unwrap()["hint"], Value::Null, "no nagging");
 }
+
+/// Blinks injected only on AF7: counted while AF7 is used, never once it is
+/// excluded (an excluded noisy pad cannot flag the eligible ones' seconds).
+fn blinks(exclude: bool) -> u64 {
+    let mut s = s("sim:muse");
+    s.call("sim.fault.add", json!({ "kind": "blink", "channels": ["AF7"] })).unwrap();
+    if exclude {
+        s.call("analysis.exclude", json!({ "channel": "AF7", "confirm": true })).unwrap();
+    }
+    s.call("feedback.start", json!({})).unwrap();
+    let mut n = 0;
+    for _ in 0..20 {
+        s.call("clock.advance", json!({ "seconds": 1.0 })).unwrap();
+        n += s.call("artifact.status", json!({})).unwrap()["status"]["blinks"].as_u64().unwrap_or(0);
+    }
+    n
+}
+
+#[test]
+fn excluded_pad_does_not_drive_artifact_gates() {
+    assert!(blinks(false) >= 3, "the injected blinks are seen on a used pad");
+    assert_eq!(blinks(true), 0, "excluded AF7 feeds no blink detector");
+}
+
+#[test]
+fn no_substitute_pads_when_the_target_pair_is_excluded() {
+    // Crown targets PO3/PO4; excluding both must not switch to other pads.
+    let mut s = s("sim:crown");
+    s.call("analysis.exclude", json!({ "channel": "PO3", "confirm": true })).unwrap();
+    s.call("analysis.exclude", json!({ "channel": "PO4", "confirm": true })).unwrap();
+    s.call("feedback.start", json!({})).unwrap();
+    s.call("clock.advance", json!({ "seconds": 4.0 })).unwrap();
+    let f = s.call("feedback.status", json!({})).unwrap().to_string();
+    assert!(f.contains("PO3 (excluded from analysis)") && f.contains("PO4 (excluded from analysis)"), "{f}");
+    for other in ["CP3", "C3", "F5", "F6", "C4", "CP4"] {
+        assert!(!f.contains(&format!("\"{other}\"")), "{other} substituted: {f}");
+    }
+}

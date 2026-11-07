@@ -28,3 +28,20 @@
    channel per connection. Tapping opens the Device dialog highlighting the
    control. It never excludes, opens, or dims anything by itself. Wording is
    about contact quality only.
+
+## Artifact gates and protocol audit (2026-11-07)
+
+- Excluded electrodes are never fed to the blink / jaw-clench / eye
+  detectors (`Artifacts.excluded`, synced from the session each packet
+  batch; their gamma is dropped). Movement (accelerometer) is unaffected.
+  Raw ring, recording and per-channel flags keep the excluded channel.
+- Histogram and Spectrogram UI views honor exclusion: excluded channels get
+  no histogram card; an excluded spectrogram channel shows "no eligible
+  electrode" (never another channel).
+- Protocol audit: every feedback feature (atr, tar, btr, alpha, theta,
+  beta, inhibits, stability) is a mean of relative band power over the
+  usable target pads; no protocol requires a pad *pair* (no asymmetry
+  feature). With one target pad excluded the engine uses the remaining
+  target pad — the same rule as a pad with bad quality. Excluding the whole
+  target pair never substitutes other electrodes: feedback reports the pads
+  as "(excluded from analysis)" and waits (tested on Crown PO3/PO4).

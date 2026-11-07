@@ -4,8 +4,9 @@
 mod-recover = Recover
 mod-discard = Discard
 topbar-toggle-sidebar = Toggle sidebar
-topbar-pause-resume = Pause / resume
+topbar-pause-resume = Pause graphs / resume: freezes the live graphs only. Recording and data acquisition continue in the background.
 topbar-record = Record
+topbar-record-tip = Start recording this session
 topbar-connect-device = Connect device
 topbar-battery = Battery
 topbar-device = Device

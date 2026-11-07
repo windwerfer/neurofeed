@@ -4,8 +4,9 @@
 mod-recover = Wiederherstellen
 mod-discard = Verwerfen
 topbar-toggle-sidebar = Seitenleiste ein/aus
-topbar-pause-resume = Pause / Fortsetzen
+topbar-pause-resume = Graphen anhalten / fortsetzen: friert nur die Live-Graphen ein. Aufnahme und Datenerfassung laufen im Hintergrund weiter.
 topbar-record = Aufnehmen
+topbar-record-tip = Aufnahme dieser Sitzung starten
 topbar-connect-device = Gerät verbinden
 topbar-battery = Akku
 topbar-device = Gerät

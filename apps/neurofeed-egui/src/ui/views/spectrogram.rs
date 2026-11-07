@@ -19,7 +19,9 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     };
     ui.horizontal(|ui| {
         for (i, name) in dev.channels.iter().enumerate() {
-            if ui.selectable_label(state.channel == i, name).clicked() {
+            let text =
+                if state.analysis.is_excluded(name) { egui::RichText::new(name).strikethrough().weak() } else { egui::RichText::new(name) };
+            if ui.selectable_label(state.channel == i, text).clicked() {
                 out.push(Command::ChannelSet { channel: name.clone() });
             }
         }
@@ -28,6 +30,12 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let max_back = 30.0 - vp.window_s;
     let back = vp.back_s(state.time, max_back);
     ui.separator();
+    // An excluded channel shows the explicit state, never another channel.
+    if dev.channels.get(state.channel).is_none_or(|n| state.analysis.is_excluded(n)) {
+        let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+        crate::ui::monitor::no_eligible(ui, rect);
+        return;
+    }
     let all: Vec<_> = sig.spectrogram.get(state.channel).map(|d| d.iter().cloned().collect()).unwrap_or_default();
     let per_s = nf_core::signal::SPEC_COLUMNS as f64 / 30.0;
     let end = all.len().saturating_sub((back * per_s) as usize);
@@ -73,4 +81,25 @@ fn colormap(db: f32) -> Color32 {
     let (a, b) = (stops[i], stops[i + 1]);
     let m = |u: f32, v: f32| (u + (v - u) * f) as u8;
     Color32::from_rgb(m(a.0, b.0), m(a.1, b.1), m(a.2, b.2))
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use nf_core::Session;
+    use serde_json::json;
+
+    #[test]
+    fn excluded_selected_channel_shows_no_eligible_not_another() {
+        let _lang = crate::i18n::lang_lock();
+        let mut s = Session::new();
+        s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
+        s.call("clock.advance", json!({ "seconds": 2.0 })).unwrap();
+        let none = t!("channels-none-eligible");
+        let show = |u: &mut egui::Ui, s: &Session| super::show(u, s, &mut Vec::new());
+        assert!(!crate::ui::views::histogram::tests::texts(&s, show).contains(&none));
+        let name = s.state().device.as_ref().unwrap().channels[s.state().channel].clone();
+        s.call("analysis.exclude", json!({ "channel": name, "confirm": true })).unwrap();
+        assert!(crate::ui::views::histogram::tests::texts(&s, show).contains(&none));
+    }
 }
