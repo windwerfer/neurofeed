@@ -8,7 +8,10 @@ use std::collections::VecDeque;
 /// Seconds of optical samples kept (legacy kept 1920 samples = 30 s @ 64 Hz).
 pub const PPG_BUFFER_S: f64 = 30.0;
 /// Estimates kept for the HR / SpO2 trend.
-pub const HISTORY_LEN: usize = 120;
+/// HR / SpO2 estimates kept (1 Hz while a pulse is found): one hour.
+pub const HISTORY_LEN: usize = 3600;
+/// Seconds of estimates kept (gaps without a pulse still count).
+pub const HISTORY_S: f64 = 3600.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct Estimate {
@@ -95,8 +98,32 @@ impl Optics {
 }
 
 fn push_capped(h: &mut VecDeque<Estimate>, e: Estimate) {
-    if h.len() >= HISTORY_LEN {
+    if h.capacity() < HISTORY_LEN {
+        h.reserve_exact(HISTORY_LEN - h.len());
+    }
+    while h.len() >= HISTORY_LEN || h.front().is_some_and(|f| f.time < e.time - HISTORY_S) {
         h.pop_front();
     }
     h.push_back(e);
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+
+    #[test]
+    fn estimates_keep_one_hour_bounded() {
+        let mut h = VecDeque::new();
+        for i in 0..5000 {
+            push_capped(&mut h, Estimate { time: f64::from(i), value: 60.0, confidence: 1.0 });
+        }
+        assert_eq!(h.len(), HISTORY_LEN);
+        assert_eq!(h.front().map(|e| e.time), Some(1400.0));
+        assert_eq!(h.capacity(), HISTORY_LEN, "{} slots", h.capacity());
+        // 3600 × 24 B = 86 400 B per series.
+        assert_eq!(h.capacity() * std::mem::size_of::<Estimate>(), 86_400);
+        // A long pause without pulse: age eviction, not only count.
+        push_capped(&mut h, Estimate { time: 9000.0, value: 60.0, confidence: 1.0 });
+        assert!(h.front().is_some_and(|e| e.time >= 9000.0 - HISTORY_S));
+    }
 }

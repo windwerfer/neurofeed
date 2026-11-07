@@ -50,8 +50,8 @@ fn imported_eeg_gets_live_bands() {
     let bytes = nf_core::import::base64_decode(&data).unwrap();
     let p = Session::new().import_bytes(&bytes, "rec.edf", 0).unwrap();
     let bands = p.imported.records.iter().filter(|r| matches!(r, nf_core::import::Record::Bands { electrode: 0, .. })).count();
-    // Live cadence: a snapshot every 0.1 s once the 1 s window is full.
-    assert!((40..=52).contains(&bands), "{bands} band snapshots");
+    // Live cadence: a snapshot every 0.25 s once the 1 s window is full.
+    assert!((15..=22).contains(&bands), "{bands} band snapshots");
 }
 
 #[test]

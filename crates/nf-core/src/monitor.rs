@@ -45,12 +45,25 @@ impl MonitorId {
     /// Presets and limits follow the legacy app (`viewport_controller.dart`).
     pub fn spec(self) -> WindowSpec {
         match self {
-            MonitorId::Bands => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 1800.0 },
+            MonitorId::Bands => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 3600.0 },
             MonitorId::RawEeg => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 8.0, min_s: 1.0, max_s: 10.0 },
             MonitorId::Spectrogram => WindowSpec { presets: &[10.0, 20.0, 30.0], default_s: 20.0, min_s: 5.0, max_s: 30.0 },
             MonitorId::HeartOverview => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 120.0 },
             MonitorId::HeartDetail => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 10.0, min_s: 2.0, max_s: 120.0 },
             MonitorId::Movement => WindowSpec { presets: &[15.0, 30.0, 60.0], default_s: 30.0, min_s: 5.0, max_s: 60.0 },
+        }
+    }
+
+    /// Seconds of live history kept in memory for this monitor (recording
+    /// or not; a recording saves from its start, it does not extend this).
+    pub fn history_s(self) -> f64 {
+        match self {
+            MonitorId::Bands => crate::state::BandHistory::SECONDS,
+            MonitorId::RawEeg => crate::signal::BUFFER_S,
+            MonitorId::Spectrogram => crate::signal::SPEC_HOP_S * crate::signal::SPEC_COLUMNS as f64,
+            MonitorId::HeartOverview => crate::optics::HISTORY_S,
+            MonitorId::HeartDetail => crate::optics::PPG_BUFFER_S,
+            MonitorId::Movement => crate::side::SIDE_S,
         }
     }
 
@@ -414,7 +427,7 @@ mod tests {
         v.set_window(bands(), 1.0);
         assert_eq!(v.window_s, 5.0);
         v.set_window(bands(), 1e9);
-        assert_eq!(v.window_s, 1800.0);
+        assert_eq!(v.window_s, 3600.0);
         v.set_window(bands(), f64::NAN);
         assert_eq!(v.window_s, 30.0);
     }
@@ -444,12 +457,12 @@ mod tests {
     fn zoom_out_clamps_to_cap_and_data() {
         let mut v = Viewport { window_s: 60.0, end_s: Some(60.0) };
         v.zoom(bands(), SPAN, 0.001, 0.0);
-        assert_eq!(v.window_s, 1800.0);
+        assert_eq!(v.window_s, 3600.0);
         // less data than the window: right edge sits at newest.
         assert_eq!(v.end_s, Some(100.0));
         v.zoom(bands(), SPAN, 0.0, 0.5);
         v.zoom(bands(), SPAN, f64::INFINITY, 0.5);
-        assert_eq!(v.window_s, 1800.0);
+        assert_eq!(v.window_s, 3600.0);
     }
 
     #[test]

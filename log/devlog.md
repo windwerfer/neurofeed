@@ -69,3 +69,7 @@
 - Simulator chosen last reconnects after restart; Disconnect persists (`auto_suspended`).
 - Bands Follow glides (`FollowClock`, 1 s lead, vsync repaint only while live + Follow). Measured sim cadence: 10 Hz snapshots, 94–141 ms apart; the old repaint was 100 ms, unsynced.
 - Perf overlay setting `perf_overlay`.
+
+## 2026-11-07 — 4 Hz bands, 1 h low-rate history
+- BAND_INTERVAL_S 0.25; `Signal::with_band_interval` (1 Hz tested). BandHistory 3600 s/14,400; HR/SpO2 3600 s.
+- audio guard test made phase-independent (chime times + ≥20 s cooldown).

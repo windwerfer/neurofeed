@@ -264,3 +264,17 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 
 ## 2026-11-07 — signal ring 5 min
 - Owner: keep 5 min. `signal::BUFFER_S` = 300 s, preallocated exactly per ring (raw f32 + filtered f32 + flag u8 = 9 B/sample/channel): 691 200 B per channel at 256 Hz, ≈2.8 MB Muse (4 ch), ≈5.5 MB Crown (8 ch), measured by `Signal::heap_bytes` in `tests/monitor.rs`. Before, `vec![VecDeque::with_capacity(cap); n]` gave clones without capacity that grew by doubling past the cap. Ring reads use `VecDeque::range` (no skip scans); Raw EEG copies only the visible window via `Signal::slice`. `raw.get` is capped at `RAW_GET_MAX_S` = 60 s (payload); `histogram.get` reads up to 300 s (transient copy ≤ 300 KB per channel). Muse AUX and accelerometer stay at 30 s (`side::SIDE_S`). DSP windows are unchanged (1 s bands/PSD, 2 s filter re-warm).
+
+## 2026-11-07 — Band snapshots at 4 Hz (local estimator)
+- Locally computed bands (Muse, Crown raw, simulators, imports) are snapshotted
+  every `signal::BAND_INTERVAL_S` = 0.25 s (was 0.1 s) on a source-time grid.
+  The 1 s analysis window, filters, PSD math and smoothing time constants are
+  unchanged; bursts produce one snapshot of the newest window, not a backlog.
+- One internal parameter: `Signal::with_band_interval(s)` (clamped 0.25..=1 s)
+  supports 1 Hz through the same scheduler; no user setting, no second path.
+- Native cadence (not configurable): the app currently has no native Crown
+  band-event ingestion — Crown bands are computed locally from raw EEG. When
+  native Crown band events are ingested they must keep device timestamps and
+  cadence (not resampled). HR/SpO2 estimates keep their own ~1 Hz cadence;
+  render FPS is independent (FollowClock).
+- 1 h band history: 14,400 snapshots cap + 3600 s age eviction.

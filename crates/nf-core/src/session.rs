@@ -1986,7 +1986,7 @@ impl Session {
                 (
                     id.name().to_owned(),
                     serde_json::json!({ "window_s": v.window_s, "mode": mode, "start_s": a, "end_s": b,
-                        "presets": spec.presets, "min_s": spec.min_s, "max_s": spec.max_s }),
+                        "presets": spec.presets, "min_s": spec.min_s, "max_s": spec.max_s, "history_s": id.history_s() }),
                 )
             })
             .collect();

@@ -211,3 +211,40 @@ fn signal_slice_reads_only_the_window() {
     let (v, _) = sig.slice(99, 0, 10, true);
     assert!(v.is_empty());
 }
+
+#[test]
+fn band_history_keeps_one_hour_bounded() {
+    for n in [4usize, 8] {
+        let mut h = nf_core::BandHistory::default();
+        // 4 Hz snapshots for 75 min (true cadence, no gaps).
+        for i in 0..18_000 {
+            h.push(nf_core::BandSnapshot { time: f64::from(i) * 0.25, powers: vec![[0.0; 5]; n] });
+        }
+        assert_eq!(h.len(), nf_core::BandHistory::CAPACITY);
+        let (old, new) = (h.oldest().unwrap().time, h.latest().unwrap().time);
+        assert!((new - old - 3599.75).abs() < 1e-6, "{old}..{new}");
+        // Measured: ring slots (32 B each) + per-snapshot powers (20 B per channel).
+        let bytes = h.heap_bytes();
+        assert_eq!(bytes, 14_400 * (std::mem::size_of::<nf_core::BandSnapshot>() + 20 * n), "{n} ch: {bytes} B");
+        // Gaps (no snapshot) don't stretch the span past the hour.
+        h.push(nf_core::BandSnapshot { time: 9000.0, powers: vec![[0.0; 5]; n] });
+        assert!(h.oldest().unwrap().time >= 9000.0 - 3600.0);
+    }
+}
+
+#[test]
+fn monitor_get_reports_live_history() {
+    let mut s = Session::new();
+    let g = s.call("monitor.get", json!({})).unwrap();
+    let m = &g["monitors"];
+    assert_eq!(m["bands"]["history_s"], 3600.0);
+    assert_eq!(m["bands"]["max_s"], 3600.0);
+    assert_eq!(m["raw_eeg"]["history_s"], 300.0);
+    assert_eq!(m["heart_overview"]["history_s"], 3600.0);
+    assert_eq!(m["heart_detail"]["history_s"], 30.0);
+    assert_eq!(m["movement"]["history_s"], 30.0);
+    assert_eq!(m["spectrogram"]["history_s"], 30.0);
+    // Bands zooms out to the full hour.
+    s.call("monitor.zoom", json!({ "monitor": "bands", "factor": 0.0001 })).unwrap();
+    assert_eq!(s.call("monitor.get", json!({})).unwrap()["monitors"]["bands"]["window_s"], 3600.0);
+}
