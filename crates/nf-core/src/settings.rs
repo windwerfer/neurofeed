@@ -224,6 +224,12 @@ pub struct Persisted {
     pub raw_mode: crate::monitor::RawMode,
     #[serde(default)]
     pub raw_scale: crate::monitor::RawScale,
+    /// Remembered analysis exclusions: device id → channel names.
+    #[serde(default)]
+    pub excluded_channels: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    /// PSD monitor: frequency range and electrodes shown.
+    #[serde(default)]
+    pub psd: crate::monitor::PsdDisplay,
 }
 
 impl Default for Persisted {
@@ -251,6 +257,8 @@ impl Persisted {
             hidden_bands: s.monitors.bands.hidden_bands.clone(),
             raw_mode: s.monitors.raw.mode,
             raw_scale: s.monitors.raw.scale,
+            excluded_channels: s.analysis.remembered.clone(),
+            psd: s.monitors.psd.clone(),
         }
     }
 
@@ -270,6 +278,8 @@ impl Persisted {
         s.monitors.bands.hidden_bands = self.hidden_bands;
         s.monitors.raw.mode = self.raw_mode;
         s.monitors.raw.scale = self.raw_scale;
+        s.analysis.remembered = self.excluded_channels;
+        s.monitors.psd = self.psd;
     }
 }
 

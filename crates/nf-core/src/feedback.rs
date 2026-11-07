@@ -69,6 +69,8 @@ pub struct Observation {
     pub artifact: Option<nf_feedback::Artifact>,
     /// Fresh AI guard probability (selected scorer).
     pub ai: Option<f64>,
+    /// Target pads excluded from analysis (left out of `names`/`pads`).
+    pub excluded: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -412,6 +414,11 @@ impl Trainer {
             .zip(&obs.quality)
             .map(|(n, &q)| PadFit { name: n.clone(), quality: q, good: obs.connected && q >= SIGNAL_GOOD })
             .collect();
+        // Every target pad excluded: never green, and the reason names them.
+        if obs.names.is_empty() && !obs.excluded.is_empty() {
+            self.pads =
+                obs.excluded.iter().map(|n| PadFit { name: format!("{n} (excluded from analysis)"), quality: 0.0, good: false }).collect();
+        }
         let all_green = obs.connected && !self.pads.is_empty() && self.pads.iter().all(|p| p.good);
         let bad: Vec<String> = self.pads.iter().filter(|p| !p.good).map(|p| p.name.clone()).collect();
         if !obs.connected {

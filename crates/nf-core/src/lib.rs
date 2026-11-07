@@ -15,6 +15,7 @@ pub const APP_VERSION: &str = match option_env!("NEUROFEED_VERSION") {
 };
 
 pub mod ai;
+pub mod analysis;
 pub mod artifacts;
 pub mod audio;
 pub mod autoconnect;
@@ -35,6 +36,7 @@ mod session;
 pub mod settings;
 pub mod side;
 pub mod signal;
+pub mod spectrum;
 mod state;
 pub mod streaming;
 pub mod trust;

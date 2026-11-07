@@ -191,6 +191,8 @@ pub struct AppState {
     pub auto: crate::autoconnect::AutoReconnect,
     /// Monitor viewports (Follow/Inspect, window) and Bands display choices.
     pub monitors: crate::monitor::Monitors,
+    /// Analysis channel exclusions (global) and the contact-quality hint.
+    pub analysis: crate::analysis::Analysis,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -225,6 +227,7 @@ impl Default for AppState {
             recovery: None,
             faults: Vec::new(),
             monitors: crate::monitor::Monitors::default(),
+            analysis: crate::analysis::Analysis::default(),
             revision: 0,
         }
     }

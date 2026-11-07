@@ -57,7 +57,7 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
         scale_menu(ui, state, out);
         ui.add_space(8.0);
         let sel = state.monitors.raw.selected(&channels);
-        monitor::electrode_chips(ui, &channels, &sel, &t!("raw-electrode-hint"), out, |names| Command::MonitorRaw {
+        monitor::channel_selector(ui, &channels, &sel, &state.analysis, false, out, |names| Command::MonitorRaw {
             mode: None,
             scale: None,
             electrodes: Some(names),
@@ -82,7 +82,12 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
             let skip = ((ch_t - range.1 - 0.5).max(0.0) * rate).floor() as usize;
             let (values, flags) = sig.slice(ch, skip, need, true);
             Pane {
-                name: dev.channels[ch].clone(),
+                // Raw keeps excluded channels, marked (analysis ignores them).
+                name: if state.analysis.is_excluded(&dev.channels[ch]) {
+                    t!("raw-excluded-pane", name = dev.channels[ch].clone())
+                } else {
+                    dev.channels[ch].clone()
+                },
                 end_t: ch_t - skip as f64 / rate,
                 rate: sig.rate,
                 values,

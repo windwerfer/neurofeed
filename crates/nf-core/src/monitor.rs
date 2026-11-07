@@ -21,6 +21,10 @@ pub enum MonitorId {
     HeartOverview,
     HeartDetail,
     Movement,
+    /// PSD analysis epoch (2/4/8 s of raw EEG).
+    Psd,
+    /// Bands context strip under the PSD.
+    PsdStrip,
 }
 
 /// Window presets and zoom limits of one monitor (seconds).
@@ -33,13 +37,15 @@ pub struct WindowSpec {
 }
 
 impl MonitorId {
-    pub const ALL: [MonitorId; 6] = [
+    pub const ALL: [MonitorId; 8] = [
         MonitorId::Bands,
         MonitorId::RawEeg,
         MonitorId::Spectrogram,
         MonitorId::HeartOverview,
         MonitorId::HeartDetail,
         MonitorId::Movement,
+        MonitorId::Psd,
+        MonitorId::PsdStrip,
     ];
 
     /// Presets and limits follow the legacy app (`viewport_controller.dart`).
@@ -51,6 +57,9 @@ impl MonitorId {
             MonitorId::HeartOverview => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 120.0 },
             MonitorId::HeartDetail => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 10.0, min_s: 2.0, max_s: 120.0 },
             MonitorId::Movement => WindowSpec { presets: &[15.0, 30.0, 60.0], default_s: 30.0, min_s: 5.0, max_s: 60.0 },
+            // Flutter `histogramPsdWindowOptions` / `psdDefaultWindowSeconds`.
+            MonitorId::Psd => WindowSpec { presets: &[2.0, 4.0, 8.0], default_s: 4.0, min_s: 2.0, max_s: 8.0 },
+            MonitorId::PsdStrip => WindowSpec { presets: &[30.0, 60.0, 90.0, 120.0, 300.0], default_s: 90.0, min_s: 10.0, max_s: 3600.0 },
         }
     }
 
@@ -64,6 +73,8 @@ impl MonitorId {
             MonitorId::HeartOverview => crate::optics::HISTORY_S,
             MonitorId::HeartDetail => crate::optics::PPG_BUFFER_S,
             MonitorId::Movement => crate::side::SIDE_S,
+            MonitorId::Psd => crate::signal::BUFFER_S,
+            MonitorId::PsdStrip => crate::state::BandHistory::SECONDS,
         }
     }
 
@@ -75,6 +86,8 @@ impl MonitorId {
             MonitorId::HeartOverview => "heart_overview",
             MonitorId::HeartDetail => "heart_detail",
             MonitorId::Movement => "movement",
+            MonitorId::Psd => "psd",
+            MonitorId::PsdStrip => "psd_strip",
         }
     }
 }
@@ -247,6 +260,52 @@ impl RawScale {
     }
 }
 
+/// PSD frequency axis (Flutter `PsdHzRange`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+pub enum PsdRange {
+    #[default]
+    #[serde(rename = "60")]
+    Hz60,
+    #[serde(rename = "100")]
+    Hz100,
+}
+
+impl PsdRange {
+    pub fn max_hz(self) -> f64 {
+        match self {
+            PsdRange::Hz60 => 60.0,
+            PsdRange::Hz100 => 100.0,
+        }
+    }
+}
+
+/// What the PSD shows: frequency range (saved) and the electrodes in the
+/// average (by name, empty = all; saved).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct PsdDisplay {
+    #[serde(default)]
+    pub electrodes: Vec<String>,
+    #[serde(default)]
+    pub range: PsdRange,
+}
+
+impl PsdDisplay {
+    pub fn selected(&self, channels: &[String]) -> Vec<usize> {
+        select(&self.electrodes, channels)
+    }
+}
+
+/// Indices of `names` in `channels` (all when none match: a new device).
+/// Display choice only; analysis eligibility is applied on top.
+pub fn select(names: &[String], channels: &[String]) -> Vec<usize> {
+    let picked: Vec<usize> = channels.iter().enumerate().filter(|(_, n)| names.contains(n)).map(|(i, _)| i).collect();
+    if picked.is_empty() {
+        (0..channels.len()).collect()
+    } else {
+        picked
+    }
+}
+
 /// What Raw EEG shows. `mode` and `scale` persist; the electrode choice
 /// (by name, empty = all, like Bands) lasts for the session.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -300,6 +359,7 @@ pub struct Monitors {
     viewports: BTreeMap<MonitorId, Viewport>,
     pub bands: BandsDisplay,
     pub raw: RawDisplay,
+    pub psd: PsdDisplay,
 }
 
 impl Monitors {

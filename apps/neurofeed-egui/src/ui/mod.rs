@@ -8,6 +8,7 @@ mod onboarding;
 mod perf;
 mod quality;
 mod sidebar;
+pub mod spectrum;
 pub mod theme;
 mod topbar;
 mod views;
@@ -120,7 +121,7 @@ fn show_safe(root: &mut egui::Ui, session: &Session, error: Option<&str>, shell:
         onboarding::show(ctx, &mut out);
     }
     if state.settings.perf_overlay {
-        perf::show(ctx, shell.cpu_s);
+        perf::show(ctx, shell.cpu_s, state.time);
     }
     out
 }

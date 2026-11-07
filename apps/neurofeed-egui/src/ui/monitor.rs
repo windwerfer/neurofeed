@@ -230,36 +230,105 @@ pub fn interact_with(ui: &Ui, resp: &Response, plot: Rect, id: MonitorId, vp: Vi
     }
 }
 
-/// Electrode chips (at least one stays on); `apply` turns the chosen names
-/// (empty = all) into the screen's command. Names come from the device.
-pub fn electrode_chips(
+/// The next display selection after toggling channel `i` (names; empty =
+/// all). `None` when it would leave nothing selected.
+pub fn toggled(channels: &[String], selected: &[usize], i: usize) -> Option<Vec<String>> {
+    let on = selected.contains(&i);
+    let mut next: Vec<usize> = selected.iter().copied().filter(|&c| c != i).collect();
+    if !on {
+        next.push(i);
+    }
+    if next.is_empty() {
+        return None;
+    }
+    Some(if next.len() == channels.len() {
+        Vec::new()
+    } else {
+        channels.iter().enumerate().filter(|(c, _)| next.contains(c)).map(|(_, n)| n.clone()).collect()
+    })
+}
+
+/// Chips or one "Channels ▾" dropdown?  Dropdown in the compact layout or
+/// when the chips would take more than ~45 % of the row.
+pub fn use_dropdown(ui: &Ui, channels: &[String]) -> bool {
+    if layout::current(ui.ctx()).is_compact() {
+        return true;
+    }
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let w: f32 =
+        channels.iter().map(|n| ui.fonts_mut(|f| f.layout_no_wrap(n.clone(), font.clone(), egui::Color32::WHITE).size().x) + 14.0).sum();
+    w > ui.available_width() * 0.45
+}
+
+/// Shared per-graph channel selector (Bands, Raw EEG, PSD): a **display**
+/// choice, separate from the global analysis exclusion. Excluded channels
+/// are marked `⊘`; on derived graphs (`derived`) they contribute nothing
+/// even when selected. `apply` turns the chosen names (empty = all) into
+/// the screen's command. At least one stays selected.
+pub fn channel_selector(
     ui: &mut Ui,
     channels: &[String],
     selected: &[usize],
-    hint: &str,
+    analysis: &nf_core::analysis::Analysis,
+    derived: bool,
     out: &mut Vec<Command>,
     apply: impl Fn(Vec<String>) -> Command,
 ) {
+    // Excluded: struck through and dimmed (no special glyphs: font coverage).
+    let label = |n: &String| {
+        let t = egui::RichText::new(n.clone());
+        if analysis.is_excluded(n) {
+            t.strikethrough().weak()
+        } else {
+            t
+        }
+    };
+    let tip = |n: &String| {
+        if !analysis.is_excluded(n) {
+            t!("channels-hint")
+        } else if derived {
+            t!("channels-excluded-derived", channel = n.clone())
+        } else {
+            t!("channels-excluded-raw", channel = n.clone())
+        }
+    };
+    if use_dropdown(ui, channels) {
+        let n_on = if derived { analysis.eligible_of(channels, selected).len() } else { selected.len() };
+        let text = t!("channels-dropdown", n = n_on, total = channels.len());
+        egui::ComboBox::from_id_salt(("nf-channels", ui.scope_id())).selected_text(text).show_ui(ui, |ui| {
+            for (i, n) in channels.iter().enumerate() {
+                let mut on = selected.contains(&i);
+                if ui.checkbox(&mut on, label(n)).on_hover_text(tip(n)).changed() {
+                    if let Some(names) = toggled(channels, selected, i) {
+                        out.push(apply(names));
+                    }
+                }
+            }
+        });
+        return;
+    }
     ui.spacing_mut().item_spacing.x = 2.0;
-    for (i, name) in channels.iter().enumerate() {
+    for (i, n) in channels.iter().enumerate() {
         let on = selected.contains(&i);
-        if ui.selectable_label(on, name).on_hover_text(hint).clicked() {
-            let mut next: Vec<usize> = selected.iter().copied().filter(|&c| c != i).collect();
-            if !on {
-                next.push(i);
+        if ui.selectable_label(on, label(n)).on_hover_text(tip(n)).clicked() {
+            if let Some(names) = toggled(channels, selected, i) {
+                out.push(apply(names));
             }
-            if next.is_empty() {
-                continue;
-            }
-            let names = if next.len() == channels.len() {
-                Vec::new()
-            } else {
-                channels.iter().enumerate().filter(|(c, _)| next.contains(c)).map(|(_, n)| n.clone()).collect()
-            };
-            out.push(apply(names));
         }
     }
     ui.spacing_mut().item_spacing.x = 8.0;
+}
+
+/// "No eligible electrode" in the middle of `rect` (derived graphs when
+/// the selection has only excluded channels: no zeros, no fallback).
+pub fn no_eligible(ui: &Ui, rect: Rect) {
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        t!("channels-none-eligible"),
+        egui::FontId::proportional(14.0),
+        ui.visuals().weak_text_color(),
+    );
 }
 
 /// `start–end` while inspecting.

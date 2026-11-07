@@ -360,3 +360,14 @@ exactly on the slot start leaves the window (x = 0); with the cursor in the
 last ~2 % of the slot, real slot-start samples hidden under the sweep's
 blank gap reappear at the left edge; samples newer than the presented
 cursor (≤ 0.25 s follow lead) appear right of it right away.
+
+### PSD (done 2026-11-07)
+One averaged spectrum (dB re µV²/Hz of the linear Welch mean) of the selected,
+analysis-eligible electrodes over the epoch (2/4/8 s, Follow/Inspect; Inspect
+computes the requested window), band shading (app band edges 1–4–8–13–30–44 Hz),
+alpha peak marker, tap/hover hairline readout, 0–60/0–100 Hz. Below (7:3) the
+Bands strip (`psd_strip` viewport) with the epoch shaded: drag the shade to move
+the epoch, drag elsewhere pans, pinch/Ctrl+wheel zooms, tap places the epoch.
+Strip time older than the 5 min raw ring is dimmed. Spectrum cached per 1/8 s of
+epoch movement; strip reads only its visible snapshots. `ui/spectrum.rs` is the
+base for the Histogram later. Landscape: graphs only.

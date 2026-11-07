@@ -78,6 +78,12 @@ impl Artifacts {
         }
     }
 
+    /// Current movement score (g) without evaluating a second; `None`
+    /// without an accelerometer.
+    pub fn movement_score(&self) -> Option<f64> {
+        self.movement.as_ref().map(MovementDetector::score)
+    }
+
     /// Evaluate one second.
     pub fn second(&mut self, t: f64) -> Option<Artifact> {
         let g = self.gesture.tick();

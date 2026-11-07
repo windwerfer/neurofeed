@@ -80,6 +80,36 @@ pub enum Command {
         #[serde(default)]
         electrodes: Option<Vec<String>>,
     },
+    /// PSD display: frequency range (60 | 100 Hz) and electrodes in the
+    /// average (empty = all). Display only: analysis exclusions still apply.
+    #[serde(rename = "monitor.psd")]
+    MonitorPsd {
+        #[serde(default)]
+        range: Option<crate::monitor::PsdRange>,
+        #[serde(default)]
+        electrodes: Option<Vec<String>>,
+    },
+    /// Exclude one channel from **all** analysis (feedback, every derived
+    /// graph, features, AI input) for this connection; raw data, recordings
+    /// and Raw EEG keep it. `confirm` must be true (the UI asks first);
+    /// `remember` also stores it for this device id + channel name.
+    #[serde(rename = "analysis.exclude")]
+    AnalysisExclude {
+        channel: String,
+        confirm: bool,
+        #[serde(default)]
+        remember: bool,
+    },
+    /// Include a channel in analysis again (immediate). Also forgets a
+    /// remembered exclusion of it for this device.
+    #[serde(rename = "analysis.include")]
+    AnalysisInclude { channel: String },
+    /// Dismiss the contact-quality hint (not shown again this connection).
+    #[serde(rename = "analysis.hint_dismiss")]
+    AnalysisHintDismiss,
+    /// Acknowledge the "remembered exclusions restored" notice.
+    #[serde(rename = "analysis.ack_restored")]
+    AnalysisAckRestored,
     /// Connect a device by id (`sim:muse`, `sim:crown`, ...).
     #[serde(rename = "device.connect")]
     DeviceConnect { id: String },
@@ -364,6 +394,27 @@ pub enum Query {
         /// Conditioned (high-pass + notch) instead of as received; default true.
         #[serde(default)]
         filtered: Option<bool>,
+    },
+    /// Analysis exclusions, eligible channels, remembered ones, the hint.
+    #[serde(rename = "analysis.get")]
+    AnalysisGet,
+    /// One averaged spectrum (Welch, linear mean, then dB) of the eligible
+    /// selected electrodes over a window of the raw ring.
+    #[serde(rename = "psd.average")]
+    PsdAverage {
+        /// Window length, 2..=8 s; default: the PSD monitor's.
+        #[serde(default)]
+        window_s: Option<f64>,
+        /// Window end (session seconds); default: the PSD viewport's end
+        /// (Inspect) or the newest sample (Follow).
+        #[serde(default)]
+        end_s: Option<f64>,
+        /// Electrodes (empty / missing = the PSD monitor's selection).
+        #[serde(default)]
+        electrodes: Option<Vec<String>>,
+        /// Upper frequency, 1..=100 Hz; default: the PSD range.
+        #[serde(default)]
+        max_hz: Option<f64>,
     },
     /// Power spectral density of the last 1 s window per channel.
     #[serde(rename = "psd.get")]
@@ -741,6 +792,13 @@ pub const SPECS: &[CommandSpec] = &[
     spec("monitor.pan", "Pan monitor", "monitor", false, "Move a monitor's time window by seconds; enters Inspect.", always),
     spec("monitor.display", "Bands display", "monitor", false, "Electrodes in the Bands average (empty = all) and hidden bands.", always),
     spec("monitor.raw", "Raw EEG display", "monitor", false, "Raw EEG: sweep or scroll traces, Y scale (auto, ±50/100/200 µV) and shown electrodes (empty = all).", always),
+    spec("monitor.psd", "PSD display", "monitor", false, "PSD: frequency range (60 or 100 Hz) and electrodes in the average (empty = all).", always),
+    spec("analysis.get", "Analysis channels", "analysis", true, "Per channel: excluded from analysis, remembered for this device, eligible; restored notice and quality hint.", always),
+    spec("analysis.exclude", "Exclude channel", "analysis", false, "Exclude a channel from feedback and all derived graphs (raw/recording keep it). Needs confirm=true; remember=true stores it for this device.", needs_device),
+    spec("analysis.include", "Include channel", "analysis", false, "Use a channel in analysis again; forgets a remembered exclusion.", needs_device),
+    spec("analysis.hint_dismiss", "Dismiss quality hint", "analysis", false, "Hide the contact-quality hint for this connection.", always),
+    spec("analysis.ack_restored", "Acknowledge restored", "analysis", false, "Hide the notice that remembered exclusions were restored.", always),
+    spec("psd.average", "Averaged spectrum", "signal", true, "One Welch spectrum (linear mean over eligible selected electrodes, then dB) for a 2–8 s window of the last 5 min.", has_signal),
     spec("device.list", "List devices", "device", true, "Connectable devices (simulators and registered providers).", always),
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
     spec("device.scan", "Scan", "device", false, "Timed discovery (Muse BLE, Crown OSC). The Device dialog watches until it closes instead.", can_scan),
@@ -1038,6 +1096,13 @@ fn base_examples() -> Vec<Request> {
             electrodes: Some(vec!["TP9".into(), "TP10".into()]),
         }),
         Q(Query::MonitorGet),
+        C(Command::MonitorPsd { range: Some(crate::monitor::PsdRange::Hz100), electrodes: Some(vec!["AF7".into(), "AF8".into()]) }),
+        Q(Query::AnalysisGet),
+        C(Command::AnalysisExclude { channel: "AF7".into(), confirm: true, remember: false }),
+        C(Command::AnalysisInclude { channel: "AF7".into() }),
+        C(Command::AnalysisHintDismiss),
+        C(Command::AnalysisAckRestored),
+        Q(Query::PsdAverage { window_s: Some(4.0), end_s: None, electrodes: None, max_hz: Some(60.0) }),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
         C(Command::DeviceDisconnect),
         C(Command::DeviceDialog { open: true }),
