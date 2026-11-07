@@ -1901,8 +1901,8 @@ impl Session {
     }
 
     fn raw_json(&self, seconds: f64, filtered: bool) -> Result<Reply, CoreError> {
-        if !(seconds.is_finite() && seconds > 0.0 && seconds <= crate::signal::BUFFER_S) {
-            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {}]", crate::signal::BUFFER_S)));
+        if !(seconds.is_finite() && seconds > 0.0 && seconds <= crate::signal::RAW_GET_MAX_S) {
+            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {}]", crate::signal::RAW_GET_MAX_S)));
         }
         let (dev, sig) = self.signal()?;
         let n = (seconds * sig.rate).round() as usize;

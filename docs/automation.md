@@ -178,7 +178,7 @@ neurofeed-cli run monitor.raw '{"electrodes":["TP9","TP10"]}'             # show
 ```
 
 Monitor ids are `bands`, `raw_eeg`, `spectrogram`, `heart_overview`, `heart_detail`
-and `movement`. Bands and Raw EEG draw from this viewport (Raw EEG: the 60 s signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
+and `movement`. Bands and Raw EEG draw from this viewport (Raw EEG: the 5 min signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
 in later milestones). Zoom keeps the time under `focal` (0 = left edge, 1 = right
 edge) in place. Zooming at the right edge keeps Follow, while any other focal point
 enters Inspect. The window is clamped to the monitor's range (Bands 5 s to 30 min)

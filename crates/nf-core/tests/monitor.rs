@@ -147,16 +147,67 @@ fn raw_inspect_can_pan_back_through_the_ring() {
 fn raw_inspect_stays_frozen_while_live_data_arrives() {
     let mut s = Session::new();
     s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
-    s.call("clock.advance", json!({ "seconds": 70.0 })).unwrap();
+    s.call("clock.advance", json!({ "seconds": 320.0 })).unwrap();
     s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": -20.0 })).unwrap();
     let get = |s: &mut Session| s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["end_s"].as_f64().unwrap();
     let end = get(&mut s);
     s.call("clock.advance", json!({ "seconds": 5.0 })).unwrap();
     assert!((get(&mut s) - end).abs() < 1e-9, "frozen while new samples arrive");
     // Once the ring evicts the window's start, the next pan clamps to the oldest data.
-    s.call("clock.advance", json!({ "seconds": 40.0 })).unwrap();
+    s.call("clock.advance", json!({ "seconds": 300.0 })).unwrap();
     s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": 0.0 })).unwrap();
     let newest = s.live_signal().and_then(|(_, g)| g.time).unwrap();
     let start = s.call("monitor.get", json!({})).unwrap()["monitors"]["raw_eeg"]["start_s"].as_f64().unwrap();
     assert!((start - (newest - nf_core::signal::BUFFER_S)).abs() < 1e-6, "history boundary");
+}
+
+#[test]
+fn raw_ring_holds_five_minutes_and_stays_bounded() {
+    for (id, n) in [("sim:muse", 4usize), ("sim:crown", 8)] {
+        let mut s = Session::new();
+        s.call("device.connect", json!({ "id": id })).unwrap();
+        s.call("clock.advance", json!({ "seconds": 330.0 })).unwrap();
+        let (_, sig) = s.live_signal().unwrap();
+        let cap = sig.capacity_samples();
+        assert_eq!(cap, (nf_core::signal::BUFFER_S * sig.rate).ceil() as usize);
+        assert_eq!(cap, 76_800, "300 s at 256 Hz");
+        let bytes = sig.heap_bytes();
+        assert_eq!(bytes, n * cap * 9, "{id}: exact preallocation, no growth past the cap ({bytes} B)");
+        let before = bytes;
+        s.call("clock.advance", json!({ "seconds": 60.0 })).unwrap();
+        let (_, sig) = s.live_signal().unwrap();
+        assert_eq!(sig.heap_bytes(), before, "evicts instead of growing");
+        assert!(sig.last(0, usize::MAX, true).len() <= cap);
+        // Pan back almost the whole ring with the default 8 s window.
+        s.call("monitor.viewport", json!({ "monitor": "raw_eeg", "mode": "inspect" })).unwrap();
+        s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": -290.0 })).unwrap();
+        let g = s.call("monitor.get", json!({})).unwrap();
+        let newest = s.live_signal().and_then(|(_, g)| g.time).unwrap();
+        let end = g["monitors"]["raw_eeg"]["end_s"].as_f64().unwrap();
+        assert!((newest - end - 290.0).abs() < 1e-6, "{id}: {}", newest - end);
+        s.call("monitor.pan", json!({ "monitor": "raw_eeg", "seconds": -100.0 })).unwrap();
+        let g = s.call("monitor.get", json!({})).unwrap();
+        assert!((g["monitors"]["raw_eeg"]["start_s"].as_f64().unwrap() - (newest - 300.0)).abs() < 1e-6, "clamped at the oldest sample");
+        // Payload limits: raw.get to 60 s, histogram over the ring.
+        assert!(s.call("raw.get", json!({ "seconds": 60.0 })).is_ok());
+        assert!(s.call("raw.get", json!({ "seconds": 61.0 })).is_err());
+        assert!(s.call("histogram.get", json!({ "seconds": 300.0 })).is_ok());
+        assert!(s.call("histogram.get", json!({ "seconds": 301.0 })).is_err());
+    }
+}
+
+#[test]
+fn signal_slice_reads_only_the_window() {
+    let mut s = Session::new();
+    s.call("device.connect", json!({ "id": "sim:crown" })).unwrap();
+    s.call("clock.advance", json!({ "seconds": 20.0 })).unwrap();
+    let (_, sig) = s.live_signal().unwrap();
+    let all = sig.last(3, usize::MAX, true);
+    let (v, f) = sig.slice(3, 256, 512, true);
+    assert_eq!((v.len(), f.len()), (512, 512));
+    assert_eq!(v[..], all[all.len() - 768..all.len() - 256]);
+    let (v, _) = sig.slice(3, all.len() + 5, 10, true);
+    assert!(v.is_empty());
+    let (v, _) = sig.slice(99, 0, 10, true);
+    assert!(v.is_empty());
 }
