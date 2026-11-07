@@ -351,20 +351,46 @@ pub fn time_grid(p: &egui::Painter, plot: Rect, range: (f64, f64), v: &egui::Vis
     let (start, end) = range;
     let target = ((plot.width() / 110.0).floor() as usize).clamp(2, 10);
     let step = m::tick_step_s(end - start, target);
-    let mut t = (start / step).ceil() * step;
-    let mut n = 0;
-    while t <= end && n < 64 {
+    let mut last = String::new();
+    for t in ticks(range, step) {
         let x = x_of(plot, range, t);
         p.line_segment([Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())], theme::grid(v));
-        p.text(Pos2::new(x, plot.bottom() + 3.0), Align2::CENTER_TOP, m::mmss(t), FontId::proportional(10.0), theme::axis_text(v));
-        t += step;
-        n += 1;
+        let label = m::mmss(t);
+        if label != last {
+            p.text(Pos2::new(x, plot.bottom() + 3.0), Align2::CENTER_TOP, &label, FontId::proportional(10.0), theme::axis_text(v));
+            last = label;
+        }
     }
+}
+
+/// Tick times in `range`, never before the session start (t < 0 would all
+/// read "0:00" when the window is wider than the data so far).
+fn ticks(range: (f64, f64), step: f64) -> Vec<f64> {
+    if !(step.is_finite() && step > 0.0) {
+        return Vec::new();
+    }
+    let mut t = (range.0.max(0.0) / step).ceil() * step;
+    let mut out = Vec::new();
+    while t <= range.1 && out.len() < 64 {
+        out.push(t);
+        t += step;
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn early_ticks_start_at_zero_once() {
+        // 90 s window, 20 s of data: no repeated "0:00" for negative times.
+        let t = ticks((-70.0, 20.0), 10.0);
+        assert_eq!(t, vec![0.0, 10.0, 20.0]);
+        let labels: Vec<_> = t.iter().map(|&t| m::mmss(t)).collect();
+        assert_eq!(labels.iter().filter(|l| *l == "0:00").count(), 1);
+        assert!(ticks((0.0, 1.0), 0.0).is_empty());
+    }
 
     #[test]
     fn window_labels() {

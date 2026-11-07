@@ -31,6 +31,9 @@ pub struct Artifacts {
     pub status: ArtifactStatus,
     /// Settings: emit eye up/down marks (experimental, off by default).
     pub eye_markers: bool,
+    /// Per electrode: excluded from analysis → never fed to the blink /
+    /// clench / eye detectors (the raw ring and recording keep it).
+    pub excluded: Vec<bool>,
     /// Gesture marks of the last evaluated second (drained by the session).
     pub marks: Vec<crate::trust::Mark>,
     last_blink: Option<f64>,
@@ -53,6 +56,7 @@ impl Artifacts {
             gesture: GestureDetector::new(info.channels.len(), pads(info, &FRONTAL), pads(info, &TEMPORAL)),
             status: ArtifactStatus::default(),
             eye_markers: false,
+            excluded: Vec::new(),
             marks: Vec::new(),
             last_blink: None,
             last_clench: None,
@@ -68,13 +72,20 @@ impl Artifacts {
     }
 
     pub fn eeg(&mut self, p: &EegPacket) {
+        if self.excluded.get(usize::from(p.electrode)).copied().unwrap_or(false) {
+            return;
+        }
         self.gesture.feed_eeg(usize::from(p.electrode), &p.samples);
     }
 
     /// Per-second gamma power per electrode (from the band snapshot).
     pub fn gamma(&mut self, powers: &[[f32; 5]]) {
         for (e, b) in powers.iter().enumerate() {
-            self.gesture.feed_gamma(e, f64::from(b[4]));
+            if self.excluded.get(e).copied().unwrap_or(false) {
+                self.gesture.forget_gamma(e);
+            } else {
+                self.gesture.feed_gamma(e, f64::from(b[4]));
+            }
         }
     }
 

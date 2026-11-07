@@ -194,6 +194,14 @@ impl GestureDetector {
         }
     }
 
+    /// Drop an electrode's gamma (excluded from analysis): clench uses the
+    /// remaining temporal pads only.
+    pub fn forget_gamma(&mut self, electrode: usize) {
+        if let Some(g) = self.gamma.get_mut(electrode) {
+            *g = None;
+        }
+    }
+
     /// Drain the current second.
     pub fn tick(&mut self) -> GestureReport {
         let gs: Vec<f64> = self.temporal.iter().filter_map(|e| self.gamma.get(*e).copied().flatten()).collect();

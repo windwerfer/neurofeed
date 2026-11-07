@@ -853,6 +853,9 @@ impl Session {
     fn route_side_streams(&mut self, packets: &[EegPacket], optical: &[PpgPacket], accel: &[AccelPacket]) {
         if let Some(a) = self.live.artifacts.as_mut() {
             accel.iter().for_each(|p| a.accel(p));
+            if let Some(d) = &self.state.device {
+                a.excluded = d.channels.iter().map(|n| self.state.analysis.is_excluded(n)).collect();
+            }
             packets.iter().for_each(|p| a.eeg(p));
         }
         if let Some(r) = self.live.recorder.as_mut() {

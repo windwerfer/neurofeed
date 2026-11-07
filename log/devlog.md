@@ -78,3 +78,9 @@
 - nf_core::analysis (exclude/include/remember/hint), nf_core::spectrum (Welch average), commands analysis.* / monitor.psd / psd.average.
 - Device dialog "Use in analysis" switches + confirm; top bar exclusion count + hint; notch removed; Pause/Record reorder.
 - PSD view: spectrum widget (ui/spectrum.rs) + Bands strip.
+
+## 2026-11-07 – Exclusion review corrections
+- Record button: red painted dot + normal-colour "Record" label, tooltip.
+- Pause tooltip states the meaning: freezes live graphs only; recording and acquisition continue (open user decision).
+- Histogram/Spectrogram honor analysis exclusion; artifact detectors skip excluded pads; tests for blink contamination and no target-pair substitution.
+- Time axis: no ticks before t=0 (duplicate "0:00" in early PSD strip fixed).

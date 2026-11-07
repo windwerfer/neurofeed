@@ -48,7 +48,7 @@ fn compact(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &mu
                     if ui.add_sized([TOUCH + 24.0, TOUCH - 8.0], egui::Button::new(format!("⏹ {:.0}s", r.duration))).clicked() {
                         out.push(Command::RecordingStop);
                     }
-                } else if record_dot(ui, state.device.is_some()).clicked() {
+                } else if record_dot(ui, state.device.is_some(), TOUCH - 8.0).clicked() {
                     out.push(Command::RecordingStart { wall_clock_unix_ms: None });
                 }
                 if pause_visible(state) {
@@ -124,7 +124,7 @@ fn stream_controls(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) 
                 out.push(Command::HistoryDelete { id, confirm: true });
             }
         }
-        if record_dot(ui, state.device.is_some()).clicked() {
+        if record_dot(ui, state.device.is_some(), 22.0).clicked() {
             out.push(Command::RecordingStart { wall_clock_unix_ms: None });
         }
     }
@@ -142,10 +142,13 @@ pub fn pause_visible(state: &AppState) -> bool {
 }
 
 /// The Record button: a red dot, no text (tooltip names it).
-fn record_dot(ui: &mut egui::Ui, enabled: bool) -> egui::Response {
-    let r = ui.add_enabled(enabled, egui::Button::new("").min_size(egui::vec2(28.0, 22.0))).on_hover_text(t!("topbar-record"));
+/// "● Record": only the dot is red (painted, the font has no ● glyph); the
+/// label keeps the normal text colour. `h` = button height (touch on mobile).
+fn record_dot(ui: &mut egui::Ui, enabled: bool, h: f32) -> egui::Response {
+    let label = format!("     {}", t!("topbar-record"));
+    let r = ui.add_enabled(enabled, egui::Button::new(label).min_size(egui::vec2(28.0, h))).on_hover_text(t!("topbar-record-tip"));
     let col = if enabled { theme::RECORD_RED } else { theme::RECORD_RED.gamma_multiply(0.4) };
-    ui.painter().circle_filled(r.rect.center(), 6.0, col);
+    ui.painter().circle_filled(egui::pos2(r.rect.left() + 13.0, r.rect.center().y), 5.5, col);
     r
 }
 
