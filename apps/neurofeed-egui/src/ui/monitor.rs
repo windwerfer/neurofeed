@@ -63,7 +63,7 @@ pub fn toolbar(ui: &mut Ui, state: &AppState, id: MonitorId, out: &mut Vec<Comma
                 ui.horizontal_centered(|ui| {
                     follow_inspect(ui, id, vp, out);
                     ui.add_space(8.0);
-                    window_menu(ui, id, vp, out);
+                    let _ = window_menu(ui, id, vp, out);
                     ui.add_space(8.0);
                     extras(ui, out);
                     ui.add_space(12.0);
@@ -101,10 +101,10 @@ fn follow_inspect(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Comman
     }
 }
 
-fn window_menu(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) {
+pub fn window_menu(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>) -> Response {
     let spec = id.spec();
-    let preset = spec.presets.iter().any(|p| (p - vp.window_s).abs() < 1e-6);
-    let text = if preset { window_label(vp.window_s) } else { t!("monitor-custom", s = window_label(vp.window_s)) };
+    // Arbitrary zooms show their length alone (no "custom" suffix).
+    let text = window_label(vp.window_s);
     egui::ComboBox::from_id_salt(("nf_window", id.name()))
         .selected_text(text)
         .width(64.0)
@@ -116,7 +116,7 @@ fn window_menu(ui: &mut Ui, id: MonitorId, vp: Viewport, out: &mut Vec<Command>)
             }
         })
         .response
-        .on_hover_text(t!("monitor-window-hint"));
+        .on_hover_text(t!("monitor-window-hint"))
 }
 
 /// A view-specific right edge for leaving Follow (Raw EEG's sweep slot);

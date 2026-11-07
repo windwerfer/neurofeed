@@ -163,3 +163,77 @@ fn spectrogram_gap_leaves_missing_columns() {
     assert!(gap > 2.0, "a dropout is a hole, not filled: max step {gap}");
     assert!(t.windows(2).all(|w| w[1] > w[0]));
 }
+
+fn view(s: &mut Session, id: &str) -> serde_json::Value {
+    s.call("monitor.get", json!({})).unwrap()["monitors"][id].clone()
+}
+
+#[test]
+fn host_follow_reengages_its_overview_only() {
+    let mut s = live("sim:muse", 400.0);
+    s.call("monitor.pan", json!({ "monitor": "bands_overview", "seconds": -120.0 })).unwrap();
+    s.call("monitor.pan", json!({ "monitor": "psd_strip", "seconds": -120.0 })).unwrap();
+    s.call("monitor.pan", json!({ "monitor": "bands", "seconds": -60.0 })).unwrap();
+    assert_eq!(view(&mut s, "bands_overview")["mode"], "inspect", "overview pan alone stays independent");
+    s.call("monitor.viewport", json!({ "monitor": "bands", "mode": "follow" })).unwrap();
+    assert_eq!(view(&mut s, "bands")["mode"], "follow");
+    assert_eq!(view(&mut s, "bands_overview")["mode"], "follow", "explicit Follow resets both");
+    assert_eq!(view(&mut s, "psd_strip")["mode"], "inspect", "other views untouched");
+}
+
+#[test]
+fn overview_never_narrower_than_its_host() {
+    let mut s = live("sim:muse", 100.0);
+    s.call("monitor.zoom", json!({ "monitor": "bands_overview", "factor": 100.0 })).unwrap();
+    assert_eq!(view(&mut s, "bands_overview")["window_s"], 10.0);
+    s.call("monitor.viewport", json!({ "monitor": "bands", "window_s": 120.0 })).unwrap();
+    assert_eq!(view(&mut s, "bands_overview")["window_s"], 180.0);
+    s.call("monitor.zoom", json!({ "monitor": "bands", "factor": 0.0001 })).unwrap();
+    assert_eq!(view(&mut s, "bands_overview")["window_s"], 3600.0);
+}
+
+#[test]
+fn bookmarks_add_go_dedupe_bound_expire_and_reset() {
+    let mut s = live("sim:muse", 400.0);
+    let id =
+        s.call("monitor.bookmark_add", json!({ "monitor": "raw_eeg", "end_s": 380.0, "window_s": 4.0 })).unwrap()["id"].as_u64().unwrap();
+    let dup =
+        s.call("monitor.bookmark_add", json!({ "monitor": "raw_eeg", "end_s": 380.2, "window_s": 4.0 })).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(id, dup, "duplicate");
+    s.call("monitor.bookmark_go", json!({ "monitor": "raw_eeg", "id": id })).unwrap();
+    let r = view(&mut s, "raw_eeg");
+    assert_eq!((r["mode"].as_str(), r["window_s"].as_f64(), r["end_s"].as_f64()), (Some("inspect"), Some(4.0), Some(380.0)));
+    assert_eq!(view(&mut s, "bands")["mode"], "follow", "other views untouched");
+    // Expired: older than the 5 min ring → kept, marked, not jumped to.
+    s.call("clock.advance", json!({ "seconds": 400.0 })).unwrap();
+    let b = &s.call("monitor.get", json!({})).unwrap()["bookmarks"]["raw_eeg"][0];
+    assert_eq!(b["available"], false);
+    assert!(s.call("monitor.bookmark_go", json!({ "monitor": "raw_eeg", "id": id })).is_err());
+    // Bounded: oldest dropped.
+    for k in 0..10 {
+        s.call("monitor.bookmark_add", json!({ "monitor": "bands", "end_s": 100.0 + f64::from(k) * 10.0, "window_s": 30.0 })).unwrap();
+    }
+    let list = s.call("monitor.get", json!({})).unwrap()["bookmarks"]["bands"].clone();
+    assert_eq!(list.as_array().unwrap().len(), nf_core::monitor::MAX_BOOKMARKS);
+    assert_eq!(list[0]["end_s"], 120.0);
+    assert!(s.call("monitor.bookmark_add", json!({ "monitor": "movement" })).is_err());
+    assert!(s.call("monitor.bookmark_remove", json!({ "monitor": "bands", "id": 9999 })).is_err());
+    let first = list[0]["id"].as_u64().unwrap();
+    s.call("monitor.bookmark_remove", json!({ "monitor": "bands", "id": first })).unwrap();
+    // New connection: all cleared; never persisted.
+    s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
+    let all = s.call("monitor.get", json!({})).unwrap()["bookmarks"].clone();
+    assert!(all.as_object().unwrap().values().all(|v| v.as_array().unwrap().is_empty()), "{all}");
+    assert!(reload(&s).state().monitors.bookmarks.is_empty());
+}
+
+#[test]
+fn bookmark_default_is_the_shown_window_and_reveals_in_overview() {
+    let mut s = live("sim:muse", 600.0);
+    s.call("monitor.viewport", json!({ "monitor": "bands", "window_s": 60.0, "mode": "inspect", "end_s": 200.0 })).unwrap();
+    let id = s.call("monitor.bookmark_add", json!({ "monitor": "bands" })).unwrap()["id"].as_u64().unwrap();
+    s.call("monitor.viewport", json!({ "monitor": "bands", "mode": "follow" })).unwrap();
+    s.call("monitor.bookmark_go", json!({ "monitor": "bands", "id": id })).unwrap();
+    let o = view(&mut s, "bands_overview");
+    assert!(o["start_s"].as_f64().unwrap() <= 140.0 && o["end_s"].as_f64().unwrap() >= 200.0, "{o}");
+}

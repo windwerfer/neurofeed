@@ -197,7 +197,19 @@ neurofeed-cli run monitor.viewport '{"monitor":"spectrogram","window_s":120}'  #
 neurofeed-cli run spectrogram.get '{"seconds":60,"max_hz":60}'             # averaged selection; '{"channel":"AF8"}' = one pad
 neurofeed-cli run monitor.overview '{"monitor":"bands","on":true}'          # per view: bands|raw_eeg|histogram|psd|spectrogram
 neurofeed-cli run monitor.pan '{"monitor":"bands_overview","seconds":-60}'  # an overview's own pan/zoom
+neurofeed-cli run monitor.viewport '{"monitor":"bands_overview","window_s":600}'  # overview span (in-graph menu)
+neurofeed-cli run monitor.bookmark_add '{"monitor":"bands"}'               # bookmark the shown window → {"id":n}
+neurofeed-cli run monitor.bookmark_go '{"monitor":"bands","id":1}'          # that window length, Inspect at its end
+neurofeed-cli run monitor.bookmark_remove '{"monitor":"bands","id":1}'
 ```
+
+Bookmarks are session-local (never saved), at most 8 per view (oldest dropped; a
+duplicate within 0.5 s returns the existing id), cleared on connect/disconnect, and
+listed in `monitor.get` under `bookmarks` with `available` (false once the window is
+older than the view's retained data; `monitor.bookmark_go` then errors instead of
+jumping). An explicit host Follow (`monitor.viewport` mode follow) also returns that
+view's overview to Follow; the overview is widened to at least 1.5× a larger host
+window. Panning only the overview keeps it independent until the next Follow.
 
 Histogram pooling: every valid sample of every selected eligible pad, each pad's
 window mean removed; waveforms are never averaged (anti-phase pads would cancel).

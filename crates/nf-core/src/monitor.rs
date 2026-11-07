@@ -104,9 +104,12 @@ impl MonitorId {
             | MonitorId::BandsOverview
             | MonitorId::RawOverview
             | MonitorId::HistogramOverview
-            | MonitorId::SpectrogramOverview => {
-                WindowSpec { presets: &[30.0, 60.0, 90.0, 120.0, 300.0], default_s: 90.0, min_s: 10.0, max_s: 3600.0 }
-            }
+            | MonitorId::SpectrogramOverview => WindowSpec {
+                presets: &[30.0, 60.0, 90.0, 120.0, 300.0, 600.0, 1800.0, 3600.0],
+                default_s: 90.0,
+                min_s: 10.0,
+                max_s: 3600.0,
+            },
         }
     }
 
@@ -471,6 +474,29 @@ pub fn db_range_ok(lo: f32, hi: f32) -> bool {
     lo.is_finite() && hi.is_finite() && lo < hi && lo >= -200.0 && hi <= 200.0
 }
 
+/// Bookmarks kept per view (oldest dropped beyond this).
+pub const MAX_BOOKMARKS: usize = 8;
+/// Two bookmarks closer than this (same window) are the same bookmark.
+pub const BOOKMARK_DUP_S: f64 = 0.5;
+
+/// A saved host window (Overview long-press): session-local, cleared on a
+/// new connection; never persisted (stream times mean nothing later).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Bookmark {
+    pub id: u32,
+    /// Window end and length (session s): restoring both makes the
+    /// comparison reproducible.
+    pub end_s: f64,
+    pub window_s: f64,
+}
+
+impl Bookmark {
+    /// Is the bookmarked window still in the host's retained data?
+    pub fn available(&self, span: Span) -> bool {
+        self.end_s - self.window_s >= span.oldest_s - 1e-6 && self.end_s <= span.newest_s + span.ahead_s + 1e-6
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Monitors {
     viewports: BTreeMap<MonitorId, Viewport>,
@@ -481,9 +507,48 @@ pub struct Monitors {
     pub spectrogram: SpectrogramDisplay,
     /// Overview shown per view; missing = [`MonitorId::overview_default`].
     pub overview: BTreeMap<MonitorId, bool>,
+    /// Session-local bookmarks per host view, oldest first.
+    pub bookmarks: BTreeMap<MonitorId, Vec<Bookmark>>,
+    next_bookmark: u32,
 }
 
 impl Monitors {
+    /// Add a bookmark (a duplicate returns the existing one; beyond
+    /// [`MAX_BOOKMARKS`] the oldest is dropped). Returns its id.
+    pub fn bookmark_add(&mut self, host: MonitorId, end_s: f64, window_s: f64) -> u32 {
+        let list = self.bookmarks.entry(host).or_default();
+        if let Some(b) = list.iter().find(|b| (b.end_s - end_s).abs() < BOOKMARK_DUP_S && (b.window_s - window_s).abs() < 1e-6) {
+            return b.id;
+        }
+        self.next_bookmark += 1;
+        let id = self.next_bookmark;
+        list.push(Bookmark { id, end_s, window_s });
+        if list.len() > MAX_BOOKMARKS {
+            list.remove(0);
+        }
+        id
+    }
+
+    pub fn bookmark_remove(&mut self, host: MonitorId, id: u32) -> bool {
+        let Some(list) = self.bookmarks.get_mut(&host) else { return false };
+        let n = list.len();
+        list.retain(|b| b.id != id);
+        list.len() != n
+    }
+
+    pub fn bookmark(&self, host: MonitorId, id: u32) -> Option<Bookmark> {
+        self.bookmarks.get(&host)?.iter().find(|b| b.id == id).copied()
+    }
+
+    pub fn bookmarks_of(&self, host: MonitorId) -> &[Bookmark] {
+        self.bookmarks.get(&host).map_or(&[], Vec::as_slice)
+    }
+
+    /// New connection: stream times restart, old bookmarks are meaningless.
+    pub fn clear_bookmarks(&mut self) {
+        self.bookmarks.clear();
+    }
+
     /// Is the overview timeline of view `id` on?
     pub fn overview_on(&self, id: MonitorId) -> bool {
         id.overview().is_some() && self.overview.get(&id).copied().unwrap_or_else(|| id.overview_default())

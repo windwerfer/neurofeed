@@ -5,7 +5,7 @@ pub(crate) mod bands;
 mod devices;
 mod feedback;
 mod heart;
-mod histogram;
+pub(crate) mod histogram;
 mod history;
 mod import;
 /// egui temp-data key mirroring the gesture-markers setting.

@@ -115,6 +115,22 @@ pub enum Command {
         #[serde(default)]
         auto: Option<bool>,
     },
+    /// Bookmark a view's window (default: what it shows now; Overview
+    /// long-press). Session-local, at most 8 per view, cleared on connect.
+    #[serde(rename = "monitor.bookmark_add")]
+    MonitorBookmarkAdd {
+        monitor: crate::monitor::MonitorId,
+        #[serde(default)]
+        end_s: Option<f64>,
+        #[serde(default)]
+        window_s: Option<f64>,
+    },
+    /// Jump a view to a bookmark (its window length + Inspect at its end);
+    /// error when its data is no longer retained. Other views unchanged.
+    #[serde(rename = "monitor.bookmark_go")]
+    MonitorBookmarkGo { monitor: crate::monitor::MonitorId, id: u32 },
+    #[serde(rename = "monitor.bookmark_remove")]
+    MonitorBookmarkRemove { monitor: crate::monitor::MonitorId, id: u32 },
     /// Exclude one channel from **all** analysis (feedback, every derived
     /// graph, features, AI input) for this connection; raw data, recordings
     /// and Raw EEG keep it. `confirm` must be true (the UI asks first);
@@ -830,6 +846,9 @@ pub const SPECS: &[CommandSpec] = &[
     spec("monitor.overview", "Overview timeline", "monitor", false, "Show/hide a view's overview timeline (saved per view; default on for psd and spectrogram).", always),
     spec("monitor.histogram", "Histogram display", "monitor", false, "Histogram: µV range (50/100/200) and electrodes pooled (empty = all).", always),
     spec("monitor.spectrogram", "Spectrogram display", "monitor", false, "Spectrogram: electrodes averaged (empty = all); lock the dB colour range (db_min, db_max) or auto.", always),
+    spec("monitor.bookmark_add", "Add bookmark", "monitor", false, "Bookmark a view's window (default: the shown one); session-local, max 8 per view, cleared on connect.", always),
+    spec("monitor.bookmark_go", "Go to bookmark", "monitor", false, "Show a bookmarked window (length + Inspect at its end) in that view only; error if no longer retained.", always),
+    spec("monitor.bookmark_remove", "Remove bookmark", "monitor", false, "Remove a view's bookmark by id.", always),
     spec("analysis.get", "Analysis channels", "analysis", true, "Per channel: excluded from analysis, remembered for this device, eligible; restored notice and quality hint.", always),
     spec("analysis.exclude", "Exclude channel", "analysis", false, "Exclude a channel from feedback and all derived graphs (raw/recording keep it). Needs confirm=true; remember=true stores it for this device.", needs_device),
     spec("analysis.include", "Include channel", "analysis", false, "Use a channel in analysis again; forgets a remembered exclusion.", needs_device),
@@ -1137,6 +1156,9 @@ fn base_examples() -> Vec<Request> {
         C(Command::MonitorOverview { monitor: crate::monitor::MonitorId::Bands, on: true }),
         C(Command::MonitorHistogram { range: Some(crate::monitor::HistRange::Uv200), electrodes: Some(vec!["AF7".into()]) }),
         C(Command::MonitorSpectrogram { electrodes: None, db_min: Some(-20.0), db_max: Some(30.0), auto: None }),
+        C(Command::MonitorBookmarkAdd { monitor: crate::monitor::MonitorId::Bands, end_s: Some(60.0), window_s: Some(30.0) }),
+        C(Command::MonitorBookmarkGo { monitor: crate::monitor::MonitorId::Bands, id: 1 }),
+        C(Command::MonitorBookmarkRemove { monitor: crate::monitor::MonitorId::Bands, id: 1 }),
         Q(Query::AnalysisGet),
         C(Command::AnalysisExclude { channel: "AF7".into(), confirm: true, remember: false }),
         C(Command::AnalysisInclude { channel: "AF7".into() }),
