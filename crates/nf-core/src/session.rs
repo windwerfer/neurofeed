@@ -12,6 +12,28 @@ use nf_sim::SimProvider;
 use nf_types::{AccelPacket, Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
 
 /// One poll of the device: EEG, optical, accelerometer.
+/// Longest raw PPG slice one `ppg.get` returns (bounded output).
+pub const PPG_GET_MAX_S: f64 = 60.0;
+
+fn mean_json(o: &crate::optics::Optics, s: crate::optics::Series) -> serde_json::Value {
+    let m = o.mean(s);
+    json!({ "value": m.value(), "count": m.count })
+}
+
+/// Data range of the HR timeline (the 1 Hz summary) and of the pulse
+/// waveform (the raw 5 min detail), ending at the presented "now".
+fn heart_span(id: crate::monitor::MonitorId, o: &crate::optics::Optics, now: f64) -> crate::monitor::Span {
+    let newest = o.view_time.or(o.time).unwrap_or(now);
+    let oldest = match id {
+        crate::monitor::MonitorId::HeartDetail => o.wave_span().map_or(newest, |w| w.0),
+        _ => {
+            let est = o.hr.front().map(|e| e.time).into_iter().chain(o.spo2.front().map(|e| e.time)).reduce(f64::min);
+            est.into_iter().chain(o.wave_span().map(|w| w.0)).reduce(f64::min).unwrap_or(newest)
+        }
+    };
+    crate::monitor::Span::new(oldest.min(newest), newest)
+}
+
 type Polled = (Vec<EegPacket>, Vec<PpgPacket>, Vec<AccelPacket>);
 use serde::Serialize;
 use serde_json::json;
@@ -866,9 +888,12 @@ impl Session {
             optical.iter().for_each(|p| self.live.streamer.ppg(p));
             accel.iter().for_each(|p| self.live.streamer.accel(p));
         }
-        if !self.state.paused {
-            if let Some(o) = self.live.optics.as_mut() {
-                optical.iter().for_each(|p| o.push(p));
+        // Optics always ingest (the recording's HR/SpO2 means must not miss
+        // a paused stretch); Pause only freezes what the HR view presents.
+        if let Some(o) = self.live.optics.as_mut() {
+            optical.iter().for_each(|p| o.push(p));
+            if !self.state.paused {
+                o.view_time = o.time;
             }
         }
     }
@@ -1140,6 +1165,9 @@ impl Session {
         self.live.next_checkpoint = self.state.time + crate::recovery::CHECKPOINT_S;
         let r = Recorder::start(dev, self.state.time, wall_clock_unix_ms);
         self.emit(Event::RecordingStarted { device: r.info.device.clone() });
+        if let Some(o) = self.live.optics.as_mut() {
+            o.begin_run(self.state.time);
+        }
         self.state.recording = Some(r.info.clone());
         self.live.recorder = Some(r);
         if let Some(sig) = self.live.signal.as_mut() {
@@ -1150,6 +1178,9 @@ impl Session {
 
     fn stop_recording(&mut self, reason: &str) {
         if let Some(r) = self.live.recorder.take() {
+            if let Some(o) = self.live.optics.as_mut() {
+                o.end_run();
+            }
             if let Some(sig) = self.live.signal.as_mut() {
                 if sig.lock(false) {
                     let (a, d) = (mains_name(sig.applied()).into(), mains_name(sig.detected()).into());
@@ -1243,6 +1274,9 @@ impl Session {
                 let (spec, span) = (monitor.spec(), self.monitor_span(monitor));
                 self.with_viewport(monitor, |v| v.zoom(spec, span, factor, focal.unwrap_or(1.0)));
                 self.sync_overview(monitor);
+                if monitor == crate::monitor::MonitorId::HeartDetail {
+                    self.reveal_in_overview(monitor);
+                }
             }
             Command::MonitorBookmarkAdd { monitor, end_s, window_s } => {
                 if monitor.overview().is_none() {
@@ -1276,6 +1310,16 @@ impl Session {
             Command::MonitorPan { monitor, seconds } => {
                 let span = self.monitor_span(monitor);
                 self.with_viewport(monitor, |v| v.pan(span, seconds));
+                // The HR timeline keeps the panned waveform window in view.
+                if monitor == crate::monitor::MonitorId::HeartDetail {
+                    self.reveal_in_overview(monitor);
+                }
+            }
+            Command::MonitorHeart { waveform } => {
+                if let Some(w) = waveform {
+                    self.state.monitors.heart.waveform = w;
+                }
+                self.persist_settings();
             }
             Command::MonitorDisplay { electrodes, hidden_bands } => {
                 if let Some(e) = electrodes {
@@ -1303,7 +1347,7 @@ impl Session {
                 self.persist_settings();
             }
             Command::MonitorOverview { monitor, on } => {
-                if monitor.overview().is_none() {
+                if monitor.overview().is_none() || monitor == crate::monitor::MonitorId::HeartDetail {
                     return Err(CoreError::InvalidArgs(format!(
                         "{} has no overview (bands, raw_eeg, histogram, psd, spectrogram)",
                         monitor.name()
@@ -1864,7 +1908,8 @@ impl Session {
             Query::PsdGet { channel, max_hz } => self.psd_json(channel.as_deref(), max_hz.unwrap_or(50.0))?,
             Query::HrGet => self.estimate_json(true)?,
             Query::Spo2Get => self.estimate_json(false)?,
-            Query::PpgGet { seconds } => self.ppg_json(seconds.unwrap_or(5.0))?,
+            Query::PpgGet { seconds, end_s } => self.ppg_json(seconds.unwrap_or(5.0), *end_s)?,
+            Query::HeartGet { time_s } => self.heart_json(*time_s)?,
             Query::SignalStatus => self.signal_status(),
             Query::ArtifactStatus => {
                 json!({ "connected": self.live.artifacts.is_some(), "status": self.live.artifacts.as_ref().map(|a| &a.status) })
@@ -1934,27 +1979,87 @@ impl Session {
     }
 
     fn estimate_json(&self, hr: bool) -> Result<Reply, CoreError> {
+        use crate::optics::Series;
         let o = self.optics_or_err()?;
-        let h = if hr { &o.hr } else { &o.spo2 };
-        let cur = crate::optics::Optics::current(h, o.time);
+        let series = if hr { Series::Hr } else { Series::Spo2 };
+        let h = o.series(series);
+        let cur = o.current_of(series);
         Ok(json!({
             "time": o.time,
             "unit": if hr { "bpm" } else { "%" },
             "value": cur.map(|e| e.value),
             "confidence": cur.map(|e| e.confidence),
-            "history": h.iter().map(|e| [e.time, e.value]).collect::<Vec<_>>(),
+            "min_confidence": series.min_confidence(),
+            "mean": mean_json(o, series),
+            // [time, value, confidence]; unreliable entries are listed (with
+            // their confidence) but never drawn or averaged.
+            "history": h.iter().map(|e| [e.time, e.value, e.confidence]).collect::<Vec<_>>(),
         }))
     }
 
-    fn ppg_json(&self, seconds: f64) -> Result<Reply, CoreError> {
-        if !(seconds.is_finite() && seconds > 0.0 && seconds <= crate::optics::PPG_BUFFER_S) {
-            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {}]", crate::optics::PPG_BUFFER_S)));
+    fn heart_json(&self, time_s: Option<f64>) -> Result<Reply, CoreError> {
+        use crate::optics::Series;
+        if time_s.is_some_and(|t| !t.is_finite()) {
+            return Err(CoreError::InvalidArgs("time_s must be finite".into()));
+        }
+        let o = self.optics_or_err()?;
+        let dev = self.state.device.as_ref();
+        let m = &self.state.monitors;
+        let vp = |id: crate::monitor::MonitorId| {
+            let (v, span) = (m.viewport(id), self.monitor_span(id));
+            let (a, b) = v.range(span);
+            json!({ "window_s": v.window_s, "mode": if v.following() { "follow" } else { "inspect" }, "start_s": a, "end_s": b,
+                "oldest_s": span.oldest_s, "newest_s": span.newest_s })
+        };
+        let cur = |s: Series| o.current_of(s).map(|e| json!({ "time": e.time, "value": e.value, "confidence": e.confidence }));
+        let at = |s: Series, t: f64| o.at(s, t).map(|e| json!({ "time": e.time, "value": e.value, "confidence": e.confidence }));
+        let wave = o.wave_span();
+        Ok(json!({
+            "device": dev.map(|d| d.name.clone()),
+            "simulated": dev.is_some_and(|d| d.simulated),
+            "ppg_channels": dev.map(|d| d.ppg_channels.clone()).unwrap_or_default(),
+            "ppg_rate_hz": o.rate,
+            "time": o.time,
+            "view_time": o.view_time,
+            "hr": cur(Series::Hr),
+            "spo2": cur(Series::Spo2),
+            "means": { "scope": if o.run().is_some() { "recording" } else { "hour" }, "since_s": o.run().map(|r| r.since),
+                "hr": mean_json(o, Series::Hr), "spo2": mean_json(o, Series::Spo2) },
+            "summary": { "hr_count": o.hr.len(), "spo2_count": o.spo2.len(), "history_s": crate::optics::HISTORY_S,
+                "oldest_s": o.hr.front().map(|e| e.time).into_iter().chain(o.spo2.front().map(|e| e.time)).reduce(f64::min) },
+            "detail": { "oldest_s": wave.map(|w| w.0), "newest_s": wave.map(|w| w.1), "retained_s": crate::optics::PPG_DETAIL_S,
+                "bytes": o.wave_bytes(), "segments": o.waves.iter().map(crate::optics::Wave::segments).max().unwrap_or(0) },
+            "waveform": m.heart.waveform,
+            "timeline": vp(crate::monitor::MonitorId::HeartOverview),
+            "pulse": vp(crate::monitor::MonitorId::HeartDetail),
+            "cursor": time_s.map(|t| json!({ "time_s": t, "tolerance_s": crate::optics::READOUT_TOL_S,
+                "hr": at(Series::Hr, t), "spo2": at(Series::Spo2, t) })),
+        }))
+    }
+
+    fn ppg_json(&self, seconds: f64, end_s: Option<f64>) -> Result<Reply, CoreError> {
+        if !(seconds.is_finite() && seconds > 0.0 && seconds <= PPG_GET_MAX_S) {
+            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {PPG_GET_MAX_S}]")));
+        }
+        if end_s.is_some_and(|e| !e.is_finite()) {
+            return Err(CoreError::InvalidArgs("end_s must be finite".into()));
         }
         let o = self.optics_or_err()?;
         let names = self.state.device.as_ref().map(|d| d.ppg_channels.clone()).unwrap_or_default();
-        let n = (seconds * o.rate).round() as usize;
-        let channels: Vec<_> = names.iter().enumerate().map(|(i, c)| json!({ "channel": c, "samples": o.last(i, n) })).collect();
-        Ok(json!({ "time": o.time, "rate_hz": o.rate, "unit": "counts", "channels": channels }))
+        let end = end_s.or(o.time).unwrap_or(0.0);
+        let max = (seconds * o.rate).ceil() as usize + 1;
+        let channels: Vec<_> = names
+            .iter()
+            .zip(&o.waves)
+            .map(|(c, w)| {
+                let segs = w.slice(end - seconds, end, max);
+                let samples: Vec<f32> = segs.iter().flat_map(|s| s.1.iter().copied()).collect();
+                json!({ "channel": c, "samples": samples,
+                    "segments": segs.iter().map(|(t, v)| json!({ "t0": t, "n": v.len() })).collect::<Vec<_>>() })
+            })
+            .collect();
+        Ok(json!({ "time": o.time, "start_s": end - seconds, "end_s": end, "rate_hz": o.rate, "unit": "counts",
+            "note": "raw optical sensor counts (not bpm); not a medical measurement", "channels": channels }))
     }
 
     fn channel_index(dev: &nf_types::DeviceInfo, channel: Option<&str>) -> Result<Option<usize>, CoreError> {
@@ -2102,8 +2207,18 @@ impl Session {
 
     /// Data range of a monitor: band history for Bands, else the monitor's
     /// longest window back from now.
+    /// Data range a monitor's viewport may show (what `monitor.get` uses).
+    pub fn monitor_span_of(&self, id: crate::monitor::MonitorId) -> crate::monitor::Span {
+        self.monitor_span(id)
+    }
+
     fn monitor_span(&self, id: crate::monitor::MonitorId) -> crate::monitor::Span {
         let s = &self.state;
+        if let (crate::monitor::MonitorId::HeartOverview | crate::monitor::MonitorId::HeartDetail, Some(o)) =
+            (id, self.live.optics.as_ref())
+        {
+            return heart_span(id, o, s.time);
+        }
         match (id, s.bands.oldest(), s.bands.latest()) {
             (crate::monitor::MonitorId::Bands, Some(a), Some(b)) => crate::monitor::Span::new(a.time, b.time),
             // Raw EEG: the signal ring (`BUFFER_S`), ending at its newest sample.
@@ -2205,6 +2320,7 @@ impl Session {
             crate::monitor::MonitorId::WITH_OVERVIEW.into_iter().map(|id| (id.name().to_owned(), m.overview_on(id).into())).collect();
         let bookmarks: serde_json::Map<String, serde_json::Value> = crate::monitor::MonitorId::WITH_OVERVIEW
             .into_iter()
+            .chain([crate::monitor::MonitorId::HeartDetail])
             .map(|id| {
                 let span = self.monitor_span(id);
                 let list: Vec<_> = m
@@ -2216,7 +2332,7 @@ impl Session {
             })
             .collect();
         serde_json::json!({ "monitors": views, "bookmarks": bookmarks, "bands": m.bands, "raw": m.raw, "psd": m.psd, "histogram": m.histogram,
-            "spectrogram": m.spectrogram, "overview": overview, "scale": self.state.band_scale })
+            "spectrogram": m.spectrogram, "heart": m.heart, "overview": overview, "scale": self.state.band_scale })
     }
 
     fn analysis_json(&self) -> Reply {

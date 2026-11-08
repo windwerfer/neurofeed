@@ -73,13 +73,16 @@ impl MonitorId {
             MonitorId::Histogram => Some(MonitorId::HistogramOverview),
             MonitorId::Psd => Some(MonitorId::PsdStrip),
             MonitorId::Spectrogram => Some(MonitorId::SpectrogramOverview),
+            // The HR+SpO2 timeline is the waveform detail's overview: the
+            // shade there is the detail window (linked within this view).
+            MonitorId::HeartDetail => Some(MonitorId::HeartOverview),
             _ => None,
         }
     }
 
     /// The view an overview viewport belongs to.
     pub fn overview_host(self) -> Option<MonitorId> {
-        Self::WITH_OVERVIEW.into_iter().find(|h| h.overview() == Some(self))
+        Self::WITH_OVERVIEW.into_iter().chain([MonitorId::HeartDetail]).find(|h| h.overview() == Some(self))
     }
 
     /// Overview shown by default: PSD, Spectrogram (owner 2026-11-07) and
@@ -96,8 +99,12 @@ impl MonitorId {
             MonitorId::RawEeg => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 8.0, min_s: 1.0, max_s: 10.0 },
             // Flutter spectrogram windows; 300 s of spectral history.
             MonitorId::Spectrogram => WindowSpec { presets: &[10.0, 20.0, 30.0, 120.0, 300.0], default_s: 30.0, min_s: 5.0, max_s: 300.0 },
-            MonitorId::HeartOverview => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 120.0 },
-            MonitorId::HeartDetail => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 10.0, min_s: 2.0, max_s: 120.0 },
+            // HR+SpO2 timeline (1 Hz summary, one hour) and its pulse
+            // waveform detail (native PPG, 5 min retained).
+            MonitorId::HeartOverview => {
+                WindowSpec { presets: &[60.0, 120.0, 300.0, 600.0, 1800.0, 3600.0], default_s: 300.0, min_s: 60.0, max_s: 3600.0 }
+            }
+            MonitorId::HeartDetail => WindowSpec { presets: &[5.0, 10.0, 20.0, 30.0, 60.0], default_s: 10.0, min_s: 2.0, max_s: 60.0 },
             MonitorId::Movement => WindowSpec { presets: &[15.0, 30.0, 60.0], default_s: 30.0, min_s: 5.0, max_s: 60.0 },
             // Flutter `histogramPsdWindowOptions` / `psdDefaultWindowSeconds`.
             MonitorId::Psd => WindowSpec { presets: &[2.0, 4.0, 8.0], default_s: 4.0, min_s: 2.0, max_s: 8.0 },
@@ -123,7 +130,7 @@ impl MonitorId {
             MonitorId::RawEeg => crate::signal::BUFFER_S,
             MonitorId::Spectrogram => crate::signal::SPEC_HOP_S * crate::signal::SPEC_COLUMNS as f64,
             MonitorId::HeartOverview => crate::optics::HISTORY_S,
-            MonitorId::HeartDetail => crate::optics::PPG_BUFFER_S,
+            MonitorId::HeartDetail => crate::optics::PPG_DETAIL_S,
             MonitorId::Movement => crate::side::SIDE_S,
             MonitorId::Psd => crate::signal::BUFFER_S,
             MonitorId::Histogram => crate::signal::BUFFER_S,
@@ -440,6 +447,20 @@ impl HistRange {
     }
 }
 
+/// HR+SpO2 display.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct HeartDisplay {
+    /// Pulse waveform (PPG) detail under the timeline (default on).
+    pub waveform: bool,
+}
+
+impl Default for HeartDisplay {
+    fn default() -> Self {
+        Self { waveform: true }
+    }
+}
+
 /// Histogram display: electrodes pooled (empty = all) and µV range.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct HistogramDisplay {
@@ -507,6 +528,7 @@ pub struct Monitors {
     pub psd: PsdDisplay,
     pub histogram: HistogramDisplay,
     pub spectrogram: SpectrogramDisplay,
+    pub heart: HeartDisplay,
     /// Overview shown per view; missing = [`MonitorId::overview_default`].
     pub overview: BTreeMap<MonitorId, bool>,
     /// Session-local bookmarks per host view, oldest first.

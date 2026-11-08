@@ -37,7 +37,7 @@ pub fn height(ui: &Ui, state: &AppState, host: MonitorId, total: f32) -> f32 {
 }
 
 /// Bookmark row height (touch size on phones).
-fn row_h(ui: &Ui) -> f32 {
+pub fn row_h(ui: &Ui) -> f32 {
     if layout::current(ui.ctx()).is_compact() {
         40.0
     } else {
@@ -151,38 +151,83 @@ fn add_bookmark(host: &Host, out: &mut Vec<Command>) {
     out.push(Command::MonitorBookmarkAdd { monitor: host.id, end_s: Some(host.range.1), window_s: Some(host.range.1 - host.range.0) });
 }
 
-/// Draw the overview in the bottom `h` points of the remaining space.
+/// Draw the (Bands history) overview in the bottom `h` points of the
+/// remaining space.
 pub fn show(ui: &mut Ui, state: &AppState, chans: &[usize], host: &Host, h: f32, out: &mut Vec<Command>) {
-    let Some(oid) = host.id.overview() else { return };
     let (Some(a), Some(b)) = (state.bands.oldest(), state.bands.latest()) else { return };
     let avail = ui.available_rect_before_wrap();
     let rect = Rect::from_min_max(egui::pos2(avail.left(), (avail.bottom() - h).max(avail.top())), avail.max);
+    let mut draw = |ui: &Ui, p: &egui::Painter, plot: Rect, range: (f64, f64)| {
+        if chans.is_empty() {
+            monitor::no_eligible(ui, plot);
+        } else {
+            bands::strip(p, state, chans, plot, range);
+        }
+    };
+    let content = Content {
+        span: Span::new(a.time, b.time),
+        margin: (40.0, 8.0),
+        draw: &mut draw,
+        accent: None,
+        lead_s: nf_core::monitor::FOLLOW_LEAD_S,
+    };
+    show_in(ui, state, host, rect, content, out);
+}
+
+/// Paints an overview's content into `plot` for the presented range.
+pub type DrawFn<'a> = dyn FnMut(&Ui, &egui::Painter, Rect, (f64, f64)) + 'a;
+
+/// What an overview timeline draws: its data span, left/right plot
+/// margins (axes), the content painter and the shade colour.
+pub struct Content<'a> {
+    pub span: Span,
+    pub margin: (f32, f32),
+    pub draw: &'a mut DrawFn<'a>,
+    /// Shade colour (default: the alpha band colour).
+    pub accent: Option<egui::Color32>,
+    /// Follow lead (s behind the newest data; ≥ the data interval so the
+    /// next point is already drawn past the right edge).
+    pub lead_s: f64,
+}
+
+/// The overview as drawn: plot rect, presented range and its response.
+pub struct Drawn {
+    pub plot: Rect,
+    pub range: (f64, f64),
+    pub resp: egui::Response,
+}
+
+/// The shared overview widget in `rect`: content, no-detail shading, the
+/// host shade (drag = move, edges = resize, tap = jump), bookmarks (long
+/// press / icon / chips), in-graph span menu and pan/zoom of the overview.
+pub fn show_in(ui: &mut Ui, state: &AppState, host: &Host, rect: Rect, content: Content<'_>, out: &mut Vec<Command>) -> Option<Drawn> {
+    let oid = host.id.overview()?;
+    let span = content.span;
     let marks = state.monitors.bookmarks_of(host.id);
     let row = if marks.is_empty() { 0.0 } else { row_h(ui) };
     let graph = Rect::from_min_max(rect.min, egui::pos2(rect.right(), rect.bottom() - row));
     let ovp = state.monitors.viewport(oid);
-    let span = Span::new(a.time, b.time);
-    let range = monitor::presented_range(ui, state, oid, ovp, span);
+    let range = monitor::presented_range_lead(ui, state, oid, ovp, span, content.lead_s);
     let resp = ui.allocate_rect(graph, Sense::click_and_drag());
     let compact = layout::current(ui.ctx()) != layout::Layout::Regular;
-    let plot = Rect::from_min_max(graph.left_top() + egui::vec2(40.0, 14.0), graph.right_bottom() - egui::vec2(8.0, 18.0));
+    let plot = Rect::from_min_max(
+        graph.left_top() + egui::vec2(content.margin.0, 14.0),
+        graph.right_bottom() - egui::vec2(content.margin.1, 18.0),
+    );
     let p = ui.painter_at(graph);
     let v = ui.visuals().clone();
     p.line_segment([graph.left_top(), graph.right_top()], theme::grid(&v));
-    if chans.is_empty() {
-        monitor::no_eligible(ui, plot);
-    } else {
-        bands::strip(&p, state, chans, plot, range);
-    }
+    (content.draw)(ui, &p, plot, range);
+    let a = span.oldest_s;
     let x = |t: f64| monitor::x_of(plot, range, t).clamp(plot.left(), plot.right());
-    if host.detail_oldest > range.0.max(a.time) {
-        let r = Rect::from_x_y_ranges(x(range.0.max(a.time))..=x(host.detail_oldest), plot.y_range());
+    if host.detail_oldest > range.0.max(a) {
+        let r = Rect::from_x_y_ranges(x(range.0.max(a))..=x(host.detail_oldest), plot.y_range());
         p.rect_filled(r, 0.0, theme::GAP_SHADE);
         if r.width() > 120.0 {
             p.text(r.center(), Align2::CENTER_CENTER, &host.no_detail, FontId::proportional(10.0), theme::axis_text(&v));
         }
     }
-    let accent = theme::band_color(nf_core::Band::Alpha);
+    let accent = content.accent.unwrap_or(theme::band_color(nf_core::Band::Alpha));
     // Bookmark markers: a short tick at each bookmarked window end.
     for m in marks.iter().filter(|m| m.end_s >= range.0 && m.end_s <= range.1) {
         let mx = x(m.end_s);
@@ -225,9 +270,10 @@ pub fn show(ui: &mut Ui, state: &AppState, chans: &[usize], host: &Host, h: f32,
         gestures(ui, state, host, oid, ovp, &resp, plot, range, (l, r), out);
     }
     if row > 0.0 {
-        let rr = Rect::from_min_max(egui::pos2(rect.left() + 40.0, graph.bottom()), rect.max);
+        let rr = Rect::from_min_max(egui::pos2(rect.left() + content.margin.0, graph.bottom()), rect.max);
         chips(ui, state, host, marks, rr, out);
     }
+    Some(Drawn { plot, range, resp })
 }
 
 /// Where the shade was drawn last frame (tests, screenshots).

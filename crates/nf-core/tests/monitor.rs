@@ -241,7 +241,7 @@ fn monitor_get_reports_live_history() {
     assert_eq!(m["bands"]["max_s"], 3600.0);
     assert_eq!(m["raw_eeg"]["history_s"], 300.0);
     assert_eq!(m["heart_overview"]["history_s"], 3600.0);
-    assert_eq!(m["heart_detail"]["history_s"], 30.0);
+    assert_eq!(m["heart_detail"]["history_s"], 300.0);
     assert_eq!(m["movement"]["history_s"], 30.0);
     assert_eq!(m["spectrogram"]["history_s"], 300.0);
     assert_eq!(m["spectrogram"]["max_s"], 300.0);

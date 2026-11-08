@@ -246,6 +246,9 @@ pub struct Persisted {
     pub histogram: crate::monitor::HistogramDisplay,
     #[serde(default)]
     pub spectrogram: crate::monitor::SpectrogramDisplay,
+    /// HR+SpO2 view: pulse waveform shown (default on).
+    #[serde(default)]
+    pub heart: crate::monitor::HeartDisplay,
     #[serde(default)]
     pub overview: std::collections::BTreeMap<crate::monitor::MonitorId, bool>,
 }
@@ -279,6 +282,7 @@ impl Persisted {
             psd: s.monitors.psd.clone(),
             histogram: s.monitors.histogram.clone(),
             spectrogram: s.monitors.spectrogram.clone(),
+            heart: s.monitors.heart.clone(),
             overview: s.monitors.overview.clone(),
         }
     }
@@ -302,6 +306,7 @@ impl Persisted {
         s.analysis.remembered = self.excluded_channels;
         s.monitors.psd = self.psd;
         s.monitors.histogram = self.histogram;
+        s.monitors.heart = self.heart;
         s.monitors.spectrogram.electrodes = self.spectrogram.electrodes;
         s.monitors.spectrogram.db_lock = self.spectrogram.db_lock.filter(|(a, b)| crate::monitor::db_range_ok(*a, *b));
         s.monitors.overview = self.overview.into_iter().filter(|(k, _)| k.overview().is_some()).collect();
