@@ -371,3 +371,14 @@ the epoch, drag elsewhere pans, pinch/Ctrl+wheel zooms, tap places the epoch.
 Strip time older than the 5 min raw ring is dimmed. Spectrum cached per 1/8 s of
 epoch movement; strip reads only its visible snapshots. `ui/spectrum.rs` is the
 base for the Histogram later. Landscape: graphs only.
+
+## HR + SpO2 (2026-11-08)
+
+Top ~70 %: dual-axis timeline (SpO2 blue left, HR red right), mean lines with
+small left labels, big current values when they fit, hover/tap cursor with
+both readings. Bottom ~30 % (toggle "Pulse waveform", saved, default on):
+raw optical channels (counts, auto-scaled per channel). The timeline's faint
+shade is the waveform window (drag, resize, tap, long-press bookmark). Phone
+landscape: graph only, both parts kept. Older than the 5 min raw detail is
+shaded "No raw PPG kept here".
+

@@ -251,6 +251,48 @@ and a double-click returns to Follow.
 Contract: [.ai/contracts/i18n.md](../.ai/contracts/i18n.md). Contract:
 [.ai/contracts/ui-layout.md](../.ai/contracts/ui-layout.md).
 
+### HR + SpO2 (optics)
+
+Muse 2 / Muse S (and `sim:muse`, `sim:muse2`, `sim:muse_s`) stream three
+optical channels (`ambient`, `infrared`, `red`) at 64 Hz, 6 samples per
+packet per channel. Crown and Athena have no decoded optics: `hr.get`,
+`spo2.get`, `ppg.get` and `heart.get` are disabled with a reason, and the
+view shows a message, never numbers.
+
+Two separate in-memory stores (no disk paging yet):
+
+- **1 Hz summary**, one hour: one HR and one SpO2 estimate per second while
+  a pulse is found (`hr.get` / `spo2.get` `history`: `[time, value,
+  confidence]`). Missing seconds are gaps, never zeros or repeats.
+  Estimates below `min_confidence` (HR 0.6, SpO2 0.1) are not drawn and
+  not averaged. SpO2 is an **uncalibrated** ratio-of-ratios estimate
+  (`110 − 25·R`); neither value is a medical measurement.
+- **Raw PPG detail**, 5 min at the native rate for every optical channel
+  (3 × 300 s × 64 Hz × 4 B = 230 400 B on a Muse), time-stamped segments
+  (a gap starts a new segment; the estimator never reads across one).
+
+Means: the plain mean of the reliable 1 Hz estimates, each counted once —
+over the retained hour, or while a recording runs (manual or feedback
+auto-recording) over that recording so far (running sum/count, reset on
+every start, dropped on stop; a new device starts empty). Pause freezes the
+view (`view_time`) only; acquisition, estimates and means continue.
+
+```text
+heart.get {"time_s"?}        current HR/SpO2, means {scope: hour|recording},
+                             timeline + pulse viewports, raw detail span/bytes,
+                             cursor read-out at time_s (nearest within 1 s)
+ppg.get {"seconds"? ≤ 60, "end_s"?}   raw counts per channel + segments [{t0, n}]
+monitor.heart {"waveform": bool}      show the pulse waveform (saved, default on)
+```
+
+Viewports: `heart_overview` (timeline, 60 s … 1 h, default 5 min) and
+`heart_detail` (pulse waveform, 2 … 60 s, default 10 s, inside the 5 min raw
+detail). They are linked inside this view: the timeline's shade is the
+waveform window (`monitor.pan`/`monitor.zoom` on `heart_detail` keep it in
+view; `heart_detail` Follow re-engages the timeline's Follow), and
+`monitor.bookmark_add`/`go`/`remove` work on `heart_detail`. `monitor.overview`
+does not apply here (use `monitor.heart`).
+
 ## MCP clients
 
 `neurofeed-cli mcp` speaks MCP over stdio (server name `neurofeed`). Point the

@@ -95,6 +95,14 @@ pub enum Command {
     MonitorOverview { monitor: crate::monitor::MonitorId, on: bool },
     /// Histogram display: µV range (50 | 100 | 200) and electrodes pooled
     /// (empty = all). Display only: analysis exclusions still apply.
+    #[serde(rename = "monitor.heart")]
+    MonitorHeart {
+        /// Show the "Pulse waveform (PPG)" detail under the HR/SpO2 timeline
+        /// (saved; default on).
+        #[serde(default)]
+        waveform: Option<bool>,
+    },
+    /// Histogram display: µV range (50/100/200) and electrodes pooled
     #[serde(rename = "monitor.histogram")]
     MonitorHistogram {
         #[serde(default)]
@@ -474,12 +482,24 @@ pub enum Query {
     /// SpO2 from PPG (ratio of ratios), every 1 s.
     #[serde(rename = "spo2.get")]
     Spo2Get,
-    /// Recent raw optical samples per PPG channel.
+    /// HR+SpO2 view summary: current values, means (recording so far or
+    /// the retained hour), viewports, raw detail span, and the nearest
+    /// readings at `time_s` (cursor read-out, ±1 s, no carry over gaps).
+    #[serde(rename = "heart.get")]
+    HeartGet {
+        #[serde(default)]
+        time_s: Option<f64>,
+    },
+    /// Raw optical samples per PPG channel (sensor counts, native rate) as
+    /// time-stamped contiguous segments; at most 60 s per call.
     #[serde(rename = "ppg.get")]
     PpgGet {
-        /// 0 < seconds <= 30; default 5.
+        /// 0 < seconds <= 60; default 5 (ending at `end_s` or the newest).
         #[serde(default)]
         seconds: Option<f64>,
+        /// Session time of the slice end (inside the 5 min detail).
+        #[serde(default)]
+        end_s: Option<f64>,
     },
     /// Mains detection / notch and per-pad quality (usable >= 80).
     #[serde(rename = "signal.status")]
@@ -844,6 +864,7 @@ pub const SPECS: &[CommandSpec] = &[
     spec("monitor.raw", "Raw EEG display", "monitor", false, "Raw EEG: sweep or scroll traces, Y scale (auto, ±50/100/200 µV) and shown electrodes (empty = all).", always),
     spec("monitor.psd", "PSD display", "monitor", false, "PSD: frequency range (60 or 100 Hz) and electrodes in the average (empty = all).", always),
     spec("monitor.overview", "Overview timeline", "monitor", false, "Show/hide a view's overview timeline (saved per view; default on for psd and spectrogram).", always),
+    spec("monitor.heart", "HR+SpO2 display", "monitor", false, "HR+SpO2 view: show/hide the pulse waveform (PPG) detail (saved; default on).", always),
     spec("monitor.histogram", "Histogram display", "monitor", false, "Histogram: µV range (50/100/200) and electrodes pooled (empty = all).", always),
     spec("monitor.spectrogram", "Spectrogram display", "monitor", false, "Spectrogram: electrodes averaged (empty = all); lock the dB colour range (db_min, db_max) or auto.", always),
     spec("monitor.bookmark_add", "Add bookmark", "monitor", false, "Bookmark a view's window (default: the shown one); session-local, max 8 per view, cleared on connect.", always),
@@ -882,7 +903,8 @@ pub const SPECS: &[CommandSpec] = &[
     spec("recording.stop", "Stop recording", "recording", false, "Stop and keep the recording for export.", is_recording),
     spec("hr.get", "Heart rate", "optics", true, "Heart rate (bpm) from PPG with confidence and history.", has_ppg),
     spec("spo2.get", "SpO2", "optics", true, "Blood oxygen (%) from PPG IR/red with confidence and history.", has_ppg),
-    spec("ppg.get", "PPG samples", "optics", true, "Last N seconds of raw optical samples per PPG channel.", has_ppg),
+    spec("ppg.get", "PPG samples", "optics", true, "Raw optical samples (counts, native rate) per PPG channel, ≤ 60 s, time-stamped segments.", has_ppg),
+    spec("heart.get", "HR+SpO2 summary", "optics", true, "Current HR/SpO2, means (recording or last hour), viewports, cursor read-out at time_s.", has_ppg),
     spec(
         "artifact.status",
         "Artifact status",
@@ -1253,7 +1275,9 @@ fn base_examples() -> Vec<Request> {
         Q(Query::ArtifactStatus),
         Q(Query::HrGet),
         Q(Query::Spo2Get),
-        Q(Query::PpgGet { seconds: Some(3.0) }),
+        Q(Query::PpgGet { seconds: Some(3.0), end_s: None }),
+        Q(Query::HeartGet { time_s: Some(20.0) }),
+        C(Command::MonitorHeart { waveform: Some(false) }),
         Q(Query::FeaturesGet),
         Q(Query::HistogramGet { seconds: Some(1.0), bins: Some(32), half_range_uv: None, end_s: None }),
         Q(Query::SpectrogramGet { channel: None, seconds: Some(30.0), max_hz: Some(40.0) }),
