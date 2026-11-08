@@ -136,7 +136,7 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
 }
 
 /// Sweep only while following; Inspect holds a time-ordered window.
-fn mapping(mode: RawMode, vp: Viewport, (start, end): (f64, f64)) -> Mapping {
+pub(crate) fn mapping(mode: RawMode, vp: Viewport, (start, end): (f64, f64)) -> Mapping {
     if mode == RawMode::Sweep && vp.following() {
         Mapping::Sweep { now: end, window: vp.window_s }
     } else {
@@ -246,7 +246,7 @@ fn draw_pane(ui: &Ui, pane: &Pane, plot: Rect, map: Mapping, half: f32, last: bo
 
 /// Vertical grid at `m:ss` steps; labels under the last pane only. In a
 /// sweep, ticks sit at fixed phases and show the time drawn there.
-fn time_grid(p: &egui::Painter, plot: Rect, map: Mapping, v: &egui::Visuals, labels: bool) {
+pub(crate) fn time_grid(p: &egui::Painter, plot: Rect, map: Mapping, v: &egui::Visuals, labels: bool) {
     let (start, end) = match map {
         Mapping::Scroll { start, end } => (start, end),
         Mapping::Sweep { window, .. } => (0.0, window),
