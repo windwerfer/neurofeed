@@ -118,6 +118,7 @@ fn show_safe(root: &mut egui::Ui, session: &Session, error: Option<&str>, shell:
         }
     }
     device_dialog::show(ctx, session, &mut out);
+    topbar::confirm_discard(ctx, session.state(), &mut out);
     if !state.settings.onboarded && !shell.no_tour {
         onboarding::show(ctx, &mut out);
     }

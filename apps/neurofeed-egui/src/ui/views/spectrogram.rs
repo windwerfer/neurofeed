@@ -64,9 +64,21 @@ pub fn phase(first: f64) -> f64 {
     first.rem_euclid(SPEC_HOP_S)
 }
 
-/// Visible slot range.
+/// Slots read past the right edge (1.5 s): Follow trails the newest column
+/// by 1 s, so those real columns are already in the texture (clipped) and
+/// slide in with the continuous x mapping instead of popping in at the edge.
+pub const OFFSCREEN_SLOTS: i64 = 6;
+/// Texture slot range is snapped to blocks of this many slots, so the
+/// texture is rebuilt on new data (4 Hz) or every 2 s of panning, while
+/// the quad itself moves every repaint.
+const BLOCK: i64 = 8;
+
+/// Texture slot range for a visible window: block-aligned, with
+/// [`OFFSCREEN_SLOTS`] beyond the right edge.
 pub fn slots((start, end): (f64, f64), phase: f64) -> (i64, i64) {
-    (((start - phase) / SPEC_HOP_S).floor() as i64, ((end - phase) / SPEC_HOP_S).ceil() as i64)
+    let s0 = ((start - phase) / SPEC_HOP_S).floor() as i64;
+    let s1 = ((end - phase) / SPEC_HOP_S).ceil() as i64 + OFFSCREEN_SLOTS;
+    (s0.div_euclid(BLOCK) * BLOCK, (s1 + BLOCK - 1).div_euclid(BLOCK) * BLOCK)
 }
 
 fn slot(t: f64, phase: f64) -> i64 {
@@ -308,8 +320,10 @@ mod tests {
 
     #[test]
     fn slots_cover_the_window() {
-        assert_eq!(slots((10.0, 40.0), 0.0), (40, 160));
-        assert_eq!(slots((10.1, 40.1), 0.0), (40, 161));
+        assert_eq!(slots((10.0, 40.0), 0.0), (40, 168));
+        assert_eq!(slots((10.1, 40.1), 0.0), (40, 168));
+        // Sub-slot movement does not change the texture range.
+        assert_eq!(slots((10.3, 40.3), 0.0), slots((10.1, 40.1), 0.0));
         // Columns at 0.12 + k·0.25 with ±0.05 s jitter keep distinct slots.
         let ph = phase(0.12);
         let t: Vec<i64> = [10.12, 10.42, 10.57, 10.90].iter().map(|&t| slot(t, ph)).collect();

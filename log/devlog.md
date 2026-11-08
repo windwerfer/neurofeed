@@ -93,3 +93,8 @@
 
 ## 2026-11-07 – Overview refinements
 - Bookmarks (long press / desktop icon + ×), in-graph span menu, no "(custom)", Follow resets overview.
+
+## 2026-11-08 — Histogram minimap default-on; Follow smooth entry; Discard safety
+- Overview default now ON for PSD, Spectrogram and Histogram (`MonitorId::overview_default`). Only explicit toggles are persisted (`overview` map), so a saved "off" survives restarts and older files without a histogram entry get the new default — no migration needed. Tests: `histogram_overview_default_on_and_explicit_off_survives_restart`, `defaults_draw_on_psd_spectrogram_and_histogram`. Screenshot: `ui-shots/monitors/rust-histogram-overview.png`.
+- Follow pop-in diagnosis: Follow's right edge trails the newest data by `FOLLOW_LEAD_S` (1 s), but Bands queried snapshots only up to the visible end and Spectrogram built its texture only up to the end slot, so each new point/column appeared when it reached the edge. Fix: Bands reads real snapshots `OFFSCREEN_S` = 1.5 s past the edge, Spectrogram includes `OFFSCREEN_SLOTS` = 6 columns past the edge (block-aligned texture range, rebuilt on new data or every 2 s of panning; the quad moves every repaint). Painters clip at the plot. No delay added, no interpolated values. Tests: `follow_edge_tests` (60 Hz frames, 4 Hz data, 1.5 s burst; fail with the old ranges).
+- Discard: placed left of Record, 0.8 s guard after Stop, confirm modal (Cancel default, unchecked "Don't ask again"; `confirm_discard` setting re-enables).

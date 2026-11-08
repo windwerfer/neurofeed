@@ -82,9 +82,11 @@ impl MonitorId {
         Self::WITH_OVERVIEW.into_iter().find(|h| h.overview() == Some(self))
     }
 
-    /// Overview shown by default: PSD and Spectrogram only (owner 2026-11-07).
+    /// Overview shown by default: PSD, Spectrogram (owner 2026-11-07) and
+    /// Histogram (owner 2026-11-08). Only explicit toggles are saved, so a
+    /// user's saved "off" still wins over this default.
     pub fn overview_default(self) -> bool {
-        matches!(self, MonitorId::Psd | MonitorId::Spectrogram)
+        matches!(self, MonitorId::Psd | MonitorId::Spectrogram | MonitorId::Histogram)
     }
 
     /// Presets and limits follow the legacy app (`viewport_controller.dart`).
