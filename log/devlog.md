@@ -105,4 +105,5 @@
 - Now: `optics::Wave` (5 min native, segments with real times; 230 400 B on Muse), 1 Hz estimates 1 h (86 400 B per series), reliability gates, incremental hour mean + per-recording running mean, cursor `at()` ±1 s, `view_time` (Pause). UI: `views/heart.rs` dual-axis timeline via the shared `overview::show_in` (refactored from `show`) + pulse waveform with min/max decimation of only the visible window; Follow leads 2 s (timeline) / 1 s (waveform) and draws real data past the edge.
 - Sim check: HR conf ≈ 0.97, SpO2 perfusion conf ≈ 0.12–0.13 (ratio fixed at 96.96 %).
 - Not in this pass: disk paging, Movement.
+- 2026-11-08 later: HR/SpO2 mean lines grid-fine (grid width + 0.2, 45 % colour). Pulse waveform now sweeps via `nf_core::rawtrace` (new `trace_samples` over time-stamped PPG segments, shared `build` with Raw EEG's `trace`; Raw's `mapping`/`time_grid` reused); `heart_detail` span gets Raw's one-window `ahead_s` so Inspect freezes on the pass.
 

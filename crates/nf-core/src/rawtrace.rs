@@ -217,20 +217,41 @@ impl Spans {
 /// The visible part of `ch` under `map`, decimated to about `columns`
 /// pixel columns (min + max per column).
 pub fn trace(ch: &Channel, map: Mapping, columns: usize) -> Trace {
+    let items = ch.indices(map.visible()).map(|i| (ch.time(i), ch.values[i], ch.flag(i)));
+    build(items, ch.rate, map, columns)
+}
+
+/// [`trace`] for time-stamped samples that are not one uniform ring (PPG
+/// segments): `Some((t, v))` in time order, `None` = a gap (the line
+/// breaks). Only samples inside `map.visible()` are used; the same sweep
+/// / scroll geometry, wrap split and min/max decimation as Raw EEG.
+pub fn trace_samples(samples: impl Iterator<Item = Option<(f64, f32)>>, rate: f64, map: Mapping, columns: usize) -> Trace {
+    let (lo, hi) = map.visible();
+    let mut last_t = lo;
+    let items = samples.filter_map(move |s| match s {
+        None => Some((last_t, f32::NAN, FLAG_GAP)),
+        Some((t, v)) if t > lo && t <= hi + 1e-9 => {
+            last_t = t;
+            Some((t, v, FLAG_OK))
+        }
+        Some(_) => None,
+    });
+    build(items, rate, map, columns)
+}
+
+fn build(items: impl Iterator<Item = (f64, f32, u8)>, rate: f64, map: Mapping, columns: usize) -> Trace {
     let cols = columns.max(1) as f64;
     let dx = match map {
-        Mapping::Scroll { start, end } => 1.0 / (ch.rate * (end - start).max(1e-9)),
-        Mapping::Sweep { window, .. } => 1.0 / (ch.rate * window.max(1e-9)),
+        Mapping::Scroll { start, end } => 1.0 / (rate * (end - start).max(1e-9)),
+        Mapping::Sweep { window, .. } => 1.0 / (rate * window.max(1e-9)),
     };
     let mut runs = Vec::new();
     let mut run: Vec<[f32; 2]> = Vec::new();
     let mut bucket = Bucket::default();
     let mut spans = Spans { open: None, out: Vec::new() };
     let mut slot = None;
-    for i in ch.indices(map.visible()) {
-        let (x, k) = map.x(ch.time(i));
-        let v = ch.values[i];
-        let flag = ch.flag(i);
+    for (i, (t, v, flag)) in items.enumerate() {
+        let (x, k) = map.x(t);
         spans.add(flag, x as f32, (x + dx).min(1.0) as f32, k);
         let broken = flag == FLAG_GAP || !v.is_finite();
         if broken || slot != Some(k) {
@@ -440,5 +461,27 @@ mod tests {
         assert!(trace(&ch(1.0, &[], &[]), Mapping::Scroll { start: 0.0, end: 1.0 }, 10).runs.is_empty());
         let c = Channel { end_t: f64::NAN, rate: 0.0, values: &[1.0, 2.0], flags: &[] };
         assert!(trace(&c, Mapping::Sweep { now: 1.0, window: 1.0 }, 10).runs.is_empty());
+    }
+
+    #[test]
+    fn samples_trace_breaks_at_gaps_and_sweep_wraps() {
+        // 64 Hz, 0..12 s with a gap 5..6 s; sweep window 10 s at now = 12.
+        let mut v: Vec<Option<(f64, f32)>> = Vec::new();
+        for i in 0..(12 * 64) {
+            let t = f64::from(i) / 64.0;
+            if (5.0..6.0).contains(&t) {
+                if v.last().is_some_and(Option::is_some) {
+                    v.push(None);
+                }
+                continue;
+            }
+            v.push(Some((t, 1.0)));
+        }
+        let map = Mapping::Sweep { now: 12.0, window: 10.0 };
+        let tr = trace_samples(v.iter().copied(), 64.0, map, 10_000);
+        // Visible (2.2, 12]: [2.2..5) | gap | [6..10) | wrap | [10..12].
+        assert_eq!(tr.runs.len(), 3, "{:?}", tr.runs.iter().map(|r| (r[0][0], r[r.len() - 1][0])).collect::<Vec<_>>());
+        assert!(tr.runs.iter().all(|r| r.windows(2).all(|p| p[1][0] >= p[0][0])), "no line crosses the wrap");
+        assert!(tr.runs[2][0][0] < 0.01 && tr.runs[1][0][0] > 0.59);
     }
 }

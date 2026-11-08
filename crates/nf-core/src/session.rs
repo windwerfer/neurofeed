@@ -21,8 +21,10 @@ fn mean_json(o: &crate::optics::Optics, s: crate::optics::Series) -> serde_json:
 }
 
 /// Data range of the HR timeline (the 1 Hz summary) and of the pulse
-/// waveform (the raw 5 min detail), ending at the presented "now".
-fn heart_span(id: crate::monitor::MonitorId, o: &crate::optics::Optics, now: f64) -> crate::monitor::Span {
+/// waveform (the raw 5 min detail), ending at the presented "now". The
+/// waveform sweeps like Raw EEG, so a frozen pass may end up to one window
+/// past the newest sample (blank, filled by later real samples).
+fn heart_span(id: crate::monitor::MonitorId, o: &crate::optics::Optics, now: f64, window_s: f64) -> crate::monitor::Span {
     let newest = o.view_time.or(o.time).unwrap_or(now);
     let oldest = match id {
         crate::monitor::MonitorId::HeartDetail => o.wave_span().map_or(newest, |w| w.0),
@@ -31,7 +33,11 @@ fn heart_span(id: crate::monitor::MonitorId, o: &crate::optics::Optics, now: f64
             est.into_iter().chain(o.wave_span().map(|w| w.0)).reduce(f64::min).unwrap_or(newest)
         }
     };
-    crate::monitor::Span::new(oldest.min(newest), newest)
+    let mut span = crate::monitor::Span::new(oldest.min(newest), newest);
+    if id == crate::monitor::MonitorId::HeartDetail {
+        span.ahead_s = window_s.max(0.0);
+    }
+    span
 }
 
 type Polled = (Vec<EegPacket>, Vec<PpgPacket>, Vec<AccelPacket>);
@@ -2217,7 +2223,7 @@ impl Session {
         if let (crate::monitor::MonitorId::HeartOverview | crate::monitor::MonitorId::HeartDetail, Some(o)) =
             (id, self.live.optics.as_ref())
         {
-            return heart_span(id, o, s.time);
+            return heart_span(id, o, s.time, s.monitors.viewport(id).window_s);
         }
         match (id, s.bands.oldest(), s.bands.latest()) {
             (crate::monitor::MonitorId::Bands, Some(a), Some(b)) => crate::monitor::Span::new(a.time, b.time),

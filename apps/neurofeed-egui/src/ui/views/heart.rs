@@ -18,6 +18,7 @@ use crate::ui::{monitor, overview, theme};
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Ui};
 use nf_core::monitor::{MonitorId, Span};
 use nf_core::optics::{Estimate, Optics, Series, GAP_S};
+use nf_core::rawtrace as rt;
 use nf_core::{AppState, Command, Session};
 
 pub const HR_COLOR: Color32 = Color32::from_rgb(0xEF, 0x53, 0x50);
@@ -33,8 +34,6 @@ const AXIS_W: f32 = 44.0;
 const TIMELINE_LEAD_S: f64 = 2.0;
 /// Data drawn past the right edge so Follow slides it in.
 const OFFSCREEN_S: f64 = 3.0;
-/// Raw samples drawn past the right edge (packets every ~0.1 s).
-const WAVE_OFFSCREEN_S: f64 = 0.5;
 
 pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
@@ -72,7 +71,13 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
     let span_detail = session.monitor_span_of(MonitorId::HeartDetail);
     let (plot, range, resp) = if bottom_h > 0.0 {
         let dvp = state.monitors.viewport(MonitorId::HeartDetail);
-        let detail_range = monitor::presented_range(ui, state, MonitorId::HeartDetail, dvp, span_detail);
+        let map = sweep_map(ui, state, dvp, span_detail);
+        // The shade is the pass shown below: the sweep's last window, or the
+        // frozen pass incl. its not-yet-filled future part.
+        let detail_range = match map {
+            rt::Mapping::Sweep { now, window } => (now - window, now),
+            rt::Mapping::Scroll { start, end } => (start, end),
+        };
         let host = overview::Host {
             id: MonitorId::HeartDetail,
             range: detail_range,
@@ -89,7 +94,7 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
         };
         let Some(d) = overview::show_in(ui, state, &host, top, content, out) else { return };
         let bottom = Rect::from_min_max(Pos2::new(avail.left(), top.bottom()), avail.max);
-        waveform(ui, state, o, bottom, span_detail, out);
+        waveform(ui, state, o, bottom, map, out);
         (d.plot, d.range, d.resp)
     } else {
         let resp = ui.allocate_rect(top, Sense::click_and_drag());
@@ -236,7 +241,9 @@ fn timeline(ui: &Ui, p: &egui::Painter, o: &Optics, plot: Rect, range: (f64, f64
     for (s, a, c, name, fmt) in [(Series::Hr, hr_a, HR_COLOR, "HR", 0usize), (Series::Spo2, sp_a, SPO2_COLOR, "SpO2", 1)] {
         let Some(m) = o.mean(s).value() else { continue };
         let y = y_of(plot, a, m).clamp(plot.top(), plot.bottom());
-        clip.line_segment([Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)], Stroke::new(0.8, c.gamma_multiply(0.55)));
+        // Grid-fine (a hair thicker), in the series colour, subdued.
+        let grid = theme::grid(v);
+        clip.line_segment([Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)], Stroke::new(grid.width + 0.2, c.gamma_multiply(0.45)));
         // Labels never overlap each other.
         let mut ly = y - 2.0;
         if label_y.iter().any(|o| (o - ly).abs() < 12.0) {
@@ -300,9 +307,12 @@ pub fn readout(o: &Optics, t: f64) -> String {
     format!("{}   HR {hr} bpm   SpO2 {sp} %", nf_core::monitor::mmss(t))
 }
 
-/// The pulse waveform detail: raw optical channels, auto-scaled each over
-/// the visible window (only that window's samples are read).
-fn waveform(ui: &mut Ui, state: &AppState, o: &Optics, rect: Rect, span: Span, out: &mut Vec<Command>) {
+/// The pulse waveform detail: raw optical channels in an oscilloscope
+/// sweep while following (same geometry, wrap split, cursor and freeze as
+/// Raw EEG via `nf_core::rawtrace`), a time-ordered window in Inspect.
+/// Each channel is auto-scaled over its visible samples; only the visible
+/// samples are read.
+fn waveform(ui: &mut Ui, state: &AppState, o: &Optics, rect: Rect, map: rt::Mapping, out: &mut Vec<Command>) {
     let id = MonitorId::HeartDetail;
     let resp = ui.allocate_rect(rect, Sense::click_and_drag());
     // Narrow (phone portrait): short title, legend on its own row.
@@ -310,8 +320,9 @@ fn waveform(ui: &mut Ui, state: &AppState, o: &Optics, rect: Rect, span: Span, o
     let top_pad = if narrow { 30.0 } else { 16.0 };
     let plot = Rect::from_min_max(rect.left_top() + egui::vec2(AXIS_W, top_pad), rect.right_bottom() - egui::vec2(AXIS_W, 18.0));
     let vp = state.monitors.viewport(id);
+    // Leaving the sweep (button, drag, wheel, zoom) freezes on its pass.
+    monitor::set_freeze_end(ui.ctx(), id, map.freeze_end());
     monitor::interact(ui, &resp, plot, id, vp, out);
-    let range = monitor::presented_range(ui, state, id, vp, span);
     let p = ui.painter_at(rect);
     let v = ui.visuals().clone();
     p.line_segment([rect.left_top(), rect.right_top()], theme::grid(&v));
@@ -322,19 +333,22 @@ fn waveform(ui: &mut Ui, state: &AppState, o: &Optics, rect: Rect, span: Span, o
         FontId::proportional(11.0),
         v.strong_text_color(),
     );
-    monitor::time_grid(&p, plot, range, &v);
-    if let Some(oldest) = o.wave_span().map(|w| w.0).filter(|w| *w > range.0) {
-        let x = monitor::x_of(plot, range, oldest).clamp(plot.left(), plot.right());
-        let r = Rect::from_x_y_ranges(plot.left()..=x, plot.y_range());
-        p.rect_filled(r, 0.0, theme::GAP_SHADE);
-        if r.width() > 140.0 {
-            p.text(r.center(), Align2::CENTER_CENTER, t!("heart-no-raw-older"), FontId::proportional(10.0), theme::axis_text(&v));
+    super::raw::time_grid(&p, plot, map, &v, true);
+    let x_px = |x: f32| plot.left() + x * plot.width();
+    // Older than the 5 min raw detail (Inspect only; a sweep shows now).
+    if let (Some(oldest), rt::Mapping::Scroll { start, end }) = (o.wave_span().map(|w| w.0), map) {
+        if oldest > start {
+            let x = x_px((((oldest - start) / (end - start).max(1e-9)) as f32).clamp(0.0, 1.0));
+            let r = Rect::from_x_y_ranges(plot.left()..=x, plot.y_range());
+            p.rect_filled(r, 0.0, theme::GAP_SHADE);
+            if r.width() > 140.0 {
+                p.text(r.center(), Align2::CENTER_CENTER, t!("heart-no-raw-older"), FontId::proportional(10.0), theme::axis_text(&v));
+            }
         }
     }
     let names = state.device.as_ref().map(|d| d.ppg_channels.clone()).unwrap_or_default();
     let clip = p.with_clip_rect(plot.expand(1.0));
     let mut legend = Vec::new();
-    let (t0, t1) = (range.0, range.1 + WAVE_OFFSCREEN_S);
     for (ch, w) in o.waves.iter().enumerate() {
         let name = names.get(ch).map_or("?", String::as_str);
         let c = match name {
@@ -342,14 +356,20 @@ fn waveform(ui: &mut Ui, state: &AppState, o: &Optics, rect: Rect, span: Span, o
             "red" => RED_COLOR,
             _ => AMBIENT_COLOR,
         };
-        let (lines, lo, hi) = trace(w, plot, range, (t0, t1));
-        if lines.is_empty() {
-            continue;
-        }
-        for l in lines.into_iter().filter(|l| l.len() > 1) {
-            clip.add(egui::Shape::line(l, Stroke::new(if c == AMBIENT_COLOR { 0.8 } else { 1.3 }, c)));
+        let tr = channel_trace(w, o.rate, map, plot.width().max(1.0) as usize);
+        let Some((lo, hi)) = value_range(&tr) else { continue };
+        let pad = ((hi - lo) * 0.08).max(1.0);
+        let (ylo, yhi) = (lo - pad, hi + pad);
+        let y_px = |val: f32| plot.bottom() - (val - ylo) / (yhi - ylo) * plot.height();
+        for run in &tr.runs {
+            let pts: Vec<Pos2> = run.iter().map(|q| Pos2::new(x_px(q[0]), y_px(q[1]))).collect();
+            clip.add(egui::Shape::line(pts, Stroke::new(if c == AMBIENT_COLOR { 0.8 } else { 1.3 }, c)));
         }
         legend.push((name.to_owned(), c, lo, hi));
+    }
+    if let Some(cx) = map.cursor() {
+        let x = x_px(cx as f32);
+        p.line_segment([Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())], Stroke::new(1.2, theme::sweep_cursor(&v)));
     }
     if legend.is_empty() {
         p.text(plot.center(), Align2::CENTER_CENTER, t!("heart-no-raw-here"), FontId::proportional(11.0), theme::axis_text(&v));
@@ -357,13 +377,8 @@ fn waveform(ui: &mut Ui, state: &AppState, o: &Optics, rect: Rect, span: Span, o
     // Legend with each channel's visible raw range (counts).
     let mut x = rect.right() - 6.0;
     for (name, c, lo, hi) in legend.iter().rev() {
-        let r = p.text(
-            Pos2::new(x, rect.top() + if narrow { 15.0 } else { 2.0 }),
-            Align2::RIGHT_TOP,
-            format!("{name} {lo:.0}–{hi:.0}"),
-            FontId::proportional(10.0),
-            *c,
-        );
+        let pos = Pos2::new(x, rect.top() + if narrow { 15.0 } else { 2.0 });
+        let r = p.text(pos, Align2::RIGHT_TOP, format!("{name} {lo:.0}–{hi:.0}"), FontId::proportional(10.0), *c);
         x = r.left() - 10.0;
     }
     p.text(
@@ -375,62 +390,25 @@ fn waveform(ui: &mut Ui, state: &AppState, o: &Optics, rect: Rect, span: Span, o
     );
 }
 
-/// Screen polylines of one channel over `(t0, t1)` (min/max per pixel when
-/// denser than 2 samples/px) and its visible min/max (counts).
-pub fn trace(w: &nf_core::optics::Wave, plot: Rect, range: (f64, f64), (t0, t1): (f64, f64)) -> (Vec<Vec<Pos2>>, f32, f32) {
-    let mut runs: Vec<Vec<(f64, f32)>> = vec![Vec::new()];
-    let (mut lo, mut hi) = (f32::MAX, f32::MIN);
-    w.visit(t0, t1, |s| match s {
-        None => runs.push(Vec::new()),
-        Some((t, v)) => {
-            if t >= range.0 && t <= range.1 {
-                lo = lo.min(v);
-                hi = hi.max(v);
-            }
-            if let Some(r) = runs.last_mut() {
-                r.push((t, v));
-            }
-        }
-    });
-    if lo > hi {
-        return (Vec::new(), 0.0, 0.0);
-    }
-    let pad = ((hi - lo) * 0.08).max(1.0);
-    let (ylo, yhi) = (lo - pad, hi + pad);
-    let y = |v: f32| plot.bottom() - (v - ylo) / (yhi - ylo) * plot.height();
-    let px = f64::from(plot.width().max(1.0));
-    let lines = runs
-        .into_iter()
-        .filter(|r| !r.is_empty())
-        .map(|r| {
-            let dense = r.len() as f64 > 2.0 * px * ((r[r.len() - 1].0 - r[0].0) / (range.1 - range.0).max(1e-9)).max(0.0) + 2.0;
-            if !dense {
-                return r.iter().map(|&(t, v)| Pos2::new(monitor::x_of(plot, range, t), y(v))).collect();
-            }
-            // Min/max per pixel column, in time order.
-            let mut pts: Vec<Pos2> = Vec::new();
-            let mut col: Option<(i64, f32, f32)> = None;
-            for &(t, v) in &r {
-                let x = monitor::x_of(plot, range, t);
-                let k = x.floor() as i64;
-                match col {
-                    Some((c, a, b)) if c == k => col = Some((c, a.min(v), b.max(v))),
-                    Some((c, a, b)) => {
-                        pts.push(Pos2::new(c as f32, y(a)));
-                        pts.push(Pos2::new(c as f32, y(b)));
-                        col = Some((k, v, v));
-                    }
-                    None => col = Some((k, v, v)),
-                }
-            }
-            if let Some((c, a, b)) = col {
-                pts.push(Pos2::new(c as f32, y(a)));
-                pts.push(Pos2::new(c as f32, y(b)));
-            }
-            pts
-        })
-        .collect();
-    (lines, lo, hi)
+/// The waveform's geometry this frame: Raw EEG's sweep (Follow) or a
+/// time-ordered window (Inspect), with Raw's Follow lead.
+pub fn sweep_map(ui: &Ui, state: &AppState, vp: nf_core::monitor::Viewport, span: Span) -> rt::Mapping {
+    let range = monitor::presented_range_lead(ui, state, MonitorId::HeartDetail, vp, span, rt::RAW_FOLLOW_LEAD_S);
+    super::raw::mapping(nf_core::monitor::RawMode::Sweep, vp, range)
+}
+
+/// One optical channel under `map`: only the visible window is visited.
+pub fn channel_trace(w: &nf_core::optics::Wave, rate: f64, map: rt::Mapping, columns: usize) -> rt::Trace {
+    let (lo, hi) = map.visible();
+    let mut samples = Vec::new();
+    w.visit(lo, hi, |s| samples.push(s));
+    rt::trace_samples(samples.into_iter(), rate, map, columns)
+}
+
+/// Min and max value of a trace (counts).
+fn value_range(tr: &rt::Trace) -> Option<(f32, f32)> {
+    let (lo, hi) = tr.runs.iter().flatten().fold((f32::MAX, f32::MIN), |(a, b), q| (a.min(q[1]), b.max(q[1])));
+    (lo <= hi).then_some((lo, hi))
 }
 
 #[cfg(test)]
@@ -521,19 +499,150 @@ mod tests {
         assert!(readout(o, 1.0).contains("HR -- bpm"), "{}", readout(o, 1.0));
     }
 
+    /// Sweep at `now` (window `w`) and the Inspect window it freezes to.
+    fn maps(now: f64, w: f64) -> (rt::Mapping, rt::Mapping) {
+        let sweep = rt::Mapping::Sweep { now, window: w };
+        let e = sweep.freeze_end().unwrap();
+        (sweep, rt::Mapping::Scroll { start: e - w, end: e })
+    }
+
+    fn pts_left_of(tr: &rt::Trace, cx: f64) -> Vec<[f32; 2]> {
+        tr.runs.iter().flatten().copied().filter(|q| f64::from(q[0]) <= cx).collect()
+    }
+
     #[test]
-    fn trace_reads_only_the_window_and_decimates() {
-        let s = session("regular", "sim:muse", 320.0);
+    fn sweep_freeze_keeps_every_x_and_clears_right_of_the_cursor() {
+        let s = session("regular", "sim:muse", 125.0);
         let o = s.optics().unwrap();
-        let w = &o.waves[1];
-        let plot = Rect::from_min_max(Pos2::ZERO, Pos2::new(200.0, 100.0));
-        let end = o.time.unwrap();
-        let (lines, lo, hi) = trace(w, plot, (end - 60.0, end), (end - 60.0, end + 0.5));
-        let pts: usize = lines.iter().map(Vec::len).sum();
-        assert!(pts <= 2 * 202, "min/max per pixel: {pts}");
-        assert!(hi > lo);
-        let n = w.visit(end - 10.0, end, |_| {});
-        assert!(n <= 10 * 64 + 4, "{n} of {} retained", w.len());
+        let w = 10.0;
+        // Cursor near the start, the middle and the end of a pass.
+        for now in [110.4, 115.0, 119.7] {
+            let (sweep, frozen) = maps(now, w);
+            let cx = sweep.cursor().unwrap();
+            for wave in &o.waves {
+                let a = channel_trace(wave, o.rate, sweep, 800);
+                let b = channel_trace(wave, o.rate, frozen, 800);
+                let (l1, l2) = (pts_left_of(&a, cx), pts_left_of(&b, cx));
+                assert!(!l1.is_empty());
+                // Same samples at the same x left of the cursor (the
+                // frozen view may also show samples newer than `now`).
+                let n = l1.len().min(l2.len());
+                assert!(n + 3 >= l1.len(), "{now}: {} vs {}", l1.len(), l2.len());
+                for (p, q) in l1.iter().zip(&l2).take(n.saturating_sub(2)) {
+                    assert!((p[0] - q[0]).abs() < 1e-5 && p[1] == q[1], "{now}: {p:?} {q:?}");
+                }
+                // Right of the newest sample: nothing (the old pass is gone).
+                let newest = wave.newest().unwrap();
+                let nx = frozen.x(newest).0 as f32;
+                assert!(b.runs.iter().flatten().all(|q| q[0] <= nx + 1e-4), "{now}: cleared right");
+                // The sweep itself shows the previous pass right of the cursor.
+                if cx < 0.9 {
+                    assert!(a.runs.iter().flatten().any(|q| f64::from(q[0]) > cx + 0.05), "{now}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn frozen_pass_fills_right_with_new_real_data_without_moving() {
+        let mut s = session("regular", "sim:muse", 112.0);
+        let w = 10.0;
+        let (sweep, frozen) = maps(s.optics().unwrap().time.unwrap(), w);
+        let before = channel_trace(&s.optics().unwrap().waves[1], 64.0, frozen, 800);
+        s.call("clock.advance", json!({ "seconds": 3.0 })).unwrap();
+        let after = channel_trace(&s.optics().unwrap().waves[1], 64.0, frozen, 800);
+        let cx = sweep.cursor().unwrap();
+        let max_x = |t: &rt::Trace| t.runs.iter().flatten().map(|q| q[0]).fold(0.0f32, f32::max);
+        assert!(max_x(&after) > max_x(&before) + 0.25, "refills: {} -> {}", max_x(&before), max_x(&after));
+        let (l1, l2) = (pts_left_of(&before, cx - 0.01), pts_left_of(&after, cx - 0.01));
+        assert_eq!(l1, l2, "left part unchanged");
+    }
+
+    #[test]
+    fn all_optical_channels_share_the_sweep_phase() {
+        let s = session("regular", "sim:muse", 60.0);
+        let o = s.optics().unwrap();
+        let map = rt::Mapping::Sweep { now: 55.3, window: 10.0 };
+        let firsts: Vec<f32> = o.waves.iter().map(|w| channel_trace(w, o.rate, map, 100_000).runs[0][0][0]).collect();
+        assert!(firsts.windows(2).all(|p| (p[0] - p[1]).abs() < 1e-6), "{firsts:?}");
+        // Window-only reads: 10 s of 64 Hz, not the 5 min.
+        let n = o.waves[1].visit(45.3, 55.3, |_| {});
+        assert!(n <= 10 * 64 + 4, "{n}");
+    }
+
+    #[test]
+    fn inspect_button_freezes_on_the_pass_and_the_shade_follows_it() {
+        let _lang = crate::i18n::lang_lock();
+        let mut s = session("regular", "sim:muse", 112.0);
+        let ctx = egui::Context::default();
+        let mut inspect = None;
+        for i in 0..3 {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1100.0, 700.0))),
+                time: Some(f64::from(i) / 60.0),
+                ..Default::default()
+            };
+            let mut o = ctx.run_ui(input, |u| {
+                crate::ui::show(u, &s, None);
+            });
+            o.textures_delta.clear();
+            for c in &o.shapes {
+                if let egui::Shape::Text(t) = &c.shape {
+                    if t.galley.text() == "Inspect" {
+                        inspect = Some(t.visual_bounding_rect().center());
+                    }
+                }
+            }
+        }
+        let p = inspect.unwrap();
+        let btn = |pressed| egui::Event::PointerButton {
+            pos: p,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut cmds = Vec::new();
+        for (i, ev) in [vec![egui::Event::PointerMoved(p), btn(true)], vec![btn(false)], vec![]].into_iter().enumerate() {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1100.0, 700.0))),
+                time: Some(0.1 + i as f64 / 60.0),
+                events: ev,
+                ..Default::default()
+            };
+            let mut out = Vec::new();
+            ctx.run_ui(input, |u| out = crate::ui::show(u, &s, None)).textures_delta.clear();
+            for c in out {
+                s.execute(c.clone()).unwrap();
+                cmds.push(c);
+            }
+        }
+        let vp = s.state().monitors.viewport(MonitorId::HeartDetail);
+        let end = vp.end_s.unwrap_or_else(|| panic!("inspect: {cmds:?}"));
+        assert!((end / vp.window_s - (end / vp.window_s).round()).abs() < 1e-9, "frozen on a pass end: {end}");
+        assert!(end > s.optics().unwrap().time.unwrap(), "incl. its future part");
+        let h = s.call("heart.get", json!({})).unwrap();
+        assert_eq!(h["pulse"]["end_s"], end, "clamp keeps the pass");
+        // The timeline's shade is that pass.
+        for i in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1100.0, 700.0))),
+                time: Some(1.0 + f64::from(i) / 60.0),
+                ..Default::default()
+            };
+            ctx.run_ui(input, |u| {
+                crate::ui::show(u, &s, None);
+            })
+            .textures_delta
+            .clear();
+        }
+        let shade = ctx.data(|d| d.get_temp::<Rect>(overview::shade_id(MonitorId::HeartOverview))).unwrap();
+        assert!(shade.width() > 2.0);
+        // A pan afterwards moves by exactly the pan (no extra shift).
+        s.call("monitor.pan", json!({ "monitor": "heart_detail", "seconds": -2.5 })).unwrap();
+        assert_eq!(s.state().monitors.viewport(MonitorId::HeartDetail).end_s, Some(end - 2.5));
+        // Follow again: a sweep, no frozen end.
+        s.call("monitor.viewport", json!({ "monitor": "heart_detail", "mode": "follow" })).unwrap();
+        assert!(s.state().monitors.viewport(MonitorId::HeartDetail).following());
     }
 
     #[test]
@@ -544,6 +653,21 @@ mod tests {
         for needle in ["SpO2 %", "HR bpm", "HR Ø", "SpO2 Ø", "Pulse waveform (PPG)", "infrared", "red", "simulated optics", "bpm"] {
             assert!(has(&f, needle), "{needle}: {:?}", f.texts);
         }
+        // Mean lines: grid-fine, subdued series colours.
+        let means: Vec<f32> = f
+            .shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::LineSegment { stroke, .. }
+                    if stroke.color == HR_COLOR.gamma_multiply(0.45) || stroke.color == SPO2_COLOR.gamma_multiply(0.45) =>
+                {
+                    Some(stroke.width)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(means.len(), 2, "two mean lines");
+        assert!(means.iter().all(|w| *w <= crate::ui::theme::grid(&egui::Visuals::dark()).width + 0.25), "{means:?}");
         // Waveform hidden: timeline + means remain, no waveform.
         s.call("monitor.heart", json!({ "waveform": false })).unwrap();
         let (f, _) = run(&mut s, egui::vec2(1100.0, 700.0), &idle(3));
@@ -592,8 +716,10 @@ mod tests {
         let (f, _) = run(&mut s, egui::vec2(1100.0, 700.0), &idle(4));
         let (x, clip) = right_edge(&f, HR_COLOR).expect("HR line");
         assert!(x > clip, "HR enters from off-screen: {x} vs {clip}");
+        // The waveform sweeps (cursor moves, no scrolling to the edge):
+        // its trace stays inside the plot.
         let (x, clip) = right_edge(&f, IR_COLOR).expect("IR trace");
-        assert!(x > clip, "PPG enters from off-screen: {x} vs {clip}");
+        assert!(x <= clip, "{x} vs {clip}");
     }
 
     #[test]

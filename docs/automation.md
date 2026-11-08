@@ -290,7 +290,11 @@ Viewports: `heart_overview` (timeline, 60 s … 1 h, default 5 min) and
 detail). They are linked inside this view: the timeline's shade is the
 waveform window (`monitor.pan`/`monitor.zoom` on `heart_detail` keep it in
 view; `heart_detail` Follow re-engages the timeline's Follow), and
-`monitor.bookmark_add`/`go`/`remove` work on `heart_detail`. `monitor.overview`
+`monitor.bookmark_add`/`go`/`remove` work on `heart_detail`. The waveform
+sweeps like Raw EEG while following; leaving Follow (Inspect, drag, wheel,
+zoom) freezes on the current pass, which may end up to one window past the
+newest sample (`heart_detail` `end_s`); its blank right part fills with new
+real samples. `monitor.overview`
 does not apply here (use `monitor.heart`).
 
 ## MCP clients
