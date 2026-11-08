@@ -498,14 +498,14 @@ mod tests {
     }
 
     #[test]
-    fn defaults_draw_on_psd_and_spectrogram_only() {
+    fn defaults_draw_on_psd_spectrogram_and_histogram() {
         let _lang = crate::i18n::lang_lock();
         let on = |view: &str| {
             let s = session(view, &[]);
             s.state().monitors.overview_on(nf_core::monitor::MonitorId::ALL.into_iter().find(|m| m.name() == view).unwrap())
         };
-        assert!(on("psd") && on("spectrogram"));
-        assert!(!on("bands") && !on("raw_eeg") && !on("histogram"));
+        assert!(on("psd") && on("spectrogram") && on("histogram"));
+        assert!(!on("bands") && !on("raw_eeg"));
     }
 
     #[test]

@@ -17,8 +17,14 @@ thread_local! {
     static BARS: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Snapshots come at 10 Hz; a longer silence is a gap.
+/// Snapshots come at 4 Hz; a longer silence is a gap.
 const GAP_S: f64 = 0.5;
+/// Real snapshots read past the visible right edge. Follow trails the
+/// newest data by `FOLLOW_LEAD_S` (1 s), so the next points already exist:
+/// drawing them (clipped) lets each segment slide in from off-screen
+/// instead of popping in when its point reaches the edge (owner 2026-11-08).
+/// ≥ one 1 Hz interval + the gap threshold.
+pub const OFFSCREEN_S: f64 = 1.5;
 /// dB axis when there is nothing to fit.
 const DB_DEFAULT: (f32, f32) = (-10.0, 30.0);
 
@@ -148,8 +154,11 @@ pub fn strip(p: &egui::Painter, state: &AppState, chans: &[usize], plot: Rect, r
 /// Points in the visible range, at most ~one per pixel column (mean).
 fn series(state: &AppState, chans: &[usize], plot: Rect, range: (f64, f64)) -> Vec<Pt> {
     let (vis, rel) = (visible(state), relative(state));
-    let raw: Vec<(f64, [Option<f32>; 5])> =
-        state.bands.range(range.0 - GAP_S, range.1).map(|s: &BandSnapshot| (s.time, band_values(s, chans, vis, rel))).collect();
+    let raw: Vec<(f64, [Option<f32>; 5])> = state
+        .bands
+        .range(range.0 - GAP_S, range.1 + OFFSCREEN_S)
+        .map(|s: &BandSnapshot| (s.time, band_values(s, chans, vis, rel)))
+        .collect();
     let per_px = (raw.len() as f32 / plot.width().max(1.0)).ceil().max(1.0) as usize;
     let mut out = Vec::with_capacity(raw.len() / per_px + 1);
     let mut prev_t = f64::NEG_INFINITY;
@@ -172,6 +181,8 @@ fn series(state: &AppState, chans: &[usize], plot: Rect, range: (f64, f64)) -> V
 
 /// Fixed 0..100 % or a dB range fitted to the data in 10 dB steps.
 fn y_range(relative: bool, pts: &[Pt]) -> (f32, f32) {
+    // (Off-screen points are included: they enter within ~1 s anyway, so
+    // the axis does not jump when they do.)
     if relative {
         return (0.0, 100.0);
     }

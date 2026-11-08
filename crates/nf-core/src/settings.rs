@@ -72,6 +72,11 @@ pub struct UserSettings {
     pub language: Language,
     /// Debug: frame-rate overlay (FPS, frame interval, CPU time) in a corner.
     pub perf_overlay: bool,
+    /// The UI asks "Discard this recording?" before the top bar's Discard
+    /// deletes the last recording (the dialog's "Don't ask again" turns it
+    /// off; Settings turns it back on). UI only: `history.delete` still
+    /// needs its own explicit `confirm: true`.
+    pub confirm_discard: bool,
 }
 
 /// Where Crown pad signal quality comes from (applies from the next second).
@@ -100,6 +105,7 @@ impl Default for UserSettings {
             layout: LayoutMode::Auto,
             language: Language::Auto,
             perf_overlay: false,
+            confirm_discard: true,
         }
     }
 }
@@ -135,6 +141,8 @@ pub struct SettingsPatch {
     pub language: Option<Language>,
     #[serde(default)]
     pub perf_overlay: Option<bool>,
+    #[serde(default)]
+    pub confirm_discard: Option<bool>,
 }
 
 /// Apply `p` to `s`, validating first (nothing changes on error).
@@ -189,6 +197,9 @@ pub fn apply(s: &mut UserSettings, p: &SettingsPatch) -> Result<(), String> {
     }
     if let Some(v) = p.perf_overlay {
         s.perf_overlay = v;
+    }
+    if let Some(v) = p.confirm_discard {
+        s.confirm_discard = v;
     }
     Ok(())
 }
