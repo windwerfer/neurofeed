@@ -106,4 +106,4 @@
 - Sim check: HR conf ≈ 0.97, SpO2 perfusion conf ≈ 0.12–0.13 (ratio fixed at 96.96 %).
 - Not in this pass: disk paging, Movement.
 - 2026-11-08 later: HR/SpO2 mean lines grid-fine (grid width + 0.2, 45 % colour). Pulse waveform now sweeps via `nf_core::rawtrace` (new `trace_samples` over time-stamped PPG segments, shared `build` with Raw EEG's `trace`; Raw's `mapping`/`time_grid` reused); `heart_detail` span gets Raw's one-window `ahead_s` so Inspect freezes on the pass.
-
+- 2026-11-11: Feedback compact fixes (plan step 1): single-column protocol cards + full-width Start, stacked fit check, wrapping button rows, live header split, 3-column trust totals on phones, short trust caption on narrow plots; vertical scroll for non-live phases. Regular layout unchanged.

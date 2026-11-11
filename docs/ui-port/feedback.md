@@ -1,6 +1,6 @@
 # UI port: Feedback screens (Flutter → egui)
 
-Status: **plan only (2026-11-11)**. No app code changed in this pass.
+Status: **plan (2026-11-11); step 1 (compact fixes) landed 2026-11-11.** Steps 2–8 wait for the decisions below.
 Scope: the Feedback section. Steps: protocol overview → session setup → calibration
 (including fit/signal gate) → live session → end/summary, plus the dialogs in that flow.
 Disk-backed loading stays on hold.
@@ -214,6 +214,17 @@ Gaps:
 - A dedicated setup step in the UI needs **no** new command (it composes `protocol.set` + `threshold.set` + audio).
 - Summary Discard reuses the existing protected discard command (no new unprotected path).
 - Every new control documented in `docs/automation.md` + i18n (en/de).
+
+## Progress
+
+- **Step 1 done (2026-11-11)**: compact (≤ phone width, tested at 400 and 360 px) only; regular unchanged.
+  Non-live phases scroll vertically; overview = one full-width card column, lengths wrap, Start full width
+  below; fit check = head (scaled to width) above status/buttons, button rows wrap; calibration progress
+  full width; live header splits into title/time + progress/toggles; summary/trust totals = 3-column grid,
+  trust caption drops its parenthetical when the plot is narrow; button rows wrap.
+  Tests: `feedback::compact_tests` (no text off-screen at 400/360 for overview, fit check, live, summary;
+  regular keeps three columns), `trust::caption_tests`. After shots: `rust-*-compact-fixed{,-360}.png`,
+  `compare-overview-compact.png`.
 
 ## Ordered plan (rough effort)
 
