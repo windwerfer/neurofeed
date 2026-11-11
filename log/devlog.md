@@ -137,3 +137,13 @@
 - `athena-optics` is on `windwerfer/muse-rs` at `fe7cfd6`. nf-device now uses
   the git rev (default-features = false) instead of the `.local/` path dep, so
   CI can fetch it.
+
+## 2026-11-11: Release workflow macos-15 + upload on cancelled jobs
+
+- GitHub retired `macos-14` on 2026-11-02. The 0.64.0 (and 0.63.0) release runs cancelled
+  the macOS job at queue time (`macos-14-arm64-us-default is not supported`). `upload`
+  `needs` every platform job, so it was skipped and the GitHub releases got no assets
+  even though Linux, Windows, Flatpak, web and Android had built.
+- Switch the Apple Silicon job to `macos-15`. Run `upload` with `if: always()` after
+  meta succeeds so surviving artifacts still attach; fail the workflow if a platform
+  dropped. `workflow_dispatch` with a tag checks out that tag from a main workflow run.
