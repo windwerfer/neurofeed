@@ -151,3 +151,6 @@
   the install step now falls back to archive.ubuntu.com and retries.
 - Shared `scripts/ci-apt-install.sh` (retries + archive.ubuntu.com fallback, including
   `security.ubuntu.com`) is used by rust-ci native as well as the release Linux job.
+- ubuntu-22.04 release Linux also failed resolving *archive.ubuntu.com* (broken
+  runner stub resolver). `ci-apt-install.sh` now rewrites `/etc/resolv.conf` to
+  1.1.1.1 / 8.8.8.8 when name lookup fails.
