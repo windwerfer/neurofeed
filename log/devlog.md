@@ -154,3 +154,6 @@
 - ubuntu-22.04 release Linux also failed resolving *archive.ubuntu.com* (broken
   runner stub resolver). `ci-apt-install.sh` now rewrites `/etc/resolv.conf` to
   1.1.1.1 / 8.8.8.8 when name lookup fails.
+- A workflow_dispatch that checks out tag 0.64.0 cannot run `scripts/ci-apt-install.sh`
+  from the tagged tree (exit 127). The release Linux job now also checks out the
+  workflow SHA to get that script, then builds the tagged source.
