@@ -19,7 +19,13 @@ wasm-bindgen-cli follows the `wasm-bindgen` version in `Cargo.lock`.
 
 Test run without a release: *Actions → release → Run workflow* with `dry-run` checked (default):
 everything builds, the artifacts stay on the run, nothing is uploaded. With a `tag` and
-`dry-run` off, the assets go to that existing release.
+`dry-run` off, the workflow on `main` checks out that tag (it does not move it) and uploads
+to the existing release with `gh release upload --clobber`.
+
+The macOS job runs on `macos-15` (Apple Silicon). GitHub retired `macos-14` on 2026-11-02;
+jobs on that label are cancelled at queue time. Platform jobs already run in parallel; the
+`upload` job still attaches whatever built if one platform is cancelled or fails, then fails
+the workflow so a missing platform is not silent.
 
 ## Version
 
@@ -57,5 +63,6 @@ unset). The version is a pure function of the commit, so reproducible builds sta
 ## macOS
 
 Same approach as PhotoCraft: `NeuroFeed.app` (Apple Silicon, macOS 11+) on a drag-to-Applications
-DMG built with `hdiutil makehybrid` + `convert`, signed inside-out. Without a Developer ID it is
-ad-hoc signed (`MACOS_SIGN_IDENTITY=-`, not notarized): users open it once via right-click → Open.
+DMG built with `hdiutil makehybrid` + `convert` on the `macos-15` runner, signed inside-out.
+Without a Developer ID it is ad-hoc signed (`MACOS_SIGN_IDENTITY=-`, not notarized): users open
+it once via right-click → Open. There is no Apple Developer ID or notarization in CI.

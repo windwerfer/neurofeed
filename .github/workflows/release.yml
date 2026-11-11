@@ -1,6 +1,6 @@
 # Release packaging for every platform; assets are attached to the GitHub release.
 #   release published          -> build everything, upload to that release
-#   workflow_dispatch tag=vX.Y.Z -> same for an existing release (dry-run = build only)
+#   workflow_dispatch tag=0.64.0  -> same for an existing release (dry-run = build only)
 # Local equivalents: scripts/build-android.sh, scripts/package-{linux,flatpak,macos,web}.sh,
 # scripts/package-windows.ps1 (docs/release.md).
 name: release
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to attach to (e.g. v0.61.0); empty = version from git describe, no upload
+        description: Release tag to attach to (e.g. 0.64.0); empty = version from git describe, no upload
         required: false
         type: string
       dry-run:
@@ -33,6 +33,9 @@ jobs:
       version: ${{ steps.v.outputs.version }}
       tag: ${{ steps.v.outputs.tag }}
       upload: ${{ steps.v.outputs.upload }}
+      # Tag when set, else this run's SHA — so workflow_dispatch from main can
+      # build the tagged source and upload to an existing release.
+      checkout: ${{ steps.v.outputs.checkout }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -50,8 +53,12 @@ jobs:
             if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then UPLOAD=true
             else echo "::warning::no GitHub release '$TAG'; building without upload"; fi
           fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"; echo "tag=$TAG" >> "$GITHUB_OUTPUT"; echo "upload=$UPLOAD" >> "$GITHUB_OUTPUT"
-          echo "version=$V tag=$TAG upload=$UPLOAD"
+          CHECKOUT="${TAG:-$GITHUB_SHA}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "upload=$UPLOAD" >> "$GITHUB_OUTPUT"
+          echo "checkout=$CHECKOUT" >> "$GITHUB_OUTPUT"
+          echo "version=$V tag=$TAG upload=$UPLOAD checkout=$CHECKOUT"
 
   android:
     needs: meta
@@ -60,6 +67,7 @@ jobs:
       artifact-name: release-android
       version: ${{ needs.meta.outputs.version }}
       require-signing: true
+      ref: ${{ needs.meta.outputs.checkout }}
     secrets: inherit
 
   linux:
@@ -68,6 +76,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
+        with: { ref: "${{ needs.meta.outputs.checkout }}" }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libdbus-1-dev pkg-config libfuse2 file desktop-file-utils
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: "${{ env.RUST_VERSION }}" }
@@ -83,7 +92,7 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, ref: "${{ needs.meta.outputs.checkout }}" }
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Offline cargo sources + metainfo release entry
         run: |
@@ -103,6 +112,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with: { ref: "${{ needs.meta.outputs.checkout }}" }
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: "${{ env.RUST_VERSION }}", targets: x86_64-pc-windows-msvc }
       - run: pwsh scripts/package-windows.ps1 -Version "${{ needs.meta.outputs.version }}"
@@ -111,9 +121,12 @@ jobs:
 
   macos:
     needs: meta
-    runs-on: macos-14 # Apple Silicon
+    # Apple Silicon. macos-14 was retired 2026-11-02; jobs on that label are
+    # cancelled at queue time ("macos-14-arm64-us-default is not supported").
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
+        with: { ref: "${{ needs.meta.outputs.checkout }}" }
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: "${{ env.RUST_VERSION }}", targets: aarch64-apple-darwin }
       - run: scripts/package-macos.sh --version "${{ needs.meta.outputs.version }}"
@@ -125,6 +138,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with: { ref: "${{ needs.meta.outputs.checkout }}" }
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: "${{ env.RUST_VERSION }}", targets: wasm32-unknown-unknown }
       - uses: Swatinem/rust-cache@v2
@@ -134,8 +148,13 @@ jobs:
       - uses: actions/upload-artifact@v6
         with: { name: release-web, path: "dist/*", if-no-files-found: error }
 
+  # There is no matrix, so strategy.fail-fast does not apply; platform jobs already
+  # run in parallel. A *cancelled* needed job (retired runner, etc.) still skips
+  # dependents unless this job uses always(). Attach whatever built, then fail
+  # the workflow if a platform dropped.
   upload:
     needs: [meta, android, linux, flatpak, windows, macos, web]
+    if: ${{ always() && needs.meta.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v7
@@ -149,3 +168,8 @@ jobs:
         run: gh release upload "${{ needs.meta.outputs.tag }}" out/* --clobber -R "$GITHUB_REPOSITORY"
       - if: needs.meta.outputs.upload != 'true'
         run: echo "Dry run / no release - nothing uploaded."
+      - name: Fail if a platform job did not succeed
+        if: ${{ needs.android.result != 'success' || needs.linux.result != 'success' || needs.flatpak.result != 'success' || needs.windows.result != 'success' || needs.macos.result != 'success' || needs.web.result != 'success' }}
+        run: |
+          echo "::error::One or more platform jobs did not succeed (android=${{ needs.android.result }}, linux=${{ needs.linux.result }}, flatpak=${{ needs.flatpak.result }}, windows=${{ needs.windows.result }}, macos=${{ needs.macos.result }}, web=${{ needs.web.result }}). Any artifacts that did build were still uploaded."
+          exit 1
