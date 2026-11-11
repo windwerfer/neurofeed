@@ -57,22 +57,45 @@ pub fn totals(ui: &mut egui::Ui, t: &Trust, big: bool) {
     let x = &t.totals;
     let size = if big { 26.0 } else { 18.0 };
     let clean = (x.training_s > 0).then(|| f64::from(x.clean_s) * 100.0 / f64::from(x.training_s));
+    let mut stats: Vec<(String, String, &str)> = vec![
+        (t!("trust-in-zone"), pct(x.pct_in_zone), "share of clean training seconds above the threshold"),
+        (t!("trust-clean"), pct(clean), "training seconds without artifacts and with a verdict"),
+        (t!("trust-held-back"), pct(x.pct_held_back), "above target but not rewarded (band ceiling, guard, no baseline)"),
+    ];
+    if x.pct_warning.is_some() {
+        stats.push((t!("trust-guard-warning"), pct(x.pct_warning), "clean guarded seconds with the drowsiness warning on"));
+    }
+    stats.push((t!("trust-trained"), mmss(x.training_s), "calibration and pauses excluded"));
+    stats.push((t!("trust-rewards"), x.reward_chimes.to_string(), "reward chimes"));
+    // Labels never wrap: a stat is one short word + one number.
+    let stat = |ui: &mut egui::Ui, (label, value, hint): &(String, String, &str)| {
+        ui.vertical(|ui| {
+            ui.add(egui::Label::new(RichText::new(label.as_str()).weak()).extend());
+            ui.add(egui::Label::new(RichText::new(value.as_str()).size(size).strong()).extend()).on_hover_text(*hint);
+        });
+    };
+    if crate::ui::layout::current(ui.ctx()).is_compact() {
+        // Phones: a 3-column grid, so stats wrap as whole cells instead of
+        // squeezing the last one into a one-letter column.
+        let col = ((ui.available_width() - 2.0 * 12.0) / 3.0).floor().max(60.0);
+        egui::Grid::new(ui.scope_id().with("trust_totals")).num_columns(3).min_col_width(col).max_col_width(col).spacing([12.0, 6.0]).show(
+            ui,
+            |ui| {
+                for (i, s) in stats.iter().enumerate() {
+                    stat(ui, s);
+                    if i % 3 == 2 {
+                        ui.end_row();
+                    }
+                }
+            },
+        );
+        return;
+    }
     ui.horizontal_wrapped(|ui| {
-        let mut stat = |label: &str, value: String, hint: &str| {
-            ui.vertical(|ui| {
-                ui.weak(label);
-                ui.label(RichText::new(value).size(size).strong()).on_hover_text(hint);
-            });
+        for s in &stats {
+            stat(ui, s);
             ui.add_space(if big { 26.0 } else { 14.0 });
-        };
-        stat(&t!("trust-in-zone"), pct(x.pct_in_zone), "share of clean training seconds above the threshold");
-        stat(&t!("trust-clean"), pct(clean), "training seconds without artifacts and with a verdict");
-        stat(&t!("trust-held-back"), pct(x.pct_held_back), "above target but not rewarded (band ceiling, guard, no baseline)");
-        if x.pct_warning.is_some() {
-            stat(&t!("trust-guard-warning"), pct(x.pct_warning), "clean guarded seconds with the drowsiness warning on");
         }
-        stat(&t!("trust-trained"), mmss(x.training_s), "calibration and pauses excluded");
-        stat(&t!("trust-rewards"), x.reward_chimes.to_string(), "reward chimes");
     });
 }
 
@@ -194,9 +217,20 @@ fn draw_plot(p: &egui::Painter, ui: &egui::Ui, t: &Trust, plot: Plot, r: Rect, x
         p.line_segment([top, Pos2Ext::down(top, r.height())], Stroke::new(1.0_f32, MARK));
     }
     let what = if plot == Plot::Percentile { t!("trust-axis-percentile") } else { t!("trust-axis-value") };
+    // Narrow plots (phones): drop the parenthetical so the caption fits.
+    let wide = p.layout_no_wrap(what.clone(), egui::FontId::monospace(10.0), Color32::GRAY).size().x > r.width() + 8.0;
+    let what = if wide { short_caption(&what) } else { what };
     label(p, r.left_top() + Vec2::new(0.0, -12.0), Align2::LEFT_TOP, what);
     label(p, r.right_bottom() + Vec2::new(0.0, 12.0), Align2::RIGHT_BOTTOM, format!("{:.0} s", x.1 - x.0));
     y
+}
+
+/// `"a (b) · c"` → `"a · c"`: the caption without its parenthetical.
+fn short_caption(text: &str) -> String {
+    match (text.find(" ("), text.find(')')) {
+        (Some(a), Some(b)) if b > a => format!("{}{}", &text[..a], &text[b + 1..]),
+        _ => text.to_owned(),
+    }
 }
 
 trait Pos2Ext {
@@ -284,5 +318,14 @@ fn legend(ui: &mut egui::Ui, t: &Trust) {
     if !t.totals.dirty_s.is_empty() {
         let parts: Vec<String> = t.totals.dirty_s.iter().map(|(k, n)| format!("{} {n} s", k.replace('_', " "))).collect();
         ui.weak(t!("trust-dirty-totals", parts = parts.join(" · ")));
+    }
+}
+
+#[cfg(test)]
+mod caption_tests {
+    #[test]
+    fn short_caption_drops_the_parenthetical_only() {
+        assert_eq!(super::short_caption("percentile (dirty seconds hold the last clean value) · threshold"), "percentile · threshold");
+        assert_eq!(super::short_caption("feature value · threshold"), "feature value · threshold");
     }
 }

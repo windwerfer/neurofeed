@@ -16,6 +16,23 @@ const MINUTES: [u32; 4] = [5, 10, 20, 30];
 
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let t = session.trainer();
+    // Phones: the text-heavy phases scroll vertically and never widen past
+    // the screen. Live training sizes itself to the panel (no scroll).
+    if compact(ui) && !matches!(t.phase, Phase::Playing | Phase::Paused { .. }) {
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.set_max_width(ui.available_width());
+            phase(ui, session, t, out);
+        });
+    } else {
+        phase(ui, session, t, out);
+    }
+}
+
+fn compact(ui: &egui::Ui) -> bool {
+    crate::ui::layout::current(ui.ctx()).is_compact()
+}
+
+fn phase(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     match t.phase {
         Phase::Idle => protocols(ui, session, t, out),
         Phase::Ended if t.summary.is_none() => protocols(ui, session, t, out),
@@ -76,7 +93,7 @@ pub(super) fn card(ui: &mut egui::Ui, p: &Protocol, selected: bool, w: f32) -> e
         .inner_margin(12.0)
         .show(ui, |ui| {
             ui.set_width(w);
-            ui.set_height(92.0);
+            ui.set_min_height(92.0);
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(crate::i18n::protocol_title(p)).strong().size(17.0));
@@ -115,9 +132,16 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
         chip(ui, m, FAIR);
         ui.add_space(8.0);
     }
-    let w = ((ui.available_width() - 3.0 * 26.0 - 24.0) / 3.0).max(200.0);
+    let narrow = compact(ui);
+    // Regular: three columns. Compact: one full-width column (card frame
+    // adds 12 px margin + stroke on each side).
+    let (cols, w) = if narrow {
+        (1, (ui.available_width() - 2.0 * 14.0).max(120.0))
+    } else {
+        (3, ((ui.available_width() - 3.0 * 26.0 - 24.0) / 3.0).max(200.0))
+    };
     let all = nf_core::protocols::all(&session.state().custom_protocols);
-    egui::Grid::new("protocol_cards").spacing([12.0, 12.0]).show(ui, |ui| {
+    egui::Grid::new("protocol_cards").spacing([12.0, if narrow { 8.0 } else { 12.0 }]).show(ui, |ui| {
         for (i, p) in all.iter().enumerate() {
             let selected = p.id == t.protocol.id;
             let rect = card(ui, p, selected, w).rect;
@@ -125,7 +149,7 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
             if resp.clicked() && !selected {
                 out.push(Command::ProtocolSet { id: p.id.clone(), minutes: None });
             }
-            if i % 3 == 2 {
+            if i % cols == cols - 1 {
                 ui.end_row();
             }
         }
@@ -135,13 +159,38 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     super::protocol_builder::window(ui.ctx(), session, out);
     ui.add_space(14.0);
     super::sound::guard_row(ui, session, out);
-    ui.horizontal(|ui| {
+    let lengths = |ui: &mut egui::Ui, out: &mut Vec<Command>| {
         ui.label(t!("feedback-length"));
         for m in MINUTES {
             if ui.selectable_label(t.minutes == m, t!("feedback-n-min", min = m)).clicked() {
                 out.push(Command::ProtocolSet { id: t.protocol.id.clone(), minutes: Some(m) });
             }
         }
+    };
+    if narrow {
+        // Lengths on one row, Start full width below (never clipped).
+        ui.horizontal_wrapped(|ui| lengths(ui, out));
+        ui.add_space(10.0);
+        ui.scope(|ui| {
+            ui.spacing_mut().button_padding.y = 8.0;
+            let title = t!("feedback-start-title", title = crate::i18n::protocol_title(&t.protocol));
+            let enabled = session.enabled("feedback.start");
+            let b = egui::Button::new(RichText::new(title).strong().size(16.0))
+                .fill(CALM.gamma_multiply(0.6))
+                .min_size(Vec2::new(ui.available_width(), 44.0));
+            let r = ui.add_enabled(enabled.is_ok(), b);
+            let r = match &enabled {
+                Err(why) => r.on_disabled_hover_text(why),
+                Ok(()) => r,
+            };
+            if r.clicked() {
+                out.push(Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None });
+            }
+        });
+        return;
+    }
+    ui.horizontal(|ui| {
+        lengths(ui, out);
         ui.add_space(16.0);
         action(
             ui,
@@ -192,8 +241,7 @@ fn hint(name: &str) -> String {
     }
 }
 
-fn head(ui: &mut egui::Ui, session: &Session, pads: &[PadFit]) {
-    let size = 260.0;
+fn head(ui: &mut egui::Ui, session: &Session, pads: &[PadFit], size: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
     let p = ui.painter_at(rect);
     let c = rect.center();
@@ -222,53 +270,56 @@ fn head(ui: &mut egui::Ui, session: &Session, pads: &[PadFit]) {
 
 fn fit_check(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     header(ui, &t!("feedback-fit-check"), &t!("feedback-put-the-headband-on-the"));
+    if compact(ui) {
+        // Head on top (scaled to the width), status and buttons below.
+        let size = ui.available_width().clamp(160.0, 260.0);
+        ui.vertical_centered(|ui| head(ui, session, &t.pads, size));
+        ui.add_space(6.0);
+        fit_controls(ui, session, t, out, true);
+        return;
+    }
     ui.horizontal(|ui| {
-        head(ui, session, &t.pads);
+        head(ui, session, &t.pads, 260.0);
         ui.vertical(|ui| {
             ui.add_space(20.0);
-            if t.fit_ready() {
-                chip(ui, &t!("feedback-good-fit-ready-to-calibrate"), GOOD);
-            } else if t.pads.iter().all(|p| p.good) && !t.pads.is_empty() {
-                chip(ui, &t!("feedback-hold-still", n = t.green_for, total = FIT_GREEN_S), GOOD);
-            } else {
-                chip(ui, &t!("feedback-adjust-the-headband"), FAIR);
-            }
-            ui.add_space(10.0);
-            for p in t.pads.iter().filter(|p| !p.good) {
-                ui.label(format!("{}: {}", p.name, hint(&p.name)));
-            }
-            if let Some(m) = &t.message {
-                ui.add_space(6.0);
-                ui.colored_label(FAIR, m);
-            }
-            ui.add_space(16.0);
-            ui.horizontal(|ui| {
-                ui.add_enabled_ui(t.fit_ready(), |ui| {
-                    action(
-                        ui,
-                        session,
-                        "calibration.start",
-                        &t!("feedback-calibrate"),
-                        true,
-                        Command::CalibrationStart { anyway: false },
-                        out,
-                    );
-                });
-                action(
-                    ui,
-                    session,
-                    "calibration.start",
-                    &t!("feedback-start-anyway"),
-                    false,
-                    Command::CalibrationStart { anyway: true },
-                    out,
-                );
-                action(ui, session, "calibration.reuse", &t!("feedback-reuse-last-baseline"), false, Command::CalibrationReuse, out);
-            });
-            ui.add_space(8.0);
-            action(ui, session, "feedback.stop", &t!("feedback-cancel"), false, Command::FeedbackStop, out);
+            fit_controls(ui, session, t, out, false);
         });
     });
+}
+
+/// Fit status, per-pad hints and the calibrate/cancel buttons. `narrow`
+/// wraps the button row instead of letting it run off a phone screen.
+fn fit_controls(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>, narrow: bool) {
+    if t.fit_ready() {
+        chip(ui, &t!("feedback-good-fit-ready-to-calibrate"), GOOD);
+    } else if t.pads.iter().all(|p| p.good) && !t.pads.is_empty() {
+        chip(ui, &t!("feedback-hold-still", n = t.green_for, total = FIT_GREEN_S), GOOD);
+    } else {
+        chip(ui, &t!("feedback-adjust-the-headband"), FAIR);
+    }
+    ui.add_space(10.0);
+    for p in t.pads.iter().filter(|p| !p.good) {
+        ui.label(format!("{}: {}", p.name, hint(&p.name)));
+    }
+    if let Some(m) = &t.message {
+        ui.add_space(6.0);
+        ui.colored_label(FAIR, m);
+    }
+    ui.add_space(16.0);
+    let row = |ui: &mut egui::Ui, out: &mut Vec<Command>| {
+        ui.add_enabled_ui(t.fit_ready(), |ui| {
+            action(ui, session, "calibration.start", &t!("feedback-calibrate"), true, Command::CalibrationStart { anyway: false }, out);
+        });
+        action(ui, session, "calibration.start", &t!("feedback-start-anyway"), false, Command::CalibrationStart { anyway: true }, out);
+        action(ui, session, "calibration.reuse", &t!("feedback-reuse-last-baseline"), false, Command::CalibrationReuse, out);
+    };
+    if narrow {
+        ui.horizontal_wrapped(|ui| row(ui, out));
+    } else {
+        ui.horizontal(|ui| row(ui, out));
+    }
+    ui.add_space(8.0);
+    action(ui, session, "feedback.stop", &t!("feedback-cancel"), false, Command::FeedbackStop, out);
 }
 
 fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
@@ -282,7 +333,9 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
         (false, _, Eyes::Open) => t!("feedback-keep-your-eyes-open-on"),
     };
     header(ui, &t!("feedback-calibrating"), &instruction);
-    ui.add(egui::ProgressBar::new(c.valid_s as f32 / c.needed_s.max(1) as f32).desired_width(520.0).text(t!(
+    let narrow = compact(ui);
+    let bar_w = if narrow { ui.available_width() } else { 520.0 };
+    ui.add(egui::ProgressBar::new(c.valid_s as f32 / c.needed_s.max(1) as f32).desired_width(bar_w).text(t!(
         "feedback-good-seconds",
         n = c.valid_s,
         total = c.needed_s
@@ -291,7 +344,7 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
     ui.add_space(10.0);
     if c.awake_missing {
         egui::Frame::group(ui.style()).stroke(Stroke::new(1.5_f32, BAD)).inner_margin(10.0).show(ui, |ui| {
-            ui.set_max_width(520.0);
+            ui.set_max_width(bar_w);
             ui.label(RichText::new(t!("feedback-no-awake-reference")).strong().color(BAD));
             ui.label(t!("feedback-the-ai-model-gave-no"));
             ui.weak(t!("feedback-cancel-check-the-model-is"));
@@ -303,11 +356,16 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
         }
     }
     ui.add_space(16.0);
-    ui.horizontal(|ui| {
+    let row = |ui: &mut egui::Ui, out: &mut Vec<Command>| {
         action(ui, session, "calibration.skip", &t!("feedback-start-now"), false, Command::CalibrationSkip, out);
         action(ui, session, "calibration.reuse", &t!("feedback-reuse-last-baseline"), false, Command::CalibrationReuse, out);
         action(ui, session, "feedback.stop", &t!("feedback-cancel"), false, Command::FeedbackStop, out);
-    });
+    };
+    if narrow {
+        ui.horizontal_wrapped(|ui| row(ui, out));
+    } else {
+        ui.horizontal(|ui| row(ui, out));
+    }
 }
 
 fn mmss(s: u32) -> String {
@@ -360,7 +418,8 @@ fn status(t: &Trainer) -> (String, Color32) {
 
 fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let mut d: Dash = ui.data(|x| x.get_temp(dash_id())).unwrap_or_default();
-    ui.horizontal(|ui| {
+    let narrow = compact(ui);
+    let header = |ui: &mut egui::Ui, d: &mut Dash| {
         ui.heading(crate::i18n::protocol_title(&t.protocol));
         ui.weak(t!("feedback-time-left", time = mmss(t.total_s().saturating_sub(t.played_s))));
         let frac = t.played_s as f32 / t.total_s().max(1) as f32;
@@ -369,7 +428,24 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
             ui.toggle_value(&mut d.show_nerd, t!("feedback-nerd")).on_hover_text(t!("feedback-the-numbers-behind-the-reward"));
             ui.toggle_value(&mut d.show_trust, t!("feedback-trust")).on_hover_text(t!("feedback-live-trust-trace-what-each"));
         });
-    });
+    };
+    if narrow {
+        // Phones: title + time left on one line, progress and toggles below.
+        ui.horizontal_wrapped(|ui| {
+            ui.heading(crate::i18n::protocol_title(&t.protocol));
+            ui.weak(t!("feedback-time-left", time = mmss(t.total_s().saturating_sub(t.played_s))));
+        });
+        ui.horizontal(|ui| {
+            let frac = t.played_s as f32 / t.total_s().max(1) as f32;
+            ui.add(egui::ProgressBar::new(frac).desired_width((ui.available_width() - 120.0).max(60.0)).desired_height(6.0));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.toggle_value(&mut d.show_nerd, t!("feedback-nerd"));
+                ui.toggle_value(&mut d.show_trust, t!("feedback-trust"));
+            });
+        });
+    } else {
+        ui.horizontal(|ui| header(ui, &mut d));
+    }
     if session.state().settings.debug {
         feature_override(ui, t, out);
     }
@@ -463,7 +539,9 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
     );
     let mut d: Dash = ui.data(|x| x.get_temp(dash_id())).unwrap_or_default();
     let trust = live_trust(t, &mut d);
-    ui.allocate_ui(Vec2::new(ui.available_width().min(900.0), 360.0), |ui| super::trust::pane(ui, &trust, &mut d.plot, 200.0, true));
+    let narrow = compact(ui);
+    let plot_h = if narrow { 160.0 } else { 200.0 };
+    ui.allocate_ui(Vec2::new(ui.available_width().min(900.0), 360.0), |ui| super::trust::pane(ui, &trust, &mut d.plot, plot_h, true));
     ui.data_mut(|x| x.insert_temp(dash_id(), d));
     ui.add_space(6.0);
     let thr = |x: Option<f64>| x.map_or("--".into(), |v| format!("{v:.3}"));
@@ -480,7 +558,7 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
         super::meta::notes(ui, session, id, out);
     }
     ui.add_space(14.0);
-    ui.horizontal(|ui| {
+    let row = |ui: &mut egui::Ui, out: &mut Vec<Command>| {
         action(
             ui,
             session,
@@ -500,7 +578,12 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
             out,
         );
         action(ui, session, "view.set", &t!("feedback-open-history"), false, Command::ViewSet { view: nf_core::View::History }, out);
-    });
+    };
+    if narrow {
+        ui.horizontal_wrapped(|ui| row(ui, out));
+    } else {
+        ui.horizontal(|ui| row(ui, out));
+    }
 }
 
 /// Debug feature override (legacy `feature_override.dart`): latch the
@@ -524,4 +607,141 @@ fn feature_override(ui: &mut egui::Ui, t: &Trainer, out: &mut Vec<Command>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod compact_tests {
+    #![allow(clippy::unwrap_used, clippy::panic)]
+    use super::*;
+    use egui::{Pos2, Rect};
+    use serde_json::json;
+
+    /// Text shapes of the last of `n` full-app frames: (text, left, right).
+    fn texts(s: &mut Session, size: Vec2, n: usize) -> Vec<(String, f32, f32)> {
+        let _lang = crate::i18n::lang_lock();
+        let ctx = egui::Context::default();
+        let mut last = Vec::new();
+        for i in 0..n {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
+                time: Some(i as f64 / 60.0),
+                ..Default::default()
+            };
+            let mut o = ctx.run_ui(input, |u| {
+                crate::ui::show(u, s, None);
+            });
+            o.textures_delta.clear();
+            last = o.shapes;
+        }
+        last.iter()
+            .filter_map(|c| match &c.shape {
+                egui::Shape::Text(t) => {
+                    let r = t.galley.rect.translate(t.pos.to_vec2());
+                    Some((t.galley.text().to_owned(), r.left(), r.right()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn session(layout: &str) -> Session {
+        let mut s = Session::new();
+        s.call("settings.set", json!({ "onboarded": true, "layout": layout })).unwrap();
+        s.call("device.connect", json!({ "id": "sim:muse_s" })).unwrap();
+        s.call("view.set", json!({ "view": "feedback" })).unwrap();
+        s.call("protocol.set", json!({ "id": "alertOpen" })).unwrap();
+        s.call("clock.advance", json!({ "seconds": 5.0 })).unwrap();
+        s
+    }
+
+    fn to_fit_check(s: &mut Session) {
+        s.call("feedback.start", json!({})).unwrap();
+        s.call("clock.advance", json!({ "seconds": 5.0 })).unwrap();
+        assert_eq!(s.trainer().phase, Phase::FitCheck);
+    }
+
+    fn to_summary(s: &mut Session) {
+        to_fit_check(s);
+        s.call("calibration.start", json!({ "anyway": false })).unwrap();
+        for _ in 0..20 {
+            s.call("clock.advance", json!({ "seconds": 5.0 })).unwrap();
+        }
+        assert_eq!(s.trainer().phase, Phase::Playing);
+        s.call("clock.advance", json!({ "seconds": 30.0 })).unwrap();
+        s.call("feedback.stop", json!({})).unwrap();
+        assert!(s.trainer().summary.is_some());
+    }
+
+    /// Every text stays inside the screen width (nothing clipped at the right).
+    fn assert_fits(t: &[(String, f32, f32)], w: f32, what: &str) {
+        let bad: Vec<_> = t.iter().filter(|(_, l, r)| *r > w + 0.5 || *l < -0.5).collect();
+        assert!(bad.is_empty(), "{what} at {w} px: off-screen texts {bad:?}");
+    }
+
+    const PHONES: [(f32, f32); 2] = [(400.0, 850.0), (360.0, 800.0)];
+
+    #[test]
+    fn compact_overview_fits_and_start_is_fully_visible() {
+        for (w, h) in PHONES {
+            let mut s = session("compact");
+            let t = texts(&mut s, Vec2::new(w, h), 3);
+            assert_fits(&t, w, "overview");
+            // Taller frame so the scrolled-off part is painted too.
+            let t = texts(&mut s, Vec2::new(w, 1800.0), 3);
+            assert_fits(&t, w, "overview (full)");
+            let start = t.iter().find(|(x, ..)| x.starts_with("Start ")).expect("start button");
+            assert!(start.2 <= w, "{start:?}");
+            // One card per row: all titles start at the same x.
+            let lefts: Vec<f32> = ["Rest Awake", "Open Monitor", "Alert, Eyes Open"]
+                .iter()
+                .map(|n| t.iter().find(|(x, ..)| x == n).unwrap_or_else(|| panic!("{n}")).1)
+                .collect();
+            assert!(lefts.iter().all(|l| (l - lefts[0]).abs() < 2.0), "{lefts:?}");
+        }
+    }
+
+    #[test]
+    fn compact_fit_check_and_summary_fit_the_screen() {
+        for (w, h) in PHONES {
+            let mut s = session("compact");
+            to_fit_check(&mut s);
+            let t = texts(&mut s, Vec2::new(w, h), 3);
+            assert_fits(&t, w, "fit check");
+            assert!(t.iter().any(|(x, ..)| x == "Calibrate"));
+
+            let mut s = session("compact");
+            to_summary(&mut s);
+            let t = texts(&mut s, Vec2::new(w, h), 3);
+            assert_fits(&t, w, "summary");
+            // Stats are whole cells: label and value each on one line.
+            for n in ["In zone", "Clean", "Held back", "Trained", "Rewards", "100 %"] {
+                assert!(t.iter().any(|(x, ..)| x == n), "{n} split or missing: {t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn compact_live_header_fits() {
+        for (w, h) in PHONES {
+            let mut s = session("compact");
+            to_fit_check(&mut s);
+            s.call("calibration.start", json!({ "anyway": false })).unwrap();
+            for _ in 0..20 {
+                s.call("clock.advance", json!({ "seconds": 5.0 })).unwrap();
+            }
+            assert_eq!(s.trainer().phase, Phase::Playing);
+            let t = texts(&mut s, Vec2::new(w, h), 3);
+            assert_fits(&t, w, "live");
+            assert!(t.iter().any(|(x, ..)| x == "Nerd") && t.iter().any(|(x, ..)| x == "End session"), "{t:?}");
+        }
+    }
+
+    #[test]
+    fn regular_overview_keeps_three_columns() {
+        let mut s = session("regular");
+        let t = texts(&mut s, Vec2::new(1280.0, 800.0), 3);
+        let left = |n: &str| t.iter().find(|(x, ..)| x == n).unwrap_or_else(|| panic!("{n}")).1;
+        assert!(left("Rest Awake") < left("Open Monitor") && left("Open Monitor") < left("Alert, Eyes Open"));
+        assert!((left("Rest Awake") - left("Alert, Eyes Closed")).abs() < 1.0);
+    }
 }
