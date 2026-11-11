@@ -14,6 +14,7 @@
 //! | 11  | Feedback      | ts f64, value f32, threshold f32, flags u16    |
 //! | 12  | Trust         | ts f64, native pct thr_pct f32, bits u16       |
 //! | 13  | Guard         | ts f64, value f32, line f32 (decision scale)   |
+//! | 14  | Optics        | ts f64, lane i16, n u16, n × f32               |
 //!
 //! Tag 11 is new (not in the legacy app). Legacy readers stop at the first
 //! unknown tag, so writers append all feedback records at the end of the
@@ -32,6 +33,7 @@ pub const TAG_SPO2: u8 = 10;
 pub const TAG_FEEDBACK: u8 = 11;
 pub const TAG_TRUST: u8 = 12;
 pub const TAG_GUARD: u8 = 13;
+pub const TAG_OPTICS: u8 = 14;
 
 /// `Record::Trust` bits: dirty reason in the low 3 bits, then flags.
 pub mod trust_bits {
@@ -94,6 +96,12 @@ pub enum Record {
     Ppg {
         ts: f64,
         channel: i16,
+        samples: Vec<f32>,
+    },
+    /// Athena optical lane (raw ADC counts). Tag 14.
+    Optics {
+        ts: f64,
+        lane: i16,
         samples: Vec<f32>,
     },
     Bands {
@@ -193,6 +201,11 @@ impl Record {
                 out.extend_from_slice(&channel.to_le_bytes());
                 f32s(out, samples);
             }
+            Record::Optics { ts, lane, samples } => {
+                head(out, TAG_OPTICS, *ts);
+                out.extend_from_slice(&lane.to_le_bytes());
+                f32s(out, samples);
+            }
             Record::Bands { ts, electrode, bands } => {
                 head(out, TAG_BANDS, *ts);
                 out.extend_from_slice(&electrode.to_le_bytes());
@@ -288,6 +301,11 @@ impl Reader<'_> {
                 } else {
                     Record::Accelerometer { ts, seq, xyz }
                 }
+            }
+            TAG_OPTICS => {
+                let lane = self.i16()?;
+                let n = self.u16()?;
+                Record::Optics { ts, lane, samples: self.f32s(n.into())? }
             }
             TAG_PPG => {
                 let channel = self.i16()?;

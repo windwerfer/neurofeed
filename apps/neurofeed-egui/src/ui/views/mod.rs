@@ -15,10 +15,11 @@ mod about;
 mod meta;
 mod movement;
 mod nerd;
+pub(crate) mod optics;
 mod plot;
 mod protocol_builder;
 mod psd;
-mod raw;
+pub(crate) mod raw;
 mod settings;
 mod sound;
 mod spectrogram;
@@ -36,6 +37,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell:
         View::RawEeg => raw::show(ui, session, out),
         View::Psd => psd::show(ui, session, out),
         View::HeartRate => heart::show(ui, session, out),
+        View::Optics => optics::show(ui, session, out),
         View::Movement => movement::show(ui, session),
         View::Histogram => histogram::show(ui, session, out),
         View::Spectrogram => spectrogram::show(ui, session, out),

@@ -25,6 +25,7 @@ pub mod feedback;
 pub mod import;
 pub mod monitor;
 pub mod nerd;
+pub mod optical;
 pub mod optics;
 pub mod protocols;
 pub mod rawtrace;

@@ -17,13 +17,14 @@ pub enum View {
     Spectrogram,
     Psd,
     HeartRate,
+    Optics,
     Movement,
     Streaming,
     Settings,
 }
 
 impl View {
-    pub const ALL: [View; 11] = [
+    pub const ALL: [View; 12] = [
         View::Feedback,
         View::History,
         View::Bands,
@@ -32,6 +33,7 @@ impl View {
         View::Spectrogram,
         View::Psd,
         View::HeartRate,
+        View::Optics,
         View::Movement,
         View::Streaming,
         View::Settings,
@@ -47,6 +49,7 @@ impl View {
             View::Spectrogram => "Spectrogram",
             View::Psd => "PSD",
             View::HeartRate => "HR+SpO2",
+            View::Optics => "Optics",
             View::Movement => "Movement",
             View::Streaming => "Streaming",
             View::Settings => "Settings",

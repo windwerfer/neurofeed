@@ -9,6 +9,7 @@ fn all_records() -> Vec<Record> {
         Record::Accelerometer { ts: 2.1, seq: 7, xyz: vec![[0.1, 0.2, 0.3], [1.0, 2.0, 3.0]] },
         Record::Gyroscope { ts: 2.2, seq: 8, xyz: vec![[4.0, 5.0, 6.0]] },
         Record::Ppg { ts: 2.3, channel: 1, samples: vec![200_000.0; 6] },
+        Record::Optics { ts: 2.35, lane: 1, samples: vec![210_000.0; 6] },
         Record::Bands { ts: 2.4, electrode: 0, bands: [1.0, 0.5, 0.75, 0.25, -0.1] },
         Record::Pulse { ts: 2.5, bpm: 72.0, confidence: 0.9 },
         Record::Movement { ts: 2.6, score: 0.1 },

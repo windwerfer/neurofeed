@@ -9,7 +9,7 @@ use crate::signal::{mains_name, Signal, SPEC_HOP_S};
 use crate::state::{AppState, BandScale, View};
 use crate::{CoreError, Reply};
 use nf_sim::SimProvider;
-use nf_types::{AccelPacket, Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
+use nf_types::{AccelPacket, Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket, LinkState, OpticsPacket, PpgPacket};
 
 /// One poll of the device: EEG, optical, accelerometer.
 /// Longest raw PPG slice one `ppg.get` returns (bounded output).
@@ -40,7 +40,7 @@ fn heart_span(id: crate::monitor::MonitorId, o: &crate::optics::Optics, now: f64
     span
 }
 
-type Polled = (Vec<EegPacket>, Vec<PpgPacket>, Vec<AccelPacket>);
+type Polled = (Vec<EegPacket>, Vec<PpgPacket>, Vec<AccelPacket>, Vec<OpticsPacket>);
 use serde::Serialize;
 use serde_json::json;
 
@@ -144,6 +144,7 @@ struct Live {
     crown_q: Option<(Vec<f64>, f64)>,
     side: Option<crate::side::Side>,
     optics: Option<crate::optics::Optics>,
+    optical: Option<crate::optical::Optical>,
     recorder: Option<Recorder>,
     finished: Option<Finished>,
     fault: Fault,
@@ -387,6 +388,7 @@ impl Session {
             duration: s.meta.duration_s,
             eeg_samples: s.meta.eeg_samples,
             ppg_samples: s.meta.ppg_samples,
+            optics_samples: 0,
             feedback_seconds: s.meta.feedback_seconds,
             bytes: s.body.len(),
             wall_clock_unix_ms: s.meta.started_unix_ms,
@@ -666,9 +668,9 @@ impl Session {
         self.state.time += dt;
         let now = self.state.time;
         self.sync_lsl();
-        if let Some((mut packets, optical, accel)) = self.poll_device(now) {
+        if let Some((mut packets, optical, accel, athena)) = self.poll_device(now) {
             self.route_aux(&mut packets, &accel);
-            self.route_side_streams(&packets, &optical, &accel);
+            self.route_side_streams(&packets, &optical, &accel, &athena);
             let full = self.process_eeg(&mut packets);
             self.flush_stream();
             if let Some(r) = self.live.recorder.as_mut() {
@@ -808,10 +810,15 @@ impl Session {
     /// Drain the device (always, so resume has no backlog burst; pause only
     /// freezes the views), track the link and apply simulated faults.
     fn poll_device(&mut self, now: f64) -> Option<Polled> {
+        let fresh = self.source.as_ref()?.info();
+        if self.state.device.as_ref() != Some(&fresh) {
+            self.apply_device_info(fresh);
+        }
         let src = self.source.as_mut()?;
         let mut packets = src.poll(now);
         let mut optical = src.poll_ppg(now);
         let mut accel = src.poll_accel(now);
+        let athena = src.poll_optics(now);
         let quality = src.poll_quality(now);
         let mut link = src.link();
         let battery = src.battery();
@@ -851,7 +858,7 @@ impl Session {
                 *x += (FAULT_UV * (std::f64::consts::TAU * 3.0 * t).sin()) as f32;
             }
         }
-        Some((packets, optical, accel))
+        Some((packets, optical, accel, athena))
     }
 
     /// Take AUX packets out of the EEG path: shown when Settings → Devices
@@ -878,7 +885,7 @@ impl Session {
     }
 
     /// Artifact detector, recorder (recording continues while paused), optics.
-    fn route_side_streams(&mut self, packets: &[EegPacket], optical: &[PpgPacket], accel: &[AccelPacket]) {
+    fn route_side_streams(&mut self, packets: &[EegPacket], optical: &[PpgPacket], accel: &[AccelPacket], athena: &[OpticsPacket]) {
         if let Some(a) = self.live.artifacts.as_mut() {
             accel.iter().for_each(|p| a.accel(p));
             if let Some(d) = &self.state.device {
@@ -888,11 +895,17 @@ impl Session {
         }
         if let Some(r) = self.live.recorder.as_mut() {
             optical.iter().for_each(|p| r.ppg(p));
+            athena.iter().for_each(|p| r.optics(p));
             accel.iter().for_each(|p| r.accel(p));
         }
         if self.streaming() {
             optical.iter().for_each(|p| self.live.streamer.ppg(p));
             accel.iter().for_each(|p| self.live.streamer.accel(p));
+        }
+        if let Some(o) = self.live.optical.as_mut() {
+            if !self.state.paused {
+                athena.iter().for_each(|p| o.push(p));
+            }
         }
         // Optics always ingest (the recording's HR/SpO2 means must not miss
         // a paused stretch); Pause only freezes what the HR view presents.
@@ -1344,6 +1357,17 @@ impl Session {
                 }
                 self.persist_settings();
             }
+            Command::MonitorOptics { mode, lanes } => {
+                let r = &mut self.state.monitors.optics;
+                r.mode = mode.unwrap_or(r.mode);
+                if let Some(e) = lanes {
+                    r.lanes = e.into_iter().take(16).collect();
+                }
+                self.persist_settings();
+            }
+            Command::OpticsPresetSet { preset } => {
+                self.set_optics_preset(&preset)?;
+            }
             Command::MonitorPsd { range, electrodes } => {
                 let d = &mut self.state.monitors.psd;
                 d.range = range.unwrap_or(d.range);
@@ -1355,7 +1379,7 @@ impl Session {
             Command::MonitorOverview { monitor, on } => {
                 if monitor.overview().is_none() || monitor == crate::monitor::MonitorId::HeartDetail {
                     return Err(CoreError::InvalidArgs(format!(
-                        "{} has no overview (bands, raw_eeg, histogram, psd, spectrogram)",
+                        "{} has no overview (bands, raw_eeg, histogram, psd, spectrogram, optics)",
                         monitor.name()
                     )));
                 }
@@ -1631,9 +1655,13 @@ impl Session {
                 self.refresh_history();
             }
             Command::SettingsSet(p) => {
+                let preset = p.athena_preset.clone();
                 crate::settings::apply(&mut self.state.settings, &p).map_err(CoreError::InvalidArgs)?;
                 if !self.state.settings.debug {
                     self.state.feedback.feature_override = None;
+                }
+                if preset.is_some() {
+                    self.apply_saved_optics_preset();
                 }
             }
             Command::RecoveryRestore => self.recover(true)?,
@@ -1696,6 +1724,7 @@ impl Session {
         let info = src.info();
         self.live.signal = Some(Signal::new(&info, self.state.mains_mode));
         self.live.optics = crate::optics::Optics::new(&info);
+        self.live.optical = crate::optical::Optical::new(&info);
         self.live.artifacts = Some(crate::artifacts::Artifacts::new(&info));
         self.live.side = Some(crate::side::Side::new(&info));
         self.emit(Event::Connected { id: info.id.clone() });
@@ -1704,6 +1733,7 @@ impl Session {
         self.state.monitors.clear_bookmarks();
         self.state.device = Some(info);
         self.source = Some(src);
+        self.apply_saved_optics_preset();
         Ok(())
     }
 
@@ -1793,6 +1823,7 @@ impl Session {
         self.state.battery = None;
         self.live.signal = None;
         self.live.optics = None;
+        self.live.optical = None;
         self.live.artifacts = None;
         self.live.side = None;
         self.state.bands.clear();
@@ -1915,6 +1946,8 @@ impl Session {
             Query::HrGet => self.estimate_json(true)?,
             Query::Spo2Get => self.estimate_json(false)?,
             Query::PpgGet { seconds, end_s } => self.ppg_json(seconds.unwrap_or(5.0), *end_s)?,
+            Query::OpticsGet { seconds, end_s } => self.optics_json(seconds.unwrap_or(5.0), *end_s)?,
+            Query::OpticsPresetGet => self.optics_preset_json()?,
             Query::HeartGet { time_s } => self.heart_json(*time_s)?,
             Query::SignalStatus => self.signal_status(),
             Query::ArtifactStatus => {
@@ -1980,8 +2013,99 @@ impl Session {
         self.live.optics.as_ref()
     }
 
+    /// Athena optical ring of the connected device.
+    pub fn live_optical(&self) -> Option<(&nf_types::DeviceInfo, &crate::optical::Optical)> {
+        Some((self.state.device.as_ref()?, self.live.optical.as_ref()?))
+    }
+
     fn optics_or_err(&self) -> Result<&crate::optics::Optics, CoreError> {
         self.live.optics.as_ref().ok_or_else(|| CoreError::Device("connected device has no PPG (HR/SpO2: Muse 2 and Muse S only)".into()))
+    }
+
+    fn apply_device_info(&mut self, info: DeviceInfo) {
+        if self.state.device.as_ref() == Some(&info) {
+            return;
+        }
+        self.live.optics = crate::optics::Optics::new(&info);
+        self.live.optical = crate::optical::Optical::new(&info);
+        self.state.device = Some(info);
+        self.state.revision += 1;
+        self.apply_saved_optics_preset();
+    }
+
+    fn apply_saved_optics_preset(&mut self) {
+        let preset = self.state.settings.athena_preset.clone();
+        if preset.is_empty() {
+            return;
+        }
+        if self.state.device.as_ref().is_some_and(|d| d.has_optics() && d.optics_preset.as_deref() != Some(preset.as_str())) {
+            let _ = self.set_optics_preset(&preset);
+        }
+    }
+
+    fn set_optics_preset(&mut self, preset: &str) -> Result<(), CoreError> {
+        {
+            let src = self.source.as_mut().ok_or_else(|| CoreError::Device("no device connected".into()))?;
+            src.set_optics_preset(preset).map_err(CoreError::InvalidArgs)?;
+        }
+        self.state.settings.athena_preset = preset.to_owned();
+        self.persist_settings();
+        let info = self.source.as_ref().ok_or_else(|| CoreError::Device("no device connected".into()))?.info();
+        self.live.optics = crate::optics::Optics::new(&info);
+        self.live.optical = crate::optical::Optical::new(&info);
+        self.state.device = Some(info);
+        self.state.revision += 1;
+        Ok(())
+    }
+
+    fn optics_or_ring(&self) -> Result<&crate::optical::Optical, CoreError> {
+        self.live.optical.as_ref().ok_or_else(|| CoreError::Device("connected device has no Athena optics (Muse S Athena only)".into()))
+    }
+
+    fn optics_json(&self, seconds: f64, end_s: Option<f64>) -> Result<Reply, CoreError> {
+        if !(seconds.is_finite() && seconds > 0.0 && seconds <= crate::optical::GET_MAX_S) {
+            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {}]", crate::optical::GET_MAX_S)));
+        }
+        if end_s.is_some_and(|e| !e.is_finite()) {
+            return Err(CoreError::InvalidArgs("end_s must be finite".into()));
+        }
+        let o = self.optics_or_ring()?;
+        let names = self.state.device.as_ref().map(|d| d.optics_channels.clone()).unwrap_or_default();
+        let newest = o.time.unwrap_or(0.0);
+        let end = end_s.unwrap_or(newest);
+        let need = (seconds * o.rate).ceil() as usize + 1;
+        let skip = ((newest - end) * o.rate).round().max(0.0) as usize;
+        let channels: Vec<_> = names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let samples = o.slice(i, skip, need);
+                json!({ "lane": name, "index": i, "samples": samples, "n": samples.len() })
+            })
+            .collect();
+        Ok(json!({
+            "rate_hz": o.rate,
+            "preset": self.state.device.as_ref().and_then(|d| d.optics_preset.clone()),
+            "end_s": end,
+            "seconds": seconds,
+            "time": o.time,
+            "unit": "counts",
+            "note": "raw Athena optical ADC counts (names are labels, not wavelengths); not a medical measurement",
+            "lanes": channels,
+        }))
+    }
+
+    fn optics_preset_json(&self) -> Result<Reply, CoreError> {
+        let d = self.state.device.as_ref().ok_or_else(|| CoreError::Device("no device connected".into()))?;
+        if !d.has_optics() {
+            return Err(CoreError::Device(format!("{} has no Athena optics", d.name)));
+        }
+        Ok(json!({
+            "preset": d.optics_preset,
+            "lanes": d.optics_channels,
+            "rate_hz": d.optics_rate_hz,
+            "saved": self.state.settings.athena_preset,
+        }))
     }
 
     fn estimate_json(&self, hr: bool) -> Result<Reply, CoreError> {
@@ -2232,6 +2356,10 @@ impl Session {
                 let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
                 crate::rawtrace::raw_span(newest, s.monitors.raw.mode, s.monitors.viewport(id).window_s)
             }
+            (crate::monitor::MonitorId::Optics, _, _) => {
+                let newest = self.live.optical.as_ref().and_then(|g| g.time).unwrap_or(s.time);
+                crate::rawtrace::raw_span(newest, s.monitors.optics.mode, s.monitors.viewport(id).window_s)
+            }
             (id, Some(a), Some(b)) if id.overview_host().is_some() => crate::monitor::Span::new(a.time, b.time),
             (crate::monitor::MonitorId::Spectrogram, _, _) => {
                 let g = self.live.signal.as_ref();
@@ -2337,7 +2465,7 @@ impl Session {
                 (id.name().to_owned(), list.into())
             })
             .collect();
-        serde_json::json!({ "monitors": views, "bookmarks": bookmarks, "bands": m.bands, "raw": m.raw, "psd": m.psd, "histogram": m.histogram,
+        serde_json::json!({ "monitors": views, "bookmarks": bookmarks, "bands": m.bands, "raw": m.raw, "optics": m.optics, "psd": m.psd, "histogram": m.histogram,
             "spectrogram": m.spectrogram, "heart": m.heart, "overview": overview, "scale": self.state.band_scale })
     }
 

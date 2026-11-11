@@ -33,6 +33,8 @@ pub enum MonitorId {
     RawOverview,
     HistogramOverview,
     SpectrogramOverview,
+    Optics,
+    OpticsOverview,
 }
 
 /// Window presets and zoom limits of one monitor (seconds).
@@ -45,7 +47,7 @@ pub struct WindowSpec {
 }
 
 impl MonitorId {
-    pub const ALL: [MonitorId; 13] = [
+    pub const ALL: [MonitorId; 15] = [
         MonitorId::Bands,
         MonitorId::RawEeg,
         MonitorId::Spectrogram,
@@ -59,11 +61,13 @@ impl MonitorId {
         MonitorId::RawOverview,
         MonitorId::HistogramOverview,
         MonitorId::SpectrogramOverview,
+        MonitorId::Optics,
+        MonitorId::OpticsOverview,
     ];
 
     /// Views that can show an overview timeline, with its viewport.
-    pub const WITH_OVERVIEW: [MonitorId; 5] =
-        [MonitorId::Bands, MonitorId::RawEeg, MonitorId::Histogram, MonitorId::Psd, MonitorId::Spectrogram];
+    pub const WITH_OVERVIEW: [MonitorId; 6] =
+        [MonitorId::Bands, MonitorId::RawEeg, MonitorId::Histogram, MonitorId::Psd, MonitorId::Spectrogram, MonitorId::Optics];
 
     /// The overview timeline viewport of a view (`None`: no overview).
     pub fn overview(self) -> Option<MonitorId> {
@@ -96,7 +100,9 @@ impl MonitorId {
     pub fn spec(self) -> WindowSpec {
         match self {
             MonitorId::Bands => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0], default_s: 30.0, min_s: 5.0, max_s: 3600.0 },
-            MonitorId::RawEeg => WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 8.0, min_s: 1.0, max_s: 10.0 },
+            MonitorId::RawEeg | MonitorId::Optics => {
+                WindowSpec { presets: &[2.0, 4.0, 8.0, 10.0], default_s: 8.0, min_s: 1.0, max_s: 10.0 }
+            }
             // Flutter spectrogram windows; 300 s of spectral history.
             MonitorId::Spectrogram => WindowSpec { presets: &[10.0, 20.0, 30.0, 120.0, 300.0], default_s: 30.0, min_s: 5.0, max_s: 300.0 },
             // HR+SpO2 timeline (1 Hz summary, one hour) and its pulse
@@ -113,7 +119,8 @@ impl MonitorId {
             | MonitorId::BandsOverview
             | MonitorId::RawOverview
             | MonitorId::HistogramOverview
-            | MonitorId::SpectrogramOverview => WindowSpec {
+            | MonitorId::SpectrogramOverview
+            | MonitorId::OpticsOverview => WindowSpec {
                 presets: &[30.0, 60.0, 90.0, 120.0, 300.0, 600.0, 1800.0, 3600.0],
                 default_s: 90.0,
                 min_s: 10.0,
@@ -127,7 +134,7 @@ impl MonitorId {
     pub fn history_s(self) -> f64 {
         match self {
             MonitorId::Bands => crate::state::BandHistory::SECONDS,
-            MonitorId::RawEeg => crate::signal::BUFFER_S,
+            MonitorId::RawEeg | MonitorId::Optics => crate::signal::BUFFER_S,
             MonitorId::Spectrogram => crate::signal::SPEC_HOP_S * crate::signal::SPEC_COLUMNS as f64,
             MonitorId::HeartOverview => crate::optics::HISTORY_S,
             MonitorId::HeartDetail => crate::optics::PPG_DETAIL_S,
@@ -138,7 +145,8 @@ impl MonitorId {
             | MonitorId::BandsOverview
             | MonitorId::RawOverview
             | MonitorId::HistogramOverview
-            | MonitorId::SpectrogramOverview => crate::state::BandHistory::SECONDS,
+            | MonitorId::SpectrogramOverview
+            | MonitorId::OpticsOverview => crate::state::BandHistory::SECONDS,
         }
     }
 
@@ -157,6 +165,8 @@ impl MonitorId {
             MonitorId::RawOverview => "raw_overview",
             MonitorId::HistogramOverview => "histogram_overview",
             MonitorId::SpectrogramOverview => "spectrogram_overview",
+            MonitorId::Optics => "optics",
+            MonitorId::OpticsOverview => "optics_overview",
         }
     }
 }
@@ -396,6 +406,20 @@ impl RawDisplay {
     }
 }
 
+/// What the Optics monitor shows. `mode` persists; the lane choice (by name,
+/// empty = all) lasts for the session.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct OpticsDisplay {
+    pub lanes: Vec<String>,
+    pub mode: RawMode,
+}
+
+impl OpticsDisplay {
+    pub fn selected(&self, lanes: &[String]) -> Vec<usize> {
+        select(&self.lanes, lanes)
+    }
+}
+
 /// What the Bands monitor shows (also the electrode choice of later
 /// averaged monitors).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -525,6 +549,7 @@ pub struct Monitors {
     viewports: BTreeMap<MonitorId, Viewport>,
     pub bands: BandsDisplay,
     pub raw: RawDisplay,
+    pub optics: OpticsDisplay,
     pub psd: PsdDisplay,
     pub histogram: HistogramDisplay,
     pub spectrogram: SpectrogramDisplay,

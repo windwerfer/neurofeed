@@ -53,6 +53,7 @@ const CARDS: &[(Section, &str, &str, CardFn)] = &[
     }),
     (Section::Devices, "Devices", "muse crown bluetooth scan connect simulator", |ui, s, o, _| super::devices::show(ui, s, o)),
     (Section::Devices, "Muse AUX channels", "muse aux auxiliary usb extra electrode", |ui, s, o, _| muse_aux(ui, s, o)),
+    (Section::Devices, "Athena optical preset", "athena optics preset p1041 p1044 p1045 lanes", |ui, s, o, _| athena_preset(ui, s, o)),
     (Section::Devices, "Crown signal quality", "crown neurosity signal quality source pads", |ui, s, o, _| crown_quality(ui, s, o)),
     (Section::Devices, "Mains notch", "notch 50 60 hz mains power line filter", |ui, s, o, _| mains(ui, s, o)),
     (Section::Training, "Band Stability", "stability window difficulty steadier", |ui, s, o, _| stability(ui, s, o)),
@@ -320,6 +321,21 @@ fn gestures(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         set(out, SettingsPatch { markers_in_feedback: Some(fb), ..Default::default() });
     }
     ui.weak(t!("settings-double-blink-double-clench-two"));
+}
+
+fn athena_preset(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    let cur = session.state().settings.athena_preset.clone();
+    let choices =
+        [("p1041", t!("settings-athena-preset-16")), ("p1044", t!("settings-athena-preset-8")), ("p1045", t!("settings-athena-preset-4"))];
+    let label = choices.iter().find(|(id, _)| *id == cur).map(|(_, l)| l.clone()).unwrap_or_else(|| cur.clone());
+    egui::ComboBox::from_id_salt("nf_athena_preset").selected_text(label).show_ui(ui, |ui| {
+        for (id, name) in &choices {
+            if ui.selectable_label(cur == *id, name).clicked() && cur != *id {
+                set(out, SettingsPatch { athena_preset: Some((*id).to_owned()), ..Default::default() });
+            }
+        }
+    });
+    ui.weak(t!("settings-athena-preset-hint"));
 }
 
 fn muse_aux(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {

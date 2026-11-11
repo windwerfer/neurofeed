@@ -62,6 +62,10 @@ pub struct UserSettings {
     pub markers_in_feedback: bool,
     /// Show Muse AUX inputs in the status bar and monitors (applies on connect).
     pub muse_aux: bool,
+    /// Athena optical preset (`p1041` 16-lane default; `p1044` 8-lane; `p1045` 4-lane).
+    /// Applied on connect and via `optics.preset.set`.
+    #[serde(default = "default_athena_preset")]
+    pub athena_preset: String,
     /// Save AUX in recordings (only while `muse_aux` is on).
     pub record_aux: bool,
     /// Neurosity Crown pad quality: the Crown's own or the app's score.
@@ -77,6 +81,10 @@ pub struct UserSettings {
     /// off; Settings turns it back on). UI only: `history.delete` still
     /// needs its own explicit `confirm: true`.
     pub confirm_discard: bool,
+}
+
+fn default_athena_preset() -> String {
+    "p1041".into()
 }
 
 /// Where Crown pad signal quality comes from (applies from the next second).
@@ -100,6 +108,7 @@ impl Default for UserSettings {
             eye_markers: false,
             markers_in_feedback: true,
             muse_aux: false,
+            athena_preset: default_athena_preset(),
             record_aux: true,
             crown_quality: QualitySource::Crown,
             layout: LayoutMode::Auto,
@@ -131,6 +140,8 @@ pub struct SettingsPatch {
     pub markers_in_feedback: Option<bool>,
     #[serde(default)]
     pub muse_aux: Option<bool>,
+    #[serde(default)]
+    pub athena_preset: Option<String>,
     #[serde(default)]
     pub record_aux: Option<bool>,
     #[serde(default)]
@@ -170,6 +181,9 @@ pub fn apply(s: &mut UserSettings, p: &SettingsPatch) -> Result<(), String> {
     }
     if let Some(v) = p.muse_aux {
         s.muse_aux = v;
+    }
+    if let Some(v) = p.athena_preset.clone() {
+        s.athena_preset = v;
     }
     if let Some(v) = p.record_aux {
         s.record_aux = v;

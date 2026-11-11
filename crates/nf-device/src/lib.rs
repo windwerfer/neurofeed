@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
-pub use nf_types::{AccelPacket, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
+pub use nf_types::{AccelPacket, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, OpticsPacket, PpgPacket};
 
 #[cfg(feature = "osc")]
 mod crown;
@@ -58,6 +58,9 @@ pub fn muse_info(id: &str, name: &str) -> DeviceInfo {
         simulated: false,
         ppg_channels: PPG_CHANNELS.iter().map(|c| (*c).to_owned()).collect(),
         ppg_rate_hz: Some(64.0),
+        optics_channels: Vec::new(),
+        optics_rate_hz: None,
+        optics_preset: None,
         accel_rate_hz: Some(52.0),
         aux_channels: MUSE_AUX.iter().map(|c| (*c).to_owned()).collect(),
         rssi: None,
@@ -75,6 +78,9 @@ pub fn crown_info(id: &str, name: &str) -> DeviceInfo {
         simulated: false,
         ppg_channels: Vec::new(),
         ppg_rate_hz: None,
+        optics_channels: Vec::new(),
+        optics_rate_hz: None,
+        optics_preset: None,
         accel_rate_hz: None,
         aux_channels: Vec::new(),
         rssi: None,
@@ -88,6 +94,10 @@ pub enum Block {
     Eeg(u16, Vec<f32>),
     /// PPG channel index, sensor counts.
     Ppg(u16, Vec<f32>),
+    /// Athena optical lane index, raw ADC counts.
+    Optics(u16, Vec<f32>),
+    /// Firmware/layout known after connect (Classic vs Athena).
+    Info(Box<DeviceInfo>),
     /// Accelerometer x/y/z in g.
     Accel(Vec<[f32; 3]>),
     /// Link state change.
@@ -112,6 +122,12 @@ impl Feed {
     }
     pub fn ppg(&self, channel: u16, samples: Vec<f32>) -> bool {
         self.send(Block::Ppg(channel, samples))
+    }
+    pub fn optics(&self, lane: u16, samples: Vec<f32>) -> bool {
+        self.send(Block::Optics(lane, samples))
+    }
+    pub fn info(&self, info: DeviceInfo) -> bool {
+        self.send(Block::Info(Box::new(info)))
     }
     pub fn accel(&self, samples: Vec<[f32; 3]>) -> bool {
         self.send(Block::Accel(samples))
@@ -154,14 +170,17 @@ pub struct LiveSource {
     link: LinkState,
     eeg_t: Vec<Timeline>,
     ppg_t: Vec<Timeline>,
+    optics_t: Vec<Timeline>,
     accel_t: Timeline,
     eeg: VecDeque<EegPacket>,
     ppg: VecDeque<PpgPacket>,
+    optics: VecDeque<OpticsPacket>,
     accel: VecDeque<AccelPacket>,
     quality: Vec<Vec<f32>>,
     battery: Option<f32>,
     /// Called on drop (transport teardown, e.g. BLE disconnect).
     on_drop: Option<Box<dyn FnOnce() + Send>>,
+    pending_preset: Arc<Mutex<Option<String>>>,
 }
 
 impl LiveSource {
@@ -170,26 +189,46 @@ impl LiveSource {
         let (tx, rx) = mpsc::channel();
         let n_eeg = info.channels.len() + info.aux_channels.len();
         let n_ppg = info.ppg_channels.len();
+        let n_opt = info.optics_channels.len();
         let s = Self {
             info,
             rx,
             link: LinkState::Connecting,
             eeg_t: vec![Timeline::default(); n_eeg],
             ppg_t: vec![Timeline::default(); n_ppg],
+            optics_t: vec![Timeline::default(); n_opt.max(16)],
             accel_t: Timeline::default(),
             eeg: VecDeque::new(),
             ppg: VecDeque::new(),
+            optics: VecDeque::new(),
             accel: VecDeque::new(),
             quality: Vec::new(),
             battery: None,
             on_drop: None,
+            pending_preset: Arc::new(Mutex::new(None)),
         };
         (s, Feed(tx))
+    }
+
+    pub fn preset_slot(&self) -> Arc<Mutex<Option<String>>> {
+        self.pending_preset.clone()
     }
 
     pub fn on_drop(mut self, f: impl FnOnce() + Send + 'static) -> Self {
         self.on_drop = Some(Box::new(f));
         self
+    }
+
+    fn apply_info(&mut self, info: DeviceInfo) {
+        let n_opt = info.optics_channels.len().max(16);
+        if self.optics_t.len() < n_opt {
+            self.optics_t.resize(n_opt, Timeline::default());
+        }
+        let n_ppg = info.ppg_channels.len();
+        if self.ppg_t.len() < n_ppg {
+            self.ppg_t.resize(n_ppg, Timeline::default());
+        }
+        self.info = info;
     }
 
     /// Move everything that arrived into the timed queues.
@@ -212,6 +251,17 @@ impl LiveSource {
                     }
                     let time = t.place(samples.len(), rate, now);
                     self.ppg.push_back(PpgPacket { time, channel: c, samples });
+                }
+                Block::Optics(c, samples) => {
+                    let (Some(t), Some(rate)) = (self.optics_t.get_mut(usize::from(c)), self.info.optics_rate_hz) else { continue };
+                    if samples.is_empty() {
+                        continue;
+                    }
+                    let time = t.place(samples.len(), rate, now);
+                    self.optics.push_back(OpticsPacket { time, lane: c, samples });
+                }
+                Block::Info(info) => {
+                    self.apply_info(*info);
                 }
                 Block::Accel(samples) => {
                     let Some(rate) = self.info.accel_rate_hz else { continue };
@@ -251,6 +301,17 @@ impl DeviceSource for LiveSource {
     fn poll_ppg(&mut self, now: f64) -> Vec<PpgPacket> {
         self.drain(now);
         due(&mut self.ppg, now, |p| p.time)
+    }
+    fn poll_optics(&mut self, now: f64) -> Vec<OpticsPacket> {
+        self.drain(now);
+        due(&mut self.optics, now, |p| p.time)
+    }
+    fn set_optics_preset(&mut self, preset: &str) -> Result<(), String> {
+        if !is_athena_preset(preset) {
+            return Err(format!("unknown Athena preset `{preset}`"));
+        }
+        *self.pending_preset.lock().unwrap_or_else(|e| e.into_inner()) = Some(preset.to_owned());
+        Ok(())
     }
     fn poll_accel(&mut self, now: f64) -> Vec<AccelPacket> {
         self.drain(now);
@@ -392,4 +453,28 @@ mod tests {
         drop(s);
         assert!(!feed.eeg(0, vec![0.0]), "feed reports a dropped source");
     }
+}
+
+fn is_athena_preset(preset: &str) -> bool {
+    matches!(
+        preset,
+        "p1025"
+            | "p1026"
+            | "p1027"
+            | "p1028"
+            | "p1029"
+            | "p102A"
+            | "p1031"
+            | "p1032"
+            | "p1033"
+            | "p1034"
+            | "p1035"
+            | "p1036"
+            | "p1041"
+            | "p1042"
+            | "p1043"
+            | "p1044"
+            | "p1045"
+            | "p1046"
+    )
 }

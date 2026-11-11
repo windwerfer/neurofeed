@@ -2,9 +2,8 @@
 //! `rust/src/api/muse.rs`). A private tokio runtime runs scan and connect in
 //! the background; `scan`/`open` never block the caller.
 //!
-//! Limits (same as the legacy app): Athena firmware streams EEG ch 0–3 but
-//! its PPG is not decoded yet. AUX inputs arrive as electrodes 4.. (the
-//! session shows / records them only when Settings asks for it).
+//! Athena optical data arrives as [`Block::Optics`] (never Classic PPG).
+//! AUX inputs arrive as electrodes 4.. (shown / recorded only when Settings asks).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,6 +16,11 @@ use muse_rs::prelude::{MuseClient, MuseClientConfig, MuseEvent};
 use tokio::runtime::Runtime;
 
 use crate::{lock, muse_info, Block, DeviceInfo, DeviceProvider, DeviceSource, LinkState, LiveSource, MUSE_CHANNELS};
+
+const OPTICS_LANES: [&str; 16] = [
+    "ambient", "infrared", "red", "opt3", "opt4", "opt5", "opt6", "opt7", "opt8", "opt9", "opt10", "opt11", "opt12", "opt13", "opt14",
+    "opt15",
+];
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(18);
 /// Length of the rescan before connecting (muse-rs `scan_all` waits it out).
@@ -74,6 +78,21 @@ struct Shared {
     linked: HashSet<String>,
 }
 
+fn athena_info(ble_id: &str, name: &str, preset: &str) -> DeviceInfo {
+    let n = match preset {
+        "p1029" | "p102A" | "p1035" | "p1036" | "p1045" | "p1046" => 4,
+        "p1027" | "p1028" | "p1033" | "p1034" | "p1043" | "p1044" => 8,
+        _ => 16,
+    };
+    let mut info = muse_info(&format!("muse:{ble_id}"), name);
+    info.ppg_channels.clear();
+    info.ppg_rate_hz = None;
+    info.optics_channels = OPTICS_LANES[..n].iter().map(|s| (*s).to_owned()).collect();
+    info.optics_rate_hz = Some(64.0);
+    info.optics_preset = Some(preset.to_owned());
+    info
+}
+
 /// Translate one muse-rs event into feed blocks.
 pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
     match ev {
@@ -81,6 +100,7 @@ pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
             vec![Block::Eeg(r.electrode as u16, r.samples.iter().map(|&x| x as f32).collect())]
         }
         MuseEvent::Ppg(r) if r.ppg_channel < 3 => vec![Block::Ppg(r.ppg_channel as u16, r.samples.iter().map(|&x| x as f32).collect())],
+        MuseEvent::Optics(r) => vec![Block::Optics(r.lane as u16, r.samples.iter().map(|&x| x as f32).collect())],
         MuseEvent::Accelerometer(imu) => vec![Block::Accel(imu.samples.iter().map(|s| [s.x, s.y, s.z]).collect())],
         MuseEvent::Disconnected => vec![Block::Link(LinkState::Lost { reason: "headset disconnected".into() })],
         _ => Vec::new(),
@@ -378,6 +398,7 @@ impl DeviceProvider for MuseProvider {
         let rt = self.runtime()?;
         let ble_id = ble.to_owned();
         let (src, feed) = LiveSource::new(muse_info(id, &name));
+        let preset_slot = src.preset_slot();
         let stop = Arc::new(AtomicBool::new(false));
         let stop2 = stop.clone();
         let shared = self.shared.clone();
@@ -391,6 +412,7 @@ impl DeviceProvider for MuseProvider {
                 enable_ppg: true,
                 enable_aux: true,
                 scan_timeout_secs: CONNECT_SCAN_SECS,
+                ..Default::default()
             });
             let conn = tokio::time::timeout(CONNECT_TIMEOUT, async {
                 // Let the watch task drop its BlueZ discovery session.
@@ -421,9 +443,20 @@ impl DeviceProvider for MuseProvider {
                     return;
                 }
             };
+            if handle.is_athena {
+                feed.info(athena_info(&ble_id, &name, "p1041"));
+            }
             let mut battery = BatterySource::default();
             let mut last_status = tokio::time::Instant::now();
             'run: while !stop2.load(Ordering::Relaxed) {
+                let pending = preset_slot.lock().unwrap_or_else(|e| e.into_inner()).take();
+                if let Some(preset) = pending {
+                    if let Err(e) = handle.set_athena_preset(&preset).await {
+                        log::warn!("muse: set Athena preset {preset}: {e}");
+                    } else {
+                        feed.info(athena_info(&ble_id, &name, &preset));
+                    }
+                }
                 if last_status.elapsed() >= STATUS_EVERY {
                     last_status = tokio::time::Instant::now();
                     if let Err(e) = handle.send_command("s").await {

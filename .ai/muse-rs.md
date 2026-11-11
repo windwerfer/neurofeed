@@ -121,3 +121,13 @@ Queued (do not start from the connect branch): raw optical stream as
 mapping metadata only. No Athena SpO₂/HR product.
 [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md),
 [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md).
+
+## 2026-11-11 — athena-optics (first milestone)
+
+Queued text above is superseded by t166: fork branch `athena-optics` (not
+`main`) adds `MuseEvent::Optics`, default preset `p1041`, and Athena never
+emits Classic `Ppg`. Recording tag is 14 (11 was already TAG_FEEDBACK).
+Local checkout lives under `.local/muse-rs` (gitignored; the stale
+`.gitmodules` entry pointing at eugenehp was removed). NeuroFeed pins the
+branch commit once it is on GitHub; until then nf-device may use a path dep
+for local builds.

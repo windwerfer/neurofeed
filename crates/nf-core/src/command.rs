@@ -80,6 +80,18 @@ pub enum Command {
         #[serde(default)]
         electrodes: Option<Vec<String>>,
     },
+    /// Optics display: sweep or scroll traces and the lanes shown (empty = all).
+    #[serde(rename = "monitor.optics")]
+    MonitorOptics {
+        #[serde(default)]
+        mode: Option<crate::monitor::RawMode>,
+        #[serde(default)]
+        lanes: Option<Vec<String>>,
+    },
+    /// Set the Athena optical preset (`p1041` / `p1044` / `p1045`, …). Saved
+    /// in settings and applied on the connected device when it has optics.
+    #[serde(rename = "optics.preset.set")]
+    OpticsPresetSet { preset: String },
     /// PSD display: frequency range (60 | 100 Hz) and electrodes in the
     /// average (empty = all). Display only: analysis exclusions still apply.
     #[serde(rename = "monitor.psd")]
@@ -501,6 +513,18 @@ pub enum Query {
         #[serde(default)]
         end_s: Option<f64>,
     },
+    /// Athena optical samples per lane (raw ADC counts, 64 Hz) as a slice
+    /// of the 5 min ring; at most 60 s per call.
+    #[serde(rename = "optics.get")]
+    OpticsGet {
+        #[serde(default)]
+        seconds: Option<f64>,
+        #[serde(default)]
+        end_s: Option<f64>,
+    },
+    /// Current Athena optical preset and lane layout.
+    #[serde(rename = "optics.preset.get")]
+    OpticsPresetGet,
     /// Mains detection / notch and per-pad quality (usable >= 80).
     #[serde(rename = "signal.status")]
     SignalStatus,
@@ -684,7 +708,15 @@ fn has_ppg(s: &AppState) -> Result<(), String> {
     if s.device.as_ref().is_some_and(|d| d.has_ppg()) {
         Ok(())
     } else {
-        Err(format!("{} has no PPG (HR/SpO2: Muse 2 and Muse S only)", s.device.as_ref().map_or("device", |d| d.name.as_str())))
+        Err(format!("{} has no PPG (HR/SpO2: Muse 2 and Muse S Classic only)", s.device.as_ref().map_or("device", |d| d.name.as_str())))
+    }
+}
+fn has_optics(s: &AppState) -> Result<(), String> {
+    needs_device(s)?;
+    if s.device.as_ref().is_some_and(|d| d.has_optics()) {
+        Ok(())
+    } else {
+        Err(format!("{} has no Athena optics", s.device.as_ref().map_or("device", |d| d.name.as_str())))
     }
 }
 fn has_signal(s: &AppState) -> Result<(), String> {
@@ -862,6 +894,7 @@ pub const SPECS: &[CommandSpec] = &[
     spec("monitor.pan", "Pan monitor", "monitor", false, "Move a monitor's time window by seconds; enters Inspect.", always),
     spec("monitor.display", "Bands display", "monitor", false, "Electrodes in the Bands average (empty = all) and hidden bands.", always),
     spec("monitor.raw", "Raw EEG display", "monitor", false, "Raw EEG: sweep or scroll traces, Y scale (auto, ±50/100/200 µV) and shown electrodes (empty = all).", always),
+    spec("monitor.optics", "Optics display", "monitor", false, "Optics: sweep or scroll traces and shown lanes (empty = all).", always),
     spec("monitor.psd", "PSD display", "monitor", false, "PSD: frequency range (60 or 100 Hz) and electrodes in the average (empty = all).", always),
     spec("monitor.overview", "Overview timeline", "monitor", false, "Show/hide a view's overview timeline (saved per view; default on for psd and spectrogram).", always),
     spec("monitor.heart", "HR+SpO2 display", "monitor", false, "HR+SpO2 view: show/hide the pulse waveform (PPG) detail (saved; default on).", always),
@@ -904,6 +937,9 @@ pub const SPECS: &[CommandSpec] = &[
     spec("hr.get", "Heart rate", "optics", true, "Heart rate (bpm) from PPG with confidence and history.", has_ppg),
     spec("spo2.get", "SpO2", "optics", true, "Blood oxygen (%) from PPG IR/red with confidence and history.", has_ppg),
     spec("ppg.get", "PPG samples", "optics", true, "Raw optical samples (counts, native rate) per PPG channel, ≤ 60 s, time-stamped segments.", has_ppg),
+    spec("optics.get", "Optics samples", "optics", true, "Athena optical samples (ADC counts, 64 Hz) per lane, ≤ 60 s of the 5 min ring.", has_optics),
+    spec("optics.preset.get", "Optics preset", "optics", true, "Current Athena optical preset and lane names.", has_optics),
+    spec("optics.preset.set", "Set optics preset", "optics", false, "Set the Athena optical preset (p1041 16-lane, p1044 8-lane, p1045 4-lane, …). Saved and applied on connect.", needs_device),
     spec("heart.get", "HR+SpO2 summary", "optics", true, "Current HR/SpO2, means (recording or last hour), viewports, cursor read-out at time_s.", has_ppg),
     spec(
         "artifact.status",
@@ -1276,6 +1312,10 @@ fn base_examples() -> Vec<Request> {
         Q(Query::HrGet),
         Q(Query::Spo2Get),
         Q(Query::PpgGet { seconds: Some(3.0), end_s: None }),
+        Q(Query::OpticsGet { seconds: Some(3.0), end_s: None }),
+        Q(Query::OpticsPresetGet),
+        C(Command::OpticsPresetSet { preset: "p1044".into() }),
+        C(Command::MonitorOptics { mode: None, lanes: Some(vec!["infrared".into()]) }),
         Q(Query::HeartGet { time_s: Some(20.0) }),
         C(Command::MonitorHeart { waveform: Some(false) }),
         Q(Query::FeaturesGet),
