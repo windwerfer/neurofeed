@@ -131,3 +131,9 @@
   overview off by default, compact + regular, safe area, graph-only phone landscape,
   EN/DE, 5 min ring, per-lane auto scale).
 - `cargo update -p rmcp` (3.8.0 → 3.9.0) for RUSTSEC-2026-0462 so `cargo deny` stays green.
+
+## 2026-11-11: Pin muse-rs to published athena-optics
+
+- `athena-optics` is on `windwerfer/muse-rs` at `fe7cfd6`. nf-device now uses
+  the git rev (default-features = false) instead of the `.local/` path dep, so
+  CI can fetch it.
