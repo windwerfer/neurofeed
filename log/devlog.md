@@ -149,3 +149,5 @@
   dropped. `workflow_dispatch` with a tag checks out that tag from a main workflow run.
 - Linux apt on ubuntu-22.04 can fail with `Temporary failure resolving azure.archive.ubuntu.com`;
   the install step now falls back to archive.ubuntu.com and retries.
+- Shared `scripts/ci-apt-install.sh` (retries + archive.ubuntu.com fallback, including
+  `security.ubuntu.com`) is used by rust-ci native as well as the release Linux job.

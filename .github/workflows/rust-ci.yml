@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: System libs (ALSA for cpal, D-Bus for btleplug)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libdbus-1-dev pkg-config
+        run: scripts/ci-apt-install.sh libasound2-dev libdbus-1-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
