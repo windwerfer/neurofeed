@@ -78,27 +78,7 @@ jobs:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.meta.outputs.checkout }}" }
       - name: Install packaging deps
-        run: |
-          set -euo pipefail
-          fallback_mirrors() {
-            echo "Falling back to archive.ubuntu.com (Azure apt mirror unreachable)"
-            if [ -f /etc/apt/apt-mirrors.txt ]; then
-              printf 'http://archive.ubuntu.com/ubuntu\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
-            fi
-            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g'               /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
-          }
-          if ! getent hosts azure.archive.ubuntu.com >/dev/null 2>&1; then
-            fallback_mirrors
-          fi
-          for i in 1 2 3 4 5; do
-            if sudo apt-get update && sudo apt-get install -y --no-install-recommends                  libasound2-dev libdbus-1-dev pkg-config libfuse2 file desktop-file-utils; then
-              exit 0
-            fi
-            echo "apt failed (attempt $i); retrying..."
-            fallback_mirrors
-            sleep 15
-          done
-          exit 1
+        run: scripts/ci-apt-install.sh libasound2-dev libdbus-1-dev pkg-config libfuse2 file desktop-file-utils
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: "${{ env.RUST_VERSION }}" }
       - run: scripts/package-linux.sh --version "${{ needs.meta.outputs.version }}"
