@@ -40,6 +40,7 @@ pub fn show(ui: &mut Ui, session: &Session, out: &mut Vec<Command>) {
     let Some(o) = session.optics() else {
         let text = match &state.device {
             None => t!("heart-no-device-connected"),
+            Some(d) if d.has_optics() && !d.has_ppg() => t!("heart-athena-classic-only"),
             Some(_) => t!("heart-no-ppg-on-this-device"),
         };
         ui.add_space(8.0);

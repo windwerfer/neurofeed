@@ -92,13 +92,24 @@ pub struct DeviceInfo {
     /// EEG sample rate (data, not an assumption: Muse and Crown are 256 Hz today).
     pub sample_rate_hz: f64,
     pub simulated: bool,
-    /// Optical (PPG) channels, e.g. `["ambient", "infrared", "red"]` on Muse
-    /// S / Athena; empty when the device has no PPG.
+    /// Classic PPG channels, e.g. `["ambient", "infrared", "red"]` on Muse 2
+    /// / Muse S Classic; empty when the device has no PPG (including Athena,
+    /// whose optical stream is `optics_channels`).
     #[serde(default)]
     pub ppg_channels: Vec<String>,
-    /// PPG sample rate (runtime data; Muse streams 64 Hz).
+    /// PPG sample rate (runtime data; Muse Classic streams 64 Hz).
     #[serde(default)]
     pub ppg_rate_hz: Option<f64>,
+    /// Athena optical lanes (names, not wavelengths), e.g. ambient/infrared/red/opt3…opt15.
+    /// Empty when the device has no Athena optics stream.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub optics_channels: Vec<String>,
+    /// Optical sample rate (Athena 64 Hz).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub optics_rate_hz: Option<f64>,
+    /// Athena firmware preset that selects the optical layout (`p1041` / `p1044` / `p1045`, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub optics_preset: Option<String>,
     /// Accelerometer rate (Muse 52 Hz), `None` without one.
     #[serde(default)]
     pub accel_rate_hz: Option<f64>,
@@ -121,6 +132,25 @@ impl DeviceInfo {
     pub fn ppg_index(&self, name: &str) -> Option<usize> {
         self.ppg_channels.iter().position(|c| c == name)
     }
+
+    pub fn has_optics(&self) -> bool {
+        self.optics_rate_hz.is_some() && !self.optics_channels.is_empty()
+    }
+
+    /// Index of an optical lane by name.
+    pub fn optics_index(&self, name: &str) -> Option<usize> {
+        self.optics_channels.iter().position(|c| c == name)
+    }
+}
+
+/// A block of Athena optical samples for one lane (raw ADC counts).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct OpticsPacket {
+    /// Session time (s) of the **last** sample in the block.
+    pub time: f64,
+    /// Index into `DeviceInfo::optics_channels`.
+    pub lane: u16,
+    pub samples: Vec<f32>,
 }
 
 /// A block of raw optical samples for one PPG channel (sensor counts).
@@ -160,6 +190,15 @@ pub trait DeviceSource: Send {
     /// PPG packets due up to `now` (same rules as `poll`). Default: none.
     fn poll_ppg(&mut self, _now: f64) -> Vec<PpgPacket> {
         Vec::new()
+    }
+    /// Athena optical packets due up to `now`. Default: none. Never mixed with PPG.
+    fn poll_optics(&mut self, _now: f64) -> Vec<OpticsPacket> {
+        Vec::new()
+    }
+    /// Switch the Athena optical preset (`p1041` / `p1044` / `p1045`, …).
+    /// Default: not supported.
+    fn set_optics_preset(&mut self, _preset: &str) -> Result<(), String> {
+        Err("this device has no optical presets".into())
     }
     /// Accelerometer packets due up to `now`. Default: none.
     fn poll_accel(&mut self, _now: f64) -> Vec<AccelPacket> {

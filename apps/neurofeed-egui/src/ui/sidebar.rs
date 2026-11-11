@@ -14,6 +14,7 @@ fn icon(view: View) -> &'static str {
         View::Spectrogram => "🌈",
         View::Psd => "📈",
         View::HeartRate => "❤",
+        View::Optics => "✨",
         View::Movement => "🏃",
         View::Streaming => "📡",
         View::Settings => "⚙",

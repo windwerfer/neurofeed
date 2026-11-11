@@ -60,7 +60,7 @@ pub fn pick(mode: LayoutMode, size: egui::Vec2, phone: bool) -> Layout {
 #[must_use]
 pub fn is_monitor(view: nf_core::View) -> bool {
     use nf_core::View as V;
-    matches!(view, V::Bands | V::RawEeg | V::Histogram | V::Spectrogram | V::Psd | V::HeartRate | V::Movement)
+    matches!(view, V::Bands | V::RawEeg | V::Histogram | V::Spectrogram | V::Psd | V::HeartRate | V::Optics | V::Movement)
 }
 
 /// The layout a view actually gets: immersive only on monitor screens.

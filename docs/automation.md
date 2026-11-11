@@ -253,11 +253,13 @@ Contract: [.ai/contracts/i18n.md](../.ai/contracts/i18n.md). Contract:
 
 ### HR + SpO2 (optics)
 
-Muse 2 / Muse S (and `sim:muse`, `sim:muse2`, `sim:muse_s`) stream three
-optical channels (`ambient`, `infrared`, `red`) at 64 Hz, 6 samples per
-packet per channel. Crown and Athena have no decoded optics: `hr.get`,
-`spo2.get`, `ppg.get` and `heart.get` are disabled with a reason, and the
-view shows a message, never numbers.
+Muse 2 / Muse S Classic (and `sim:muse`, `sim:muse2`, `sim:muse_s`) stream
+three Classic PPG channels (`ambient`, `infrared`, `red`) at 64 Hz, 6 samples
+per packet per channel. Crown has no optics. Muse S Athena (`sim:athena`)
+streams a separate 16-lane optical ring (default preset `p1041`, 64 Hz) and
+never feeds Classic PPG / HR / SpO2: `hr.get`, `spo2.get`, `ppg.get` and
+`heart.get` are disabled with a reason; the HR+SpO2 view explains that pulse
+and SpO2 are Classic-only. Use the Optics page and `optics.get` instead.
 
 Two separate in-memory stores (no disk paging yet):
 
@@ -284,6 +286,24 @@ heart.get {"time_s"?}        current HR/SpO2, means {scope: hour|recording},
 ppg.get {"seconds"? ≤ 60, "end_s"?}   raw counts per channel + segments [{t0, n}]
 monitor.heart {"waveform": bool}      show the pulse waveform (saved, default on)
 ```
+
+### Athena optics
+
+`sim:athena` and a connected Muse S Athena emit `OpticsPacket`s (ADC counts,
+lane labels `ambient` / `infrared` / `red` / `opt3`…`opt15` — names, not
+wavelengths). A 5 min ring is kept in memory, like Raw EEG. Recording writes
+NFEDBIN tag 14 only while Record or training is on.
+
+```text
+optics.get {"seconds"? ≤ 60, "end_s"?}   raw counts per lane of the 5 min ring
+optics.preset.get                        current preset, lanes, saved setting
+optics.preset.set {"preset"}             p1041 (16), p1044 (8), p1045 (4), …
+monitor.optics {"mode"?, "lanes"?}       sweep/scroll; shown lanes (empty = all)
+```
+
+Viewports: `optics` (2/4/8/10 s, default 8 s, like Raw) and `optics_overview`
+(off by default). Same Follow / Inspect, sweep, and graph-only phone landscape
+rules as Raw EEG.
 
 Viewports: `heart_overview` (timeline, 60 s … 1 h, default 5 min) and
 `heart_detail` (pulse waveform, 2 … 60 s, default 10 s, inside the 5 min raw

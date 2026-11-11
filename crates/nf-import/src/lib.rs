@@ -148,6 +148,7 @@ pub fn record_ts(r: &Record) -> f64 {
         | Record::Accelerometer { ts, .. }
         | Record::Gyroscope { ts, .. }
         | Record::Ppg { ts, .. }
+        | Record::Optics { ts, .. }
         | Record::Bands { ts, .. }
         | Record::Pulse { ts, .. }
         | Record::Movement { ts, .. }
@@ -215,6 +216,9 @@ pub(crate) fn device(kind: DeviceKind, channels: Vec<String>, source: &str) -> D
         simulated: false,
         ppg_channels: Vec::new(),
         ppg_rate_hz: None,
+        optics_channels: Vec::new(),
+        optics_rate_hz: None,
+        optics_preset: None,
         accel_rate_hz: None,
         aux_channels: Vec::new(),
         rssi: None,

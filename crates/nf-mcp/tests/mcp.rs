@@ -94,7 +94,7 @@ fn full_session_via_tools_with_manual_clock() {
     );
     let st = ok(&s, "status", json!({}));
     assert_eq!((st["view"].as_str(), st["sidebar_open"].as_bool(), st["paused"].as_bool()), (Some("settings"), Some(false), Some(false)));
-    assert_eq!(run(&s, "view.list", json!({})).as_array().map(Vec::len), Some(11));
+    assert_eq!(run(&s, "view.list", json!({})).as_array().map(Vec::len), Some(12));
 
     let events = run(&s, "events.drain", json!({}));
     let kinds: Vec<_> = events.as_array().into_iter().flatten().filter_map(|e| e["event"].as_str()).collect();
@@ -389,7 +389,7 @@ fn hr_and_spo2_from_simulated_ppg() {
         run(&s, "device.connect", json!({ "id": id }));
         for q in ["hr.get", "spo2.get", "ppg.get"] {
             let d = ok(&s, "command_describe", json!({ "id": q }));
-            assert_eq!(d["disabled_reason"], format!("{name} has no PPG (HR/SpO2: Muse 2 and Muse S only)"));
+            assert_eq!(d["disabled_reason"], format!("{name} has no PPG (HR/SpO2: Muse 2 and Muse S Classic only)"));
         }
     }
     assert!(s.call("command_run", json!({ "id": "sim.configure", "params": { "hr_bpm": 500 } })).is_err());

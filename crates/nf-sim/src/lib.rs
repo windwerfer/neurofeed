@@ -5,7 +5,7 @@
 //! DSP included, is testable without hardware.
 #![forbid(unsafe_code)]
 
-use nf_types::{AccelPacket, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
+use nf_types::{AccelPacket, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, OpticsPacket, PpgPacket};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
@@ -22,6 +22,21 @@ pub const ACCEL_RATE_HZ: f64 = 52.0;
 pub const ACCEL_SAMPLES_PER_PACKET: usize = 3;
 /// PPG channel names (legacy channel 0 ambient, 1 infrared, 2 red).
 pub const PPG_CHANNELS: [&str; 3] = ["ambient", "infrared", "red"];
+/// Athena optical lane labels (names, not wavelengths); p1041 uses all 16.
+pub const OPTICS_LANES: [&str; 16] = [
+    "ambient", "infrared", "red", "opt3", "opt4", "opt5", "opt6", "opt7", "opt8", "opt9", "opt10", "opt11", "opt12", "opt13", "opt14",
+    "opt15",
+];
+pub const OPTICS_RATE_HZ: f64 = 64.0;
+pub const ATHENA_DEFAULT_PRESET: &str = "p1041";
+
+pub fn optics_lane_count(preset: &str) -> usize {
+    match preset {
+        "p1029" | "p102A" | "p1035" | "p1036" | "p1045" | "p1046" => 4,
+        "p1027" | "p1028" | "p1033" | "p1034" | "p1043" | "p1044" => 8,
+        _ => 16,
+    }
+}
 /// Optical DC levels and IR pulse amplitude (legacy `ppg_sample`).
 const IR_DC: f64 = 200_000.0;
 const RED_DC: f64 = 180_000.0;
@@ -93,6 +108,7 @@ pub struct SimDevice {
     next: u64,
     rng: u64,
     ppg_next: u64,
+    optics_next: u64,
     accel_next: u64,
     /// Upcoming beat onsets (device seconds), oldest first.
     beats: Vec<f64>,
@@ -122,6 +138,7 @@ impl SimDevice {
             next: 0,
             rng: config.seed.max(1),
             ppg_next: 0,
+            optics_next: 0,
             accel_next: 0,
             beats: vec![0.2],
             beat_rng,
@@ -167,6 +184,18 @@ impl SimDevice {
             2 => RED_DC + r * (IR_AC / IR_DC) * RED_DC * pulse,
             _ => 0.0,
         }
+    }
+
+    /// Athena optical ADC counts: pulsatile IR/red, slow ambient, and
+    /// distinct DC + weaker pulse on the remaining lanes (labels, not wavelengths).
+    pub fn optics_sample(&mut self, t: f64, lane: usize) -> f64 {
+        if lane < 3 {
+            return self.ppg_sample(t, lane);
+        }
+        let pulse = self.pulse(t);
+        let dc = 40_000.0 + (lane as f64) * 8_000.0;
+        let ac = 2_000.0 + (lane as f64) * 180.0;
+        dc + ac * pulse + 250.0 * (t * (0.25 + lane as f64 * 0.04)).sin()
     }
 
     /// xorshift64*: uniform in -1.0..1.0.
@@ -287,6 +316,72 @@ impl DeviceSource for SimDevice {
         }
         out
     }
+
+    fn poll_optics(&mut self, now: f64) -> Vec<OpticsPacket> {
+        let (Some(start), Some(rate)) = (self.start, self.info.optics_rate_hz) else { return Vec::new() };
+        let n = self.info.optics_channels.len();
+        if n == 0 {
+            return Vec::new();
+        }
+        let due = ((now - start) * rate + 1e-6).floor().max(-1.0) as i64 + 1;
+        let mut out = Vec::new();
+        while (self.optics_next + PPG_SAMPLES_PER_PACKET as u64) as i64 <= due {
+            let first = self.optics_next;
+            let rows: Vec<Vec<f32>> = (0..PPG_SAMPLES_PER_PACKET as u64)
+                .map(|k| {
+                    let t = (first + k) as f64 / rate;
+                    (0..n).map(|ch| self.optics_sample(t, ch) as f32).collect()
+                })
+                .collect();
+            for ch in 0..n {
+                out.push(OpticsPacket {
+                    time: start + (first + PPG_SAMPLES_PER_PACKET as u64 - 1) as f64 / rate,
+                    lane: u16::try_from(ch).unwrap_or(u16::MAX),
+                    samples: rows.iter().map(|r| r[ch]).collect(),
+                });
+            }
+            self.optics_next += PPG_SAMPLES_PER_PACKET as u64;
+        }
+        out
+    }
+
+    fn set_optics_preset(&mut self, preset: &str) -> Result<(), String> {
+        if !self.info.has_optics() && self.info.id != "sim:athena" {
+            return Err("this device has no optical presets".into());
+        }
+        let n = optics_lane_count(preset);
+        // Accept the documented layouts (unknown names still get 16 lanes, like p1041).
+        if !matches!(
+            preset,
+            "p1025"
+                | "p1026"
+                | "p1027"
+                | "p1028"
+                | "p1029"
+                | "p102A"
+                | "p1031"
+                | "p1032"
+                | "p1033"
+                | "p1034"
+                | "p1035"
+                | "p1036"
+                | "p1041"
+                | "p1042"
+                | "p1043"
+                | "p1044"
+                | "p1045"
+                | "p1046"
+        ) {
+            return Err(format!("unknown Athena preset `{preset}`"));
+        }
+        self.info.optics_channels = OPTICS_LANES[..n].iter().map(|s| (*s).to_owned()).collect();
+        self.info.optics_rate_hz = Some(OPTICS_RATE_HZ);
+        self.info.optics_preset = Some(preset.to_owned());
+        self.info.ppg_channels.clear();
+        self.info.ppg_rate_hz = None;
+        self.optics_next = 0;
+        Ok(())
+    }
 }
 
 /// Simulator ids. `sim:muse` is kept as an alias of `sim:muse_s`.
@@ -303,13 +398,15 @@ pub fn sim_info_for(id: &str) -> Option<DeviceInfo> {
             i
         }
         "sim:athena" => {
-            // Same EEG montage, no PPG: Athena optics (and AUX) come later
-            // in their own patch set.
+            // Same EEG montage; 16-lane optics at p1041, never Classic PPG.
             let mut i = sim_info(DeviceKind::Muse);
             i.id = "sim:athena".into();
             i.name = "Muse S Athena (simulated)".into();
             i.ppg_channels.clear();
             i.ppg_rate_hz = None;
+            i.optics_channels = OPTICS_LANES.iter().map(|s| (*s).to_owned()).collect();
+            i.optics_rate_hz = Some(OPTICS_RATE_HZ);
+            i.optics_preset = Some(ATHENA_DEFAULT_PRESET.into());
             i
         }
         "sim:crown" => sim_info(DeviceKind::Crown),
@@ -342,6 +439,9 @@ pub fn sim_info(kind: DeviceKind) -> DeviceInfo {
         simulated: true,
         ppg_channels: if kind == DeviceKind::Muse { PPG_CHANNELS.iter().map(|c| (*c).to_owned()).collect() } else { Vec::new() },
         ppg_rate_hz: (kind == DeviceKind::Muse).then_some(PPG_RATE_HZ),
+        optics_channels: Vec::new(),
+        optics_rate_hz: None,
+        optics_preset: None,
         accel_rate_hz: Some(ACCEL_RATE_HZ),
         aux_channels: if kind == DeviceKind::Muse { vec!["AUX1".into()] } else { Vec::new() },
         rssi: None,
@@ -396,8 +496,11 @@ mod tests {
         assert!(p.open("sim:nope").is_err());
         assert_eq!(p.open("sim:muse").ok().map(|s| s.info().id), Some("sim:muse_s".into()));
         assert!(p.open("sim:crown").ok().is_some_and(|s| !s.info().has_ppg()));
-        assert!(p.open("sim:athena").ok().is_some_and(|s| !s.info().has_ppg()));
-        assert!(p.open("sim:muse2").ok().is_some_and(|s| s.info().has_ppg()));
+        assert!(p
+            .open("sim:athena")
+            .ok()
+            .is_some_and(|s| !s.info().has_ppg() && s.info().has_optics() && s.info().optics_channels.len() == 16));
+        assert!(p.open("sim:muse2").ok().is_some_and(|s| s.info().has_ppg() && !s.info().has_optics()));
         assert!(p.list().iter().all(|d| d.rssi.is_some()), "simulators advertise a signal strength");
     }
 
@@ -427,5 +530,23 @@ mod tests {
             let (s, _) = nf_dsp::spo2(&ch[1], &ch[2], PPG_RATE_HZ).unwrap_or_default();
             assert!((s - spo2).abs() < 1.0, "{id}: {s}");
         }
+    }
+
+    #[test]
+    fn athena_optics_is_pulsatile() {
+        let mut p = SimProvider::default();
+        let Ok(mut d) = p.open("sim:athena") else { panic!("athena") };
+        d.poll(0.0);
+        let mut lanes = vec![Vec::new(); 16];
+        for pk in d.poll_optics(5.0) {
+            lanes[usize::from(pk.lane)].extend(pk.samples.iter().copied());
+        }
+        assert_eq!(lanes[1].len(), 318, "64 Hz, whole packets of 6 over 5 s");
+        assert!(lanes.iter().all(|c| c.len() == lanes[1].len()));
+        // IR pulsatile: AC larger than ambient's.
+        let ac = |v: &[f32]| v.iter().copied().fold(f32::MIN, f32::max) - v.iter().copied().fold(f32::MAX, f32::min);
+        assert!(ac(&lanes[1]) > ac(&lanes[0]) * 10.0);
+        assert!(d.set_optics_preset("p1044").is_ok());
+        assert_eq!(d.info().optics_channels.len(), 8);
     }
 }

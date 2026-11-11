@@ -46,6 +46,7 @@ pub fn view_label(view: nf_core::View) -> String {
         V::Spectrogram => t!("view-spectrogram"),
         V::Psd => t!("view-psd"),
         V::HeartRate => t!("view-heart-rate"),
+        V::Optics => t!("view-optics"),
         V::Movement => t!("view-movement"),
         V::Streaming => t!("view-streaming"),
         V::Settings => t!("view-settings"),

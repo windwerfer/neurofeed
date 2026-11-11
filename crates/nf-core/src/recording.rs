@@ -4,7 +4,7 @@
 
 use nf_format::body::BodyWriter;
 use nf_format::Record;
-use nf_types::{BandSnapshot, DeviceInfo, EegPacket, PpgPacket};
+use nf_types::{BandSnapshot, DeviceInfo, EegPacket, OpticsPacket, PpgPacket};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +23,7 @@ pub struct RecordingInfo {
     pub duration: f64,
     pub eeg_samples: u64,
     pub ppg_samples: u64,
+    pub optics_samples: u64,
     pub feedback_seconds: u64,
     pub bytes: usize,
     /// Injected wall-clock start (Unix ms, UTC), if the shell provided one.
@@ -53,6 +54,7 @@ impl Recorder {
             duration: 0.0,
             eeg_samples: 0,
             ppg_samples: 0,
+            optics_samples: 0,
             feedback_seconds: 0,
             bytes: 12,
             wall_clock_unix_ms,
@@ -85,6 +87,11 @@ impl Recorder {
     pub fn ppg(&mut self, p: &PpgPacket) {
         self.writer.push(&Record::Ppg { ts: p.time, channel: i16::try_from(p.channel).unwrap_or(i16::MAX), samples: p.samples.clone() });
         self.info.ppg_samples += p.samples.len() as u64;
+    }
+
+    pub fn optics(&mut self, p: &OpticsPacket) {
+        self.writer.push(&Record::Optics { ts: p.time, lane: i16::try_from(p.lane).unwrap_or(i16::MAX), samples: p.samples.clone() });
+        self.info.optics_samples += p.samples.len() as u64;
     }
 
     pub fn accel(&mut self, p: &nf_types::AccelPacket) {

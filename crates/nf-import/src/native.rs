@@ -152,6 +152,7 @@ fn set_ts(r: &mut Record, f: impl Fn(f64) -> f64) {
         | Record::Accelerometer { ts, .. }
         | Record::Gyroscope { ts, .. }
         | Record::Ppg { ts, .. }
+        | Record::Optics { ts, .. }
         | Record::Bands { ts, .. }
         | Record::Pulse { ts, .. }
         | Record::Movement { ts, .. }

@@ -3,7 +3,7 @@
 //! view works on a recording. Replays are never recorded again.
 
 use nf_format::Record;
-use nf_types::{AccelPacket, DeviceInfo, DeviceSource, EegPacket, LinkState, PpgPacket};
+use nf_types::{AccelPacket, DeviceInfo, DeviceSource, EegPacket, LinkState, OpticsPacket, PpgPacket};
 
 /// Id scheme for replays.
 pub const SCHEME: &str = "replay";
@@ -40,6 +40,7 @@ pub struct Replay {
     info: DeviceInfo,
     eeg: Lane<(u16, Vec<f32>)>,
     ppg: Lane<(u16, Vec<f32>)>,
+    optics: Lane<(u16, Vec<f32>)>,
     accel: Lane<Vec<[f32; 3]>>,
     start: Option<f64>,
 }
@@ -48,11 +49,12 @@ impl Replay {
     /// Build from a stored session's device JSON and NFEDBIN body.
     pub fn new(id: u64, device_json: &str, body: &[u8]) -> Result<Self, String> {
         let mut info: DeviceInfo = serde_json::from_str(device_json).map_err(|e| format!("device info: {e}"))?;
-        let (mut eeg, mut ppg, mut accel) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut eeg, mut ppg, mut optics, mut accel) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for r in nf_format::parse_body(body).map_err(|e| e.to_string())? {
             match r {
                 Record::Eeg { ts, electrode, samples } => eeg.extend(u16::try_from(electrode).ok().map(|e| (ts, (e, samples)))),
                 Record::Ppg { ts, channel, samples } => ppg.extend(u16::try_from(channel).ok().map(|c| (ts, (c, samples)))),
+                Record::Optics { ts, lane, samples } => optics.extend(u16::try_from(lane).ok().map(|c| (ts, (c, samples)))),
                 Record::Accelerometer { ts, xyz, .. } => accel.push((ts, xyz)),
                 _ => {}
             }
@@ -62,7 +64,14 @@ impl Replay {
         };
         info.id = format!("{SCHEME}:{id}");
         info.name = format!("Replay · {}", info.name);
-        Ok(Self { info, eeg: Lane::new(eeg, t0), ppg: Lane::new(ppg, t0), accel: Lane::new(accel, t0), start: None })
+        Ok(Self {
+            info,
+            eeg: Lane::new(eeg, t0),
+            ppg: Lane::new(ppg, t0),
+            optics: Lane::new(optics, t0),
+            accel: Lane::new(accel, t0),
+            start: None,
+        })
     }
 
     /// Seconds of EEG.
@@ -82,6 +91,10 @@ impl DeviceSource for Replay {
     fn poll_ppg(&mut self, now: f64) -> Vec<PpgPacket> {
         let start = *self.start.get_or_insert(now);
         self.ppg.take(start, now).into_iter().map(|(time, (channel, samples))| PpgPacket { time, channel, samples }).collect()
+    }
+    fn poll_optics(&mut self, now: f64) -> Vec<OpticsPacket> {
+        let start = *self.start.get_or_insert(now);
+        self.optics.take(start, now).into_iter().map(|(time, (lane, samples))| OpticsPacket { time, lane, samples }).collect()
     }
     fn poll_accel(&mut self, now: f64) -> Vec<AccelPacket> {
         let start = *self.start.get_or_insert(now);

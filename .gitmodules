@@ -3,10 +3,6 @@
 	url = https://github.com/windwerfer/btleplug
 	ignore = all
 
-[submodule ".local/muse-rs"]
-	path = .local/muse-rs
-	url = https://github.com/eugenehp/muse-rs
-	ignore = all
 
 [submodule ".local/reve-rs"]
 	path = .local/reve-rs

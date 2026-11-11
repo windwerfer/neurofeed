@@ -27,6 +27,7 @@ Flutter `AppView` with `appViewIsGraph == true`:
 | Spectrogram | `monitor/views/spectrogram_view.dart` + `panes/spectrogram_pane.dart` | Spectrogram | `ui/views/spectrogram.rs` |
 | PSD | `monitor/views/psd_view.dart` + `panes/psd_pane.dart` + `bands_context_strip.dart` | PSD | `ui/views/psd.rs` |
 | HR + SpO2 | `monitor/views/hr_spo2_view.dart` + `optical_overview_pane.dart` + `optical_ppg_pane.dart` | HR+SpO2 | `ui/views/heart.rs` |
+| Optics | (new; Athena raw lanes) | Optics | `ui/views/optics.rs` |
 | (Movement: only a pane in the recording dashboard) | `panes/movement_pane.dart` | Movement (own view) | `ui/views/movement.rs` |
 
 Rust-only extra: Movement is a top-level view. Keep it, but give it the same chrome as the others.

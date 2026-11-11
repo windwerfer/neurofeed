@@ -107,3 +107,27 @@
 - Not in this pass: disk paging, Movement.
 - 2026-11-08 later: HR/SpO2 mean lines grid-fine (grid width + 0.2, 45 % colour). Pulse waveform now sweeps via `nf_core::rawtrace` (new `trace_samples` over time-stamped PPG segments, shared `build` with Raw EEG's `trace`; Raw's `mapping`/`time_grid` reused); `heart_detail` span gets Raw's one-window `ahead_s` so Inspect freezes on the pass.
 - 2026-11-11: Feedback compact fixes (plan step 1): single-column protocol cards + full-width Start, stacked fit check, wrapping button rows, live header split, 3-column trust totals on phones, short trust caption on narrow plots; vertical scroll for non-live phases. Regular layout unchanged.
+
+## 2026-11-11: Athena optics (separate stream + monitor page)
+
+- `.local/` is now gitignored. The stale `.gitmodules` entry for `.local/muse-rs`
+  (URL `eugenehp/muse-rs`) was removed: that path is a local checkout of the
+  `windwerfer/muse-rs` fork, not a submodule, and must not be committed. Other
+  `.local/*` submodule entries were left as-is but are also covered by `.local/`.
+- muse-rs (fork, branch `athena-optics`): `MuseEvent::Optics` with per-lane
+  samples and labels `ambient`/`infrared`/`red`/`opt3`…`opt15` (names, not
+  wavelengths). Athena emits Optics only; Classic PPG is unchanged. Default
+  startup preset `p1041` (16 lanes); `p1044`/`p1045` and other measured presets
+  are selectable. `AthenaDecoder` is wired in the notify loop so Gap events emit.
+- nf-types/nf-device/nf-sim/nf-core: `OpticsPacket`, `DeviceInfo` optics fields,
+  `Block::Optics` + `Block::Info`, `DeviceSource::poll_optics` / `set_optics_preset`.
+  `sim:athena` emits plausible 16-lane pulsatile + ambient data (no PPG).
+- Recording: NFEDBIN tag 14 (`Optics`), only while Record/training is on. Disk-backed
+  waveform loading stays on hold. History meta has no new SQLite column yet.
+- Commands: `optics.get`, `optics.preset.get`, `optics.preset.set`, `monitor.optics`.
+  Settings `athena_preset` (default p1041). Heart view: pulse/SpO2 is Classic-only
+  on Athena; use the Optics page.
+- Optics monitor: stacked lanes like Raw (sweep/Follow/Inspect, lane selector,
+  overview off by default, compact + regular, safe area, graph-only phone landscape,
+  EN/DE, 5 min ring, per-lane auto scale).
+- `cargo update -p rmcp` (3.8.0 → 3.9.0) for RUSTSEC-2026-0462 so `cargo deny` stays green.

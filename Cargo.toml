@@ -3,7 +3,7 @@
 resolver = "2"
 members = ["crates/*", "apps/*"]
 # Patched upstream (vendor) and the Python gym are not workspace crates.
-exclude = ["vendor", "feedback_gym"]
+exclude = ["vendor", "feedback_gym", ".local/*"]
 
 [workspace.package]
 version = "0.1.0"
