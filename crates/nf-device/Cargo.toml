@@ -20,10 +20,8 @@ nf-types.workspace = true
 log.workspace = true
 pure-lsl = { path = "../pure-lsl", optional = true }
 rosc = { version = "0.11", optional = true }
-# windwerfer/muse-rs branch athena-optics, local SHA fe7cfd6d87f72d049c4bdf28af3a3f3b4dfeb71a.
-# Path until that branch is on GitHub (windwerfer-bot push is HTTP 403). Then switch to:
-# muse-rs = { git = "https://github.com/windwerfer/muse-rs", rev = "fe7cfd6d87f72d049c4bdf28af3a3f3b4dfeb71a", default-features = false, optional = true }
-muse-rs = { path = "../../.local/muse-rs", default-features = false, optional = true }
+# windwerfer fork, branch athena-optics (Optics event, default p1041). Default features pull a TUI.
+muse-rs = { git = "https://github.com/windwerfer/muse-rs", rev = "fe7cfd6d87f72d049c4bdf28af3a3f3b4dfeb71a", default-features = false, optional = true }
 btleplug = { version = "0.13.5", optional = true }
 anyhow = { version = "1", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"], optional = true }

@@ -24,7 +24,10 @@ fn reload(s: &Session) -> Session {
 fn overview_defaults_toggle_and_persist_per_view() {
     let mut s = Session::new();
     let m = s.call("monitor.get", json!({})).unwrap();
-    assert_eq!(m["overview"], json!({ "bands": false, "raw_eeg": false, "histogram": true, "optics": false, "psd": true, "spectrogram": true }));
+    assert_eq!(
+        m["overview"],
+        json!({ "bands": false, "raw_eeg": false, "histogram": true, "optics": false, "psd": true, "spectrogram": true })
+    );
     s.call("monitor.overview", json!({ "monitor": "bands", "on": true })).unwrap();
     s.call("monitor.overview", json!({ "monitor": "psd", "on": false })).unwrap();
     assert!(s.call("monitor.overview", json!({ "monitor": "movement", "on": true })).is_err());
@@ -32,7 +35,12 @@ fn overview_defaults_toggle_and_persist_per_view() {
     let s2 = reload(&s);
     let st = &s2.state().monitors;
     assert!(st.overview_on(MonitorId::Bands) && !st.overview_on(MonitorId::Psd));
-    assert!(st.overview_on(MonitorId::Spectrogram) && !st.overview_on(MonitorId::RawEeg) && st.overview_on(MonitorId::Histogram) && !st.overview_on(MonitorId::Optics));
+    assert!(
+        st.overview_on(MonitorId::Spectrogram)
+            && !st.overview_on(MonitorId::RawEeg)
+            && st.overview_on(MonitorId::Histogram)
+            && !st.overview_on(MonitorId::Optics)
+    );
 }
 
 /// Histogram's minimap is on by default (owner 2026-11-08), but a saved
