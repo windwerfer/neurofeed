@@ -147,3 +147,5 @@
 - Switch the Apple Silicon job to `macos-15`. Run `upload` with `if: always()` after
   meta succeeds so surviving artifacts still attach; fail the workflow if a platform
   dropped. `workflow_dispatch` with a tag checks out that tag from a main workflow run.
+- Linux apt on ubuntu-22.04 can fail with `Temporary failure resolving azure.archive.ubuntu.com`;
+  the install step now falls back to archive.ubuntu.com and retries.
