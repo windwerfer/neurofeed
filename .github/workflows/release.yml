@@ -77,8 +77,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.meta.outputs.checkout }}" }
+      # Script lives on main; a workflow_dispatch that builds a tagged commit
+      # (e.g. 0.64.0) would otherwise 127 because the tag predates the file.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: .ci-workflow
+          sparse-checkout: scripts/ci-apt-install.sh
+          sparse-checkout-cone-mode: false
       - name: Install packaging deps
-        run: scripts/ci-apt-install.sh libasound2-dev libdbus-1-dev pkg-config libfuse2 file desktop-file-utils
+        run: |
+          .ci-workflow/scripts/ci-apt-install.sh libasound2-dev libdbus-1-dev pkg-config libfuse2 file desktop-file-utils
+          rm -rf .ci-workflow
       - uses: dtolnay/rust-toolchain@master
         with: { toolchain: "${{ env.RUST_VERSION }}" }
       - run: scripts/package-linux.sh --version "${{ needs.meta.outputs.version }}"
