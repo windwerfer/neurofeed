@@ -33,16 +33,16 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0" "ndk;$NDK_VERSION" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: android
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-ndk
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
       - name: x86_64 debug APK (emulator)
         run: scripts/build-android.sh --debug --abis x86_64
       - name: Unsigned release APKs (arm64-v8a, armeabi-v7a)

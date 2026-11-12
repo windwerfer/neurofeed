@@ -48,14 +48,14 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;$BUILD_TOOLS" "ndk;$NDK_VERSION" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; toolchain set via with:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-ndk@${{ env.CARGO_NDK_VERSION }}
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
         with:
           cache-disabled: true
       - name: Fail if signing is required but the secrets are missing
