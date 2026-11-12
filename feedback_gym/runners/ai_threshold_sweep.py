@@ -150,13 +150,13 @@ def sleep_edf_metrics(c: dict, rule: tuple[str, float]) -> dict:
         b = ba(warn[m], c["y"][m])
         if b is not None:
             bas.append(b)
-        rows = np.where(c["rid"] == r)[0]
+        rows = np.nonzero(c["rid"] == r)[0]
         y_r, w_r, s_r = c["y"][rows], warn[rows] & scored[rows], scored[rows]
-        n1 = np.where((y_r == 1) & s_r)[0]
+        n1 = np.nonzero((y_r == 1) & s_r)[0]
         if n1.size == 0:
             continue
         onset = n1[0]
-        after = np.where(w_r[onset:])[0]
+        after = np.nonzero(w_r[onset:])[0]
         if after.size == 0:
             missed += 1
             continue

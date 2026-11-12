@@ -151,7 +151,7 @@ def emb_keep_indices(win: Any) -> np.ndarray:
     table = {n: i for i, n in enumerate(_HEAD_C_ACTIVE)}
     keep_c = np.array([str(c) in table for c in stage_coarse], dtype=bool)
     keep = qc_pass_mask(X) & (y_a >= 0) & keep_c
-    return np.where(keep)[0]
+    return np.nonzero(keep)[0]
 
 def import_flutter_bands():
     """Import compute_window_features_fast from sibling muse-eeg-heads."""
@@ -193,7 +193,7 @@ def _reve_cap_idxs(y: np.ndarray, per_class: int, rng: np.random.Generator) -> n
         return np.arange(len(y), dtype=np.int64)
     picks = []
     for c in np.unique(y):
-        cand = np.where(y == c)[0]
+        cand = np.nonzero(y == c)[0]
         n = min(per_class, len(cand))
         if n:
             picks.append(rng.choice(cand, size=n, replace=False))

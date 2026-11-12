@@ -305,7 +305,7 @@ def blink_eo_matched(series: np.ndarray, corpus: dict[str, Any], p: int = FIXED_
         base = base[np.isfinite(base)]
         rest = plan.play_idx[g.play_pos]
         rest = rest[np.char.find(seg[rest], "_rest/") >= 0]
-        task = np.where((rid == eb) & (np.char.find(seg, "/task/") >= 0))[0]
+        task = np.nonzero((rid == eb) & (np.char.find(seg, "/task/") >= 0))[0]
         if base.size < 5 or rest.size < MIN_CLASS_ROWS or task.size < MIN_CLASS_ROWS:
             continue
         thr = threshold_at_percentile(base, p)

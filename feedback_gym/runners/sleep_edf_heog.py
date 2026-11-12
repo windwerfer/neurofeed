@@ -78,7 +78,7 @@ def heog_columns(corpus: dict[str, Any], windows_dir: Path = DEFAULT_WINDOWS) ->
     labels = np.asarray(corpus["labels"])
     cols = {k: np.full(rid.size, np.nan) for k in LOWFREQ}
     for rec in dict.fromkeys(rid):
-        rows = np.where(rid == rec)[0]
+        rows = np.nonzero(rid == rec)[0]
         win = np.load(windows_dir / f"{rec}_windows.npz", allow_pickle=True)
         starts = np.asarray(win["starts"])
         idxs = np.arange(starts.size) if starts.size == rows.size else emb_keep_indices(win)
