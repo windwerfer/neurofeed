@@ -58,7 +58,7 @@ fn usage(msg: &str) -> ! {
 /// (the `neurofeed-mcp` compatibility binary).
 pub fn run(default_mcp: bool) {
     match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
-        Ok(rt) => rt.block_on(main(default_mcp)),
+        Ok(rt) => rt.block_on(async_main(default_mcp)),
         Err(e) => {
             eprintln!("{}", json!({ "error": format!("tokio runtime: {e}") }));
             std::process::exit(1)
@@ -66,7 +66,7 @@ pub fn run(default_mcp: bool) {
     }
 }
 
-async fn main(as_mcp: bool) {
+async fn async_main(as_mcp: bool) {
     let mut o = Opts {
         manual: false,
         hardware: true,
@@ -135,12 +135,17 @@ async fn main(as_mcp: bool) {
         }
         "batch" => {
             let src = rest.first().unwrap_or_else(|| usage("batch <FILE|->"));
-            let text = if src == "-" {
-                let mut s = String::new();
-                std::io::stdin().read_to_string(&mut s).map(|_| s)
-            } else {
-                std::fs::read_to_string(src)
-            }
+            let path = src.clone();
+            let text = tokio::task::spawn_blocking(move || {
+                if path == "-" {
+                    let mut s = String::new();
+                    std::io::stdin().read_to_string(&mut s).map(|_| s)
+                } else {
+                    std::fs::read_to_string(&path)
+                }
+            })
+            .await
+            .unwrap_or_else(|e| Err(std::io::Error::other(e)))
             .unwrap_or_else(|e| usage(&format!("read {src}: {e}")));
             let v: Value = serde_json::from_str(&text).unwrap_or_else(|e| usage(&format!("{src} is not JSON: {e}")));
             let steps = if v.is_array() {
