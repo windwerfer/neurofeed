@@ -90,7 +90,7 @@ Streaming → enable, set IP/port/prefix. Messages `<prefix>/eeg|ppg|imu|bands` 
 
 ## Security
 
-[SonarQube Cloud](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) automatic analysis runs on `main` and reports code quality, bugs, vulnerabilities, and security hotspots. It is on the free plan, so only the `main` branch is analyzed (not other branches or pull requests).
+[SonarQube Cloud](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) CI analysis (`.github/workflows/sonarcloud.yml`) runs on every push to `main` and on pull requests, with Clippy and coverage imported. It reports code quality, bugs, vulnerabilities, and security hotspots. It is on the free plan, so other branches are not analyzed, and only pull requests that target `main` are.
 
 CI also runs `cargo deny check advisories bans licenses sources` on the Rust dependency tree (`.github/workflows/rust-ci.yml`), and third-party (non-`actions/*`) GitHub Actions in the workflows are pinned to commit SHAs.
 
