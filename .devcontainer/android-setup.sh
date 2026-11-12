@@ -26,7 +26,7 @@ CMDLINE_URL="https://dl.google.com/android/repository/${CMDLINE_ZIP}"
 CMDLINE_TARGET="${ANDROID_HOME}/cmdline-tools/latest"
 
 setup_cmdline_tools() {
-    if [ -x "${CMDLINE_TARGET}/bin/sdkmanager" ]; then
+    if [[ -x "${CMDLINE_TARGET}/bin/sdkmanager" ]]; then
         echo "    [x] cmdline-tools (sdkmanager) already present"
         return 0
     fi
@@ -36,7 +36,7 @@ setup_cmdline_tools() {
 
     local cached_zip="${CACHE_DIR}/${CMDLINE_ZIP}"
 
-    if [ -f "$cached_zip" ]; then
+    if [[ -f "$cached_zip" ]]; then
         echo "    Using cached ${CMDLINE_ZIP}"
         echo "    Verifying archive integrity..."
         if ! unzip -tq "$cached_zip" >/dev/null 2>&1; then
@@ -47,7 +47,7 @@ setup_cmdline_tools() {
     else
         local partial="${cached_zip}.part"
 
-        if [ -f "$partial" ]; then
+        if [[ -f "$partial" ]]; then
             echo "    Resuming previous interrupted download of cmdline-tools..."
         else
             echo "    Downloading cmdline-tools (~173 MB) to cache..."
@@ -75,7 +75,7 @@ setup_cmdline_tools() {
     unzip -q "$cached_zip" -d "${ANDROID_HOME}/cmdline-tools"
 
     # Modern zips contain a "cmdline-tools/" folder inside
-    if [ -d "${ANDROID_HOME}/cmdline-tools/cmdline-tools" ]; then
+    if [[ -d "${ANDROID_HOME}/cmdline-tools/cmdline-tools" ]]; then
         mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${CMDLINE_TARGET}"
     else
         # Fallback (rare)
@@ -133,7 +133,7 @@ setup_rust_android() {
 
     # Make sure Cargo environment is loaded
     # shellcheck disable=SC1091
-    [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
     # ABIs in apps/neurofeed-android/android/gradle.properties:
     # arm64-v8a, armeabi-v7a, x86_64
@@ -148,14 +148,14 @@ setup_rust_android() {
 
     # cargo-ndk is the build helper Gradle calls (`cargo ndk -t <abi>`).
     # Pinned because this tree uses one NDK (27.2.12479018).
-    if [ -x "$HOME/.cargo/bin/cargo-ndk" ] || type -P cargo-ndk > /dev/null 2>&1; then
+    if [[ -x "$HOME/.cargo/bin/cargo-ndk" ]] || type -P cargo-ndk > /dev/null 2>&1; then
         echo "    [x] cargo-ndk already installed"
     else
         echo "    Installing cargo-ndk..."
         cargo install cargo-ndk --version 4.1.2 --locked
         echo "    [x] cargo-ndk installed"
         # shellcheck disable=SC1091
-        [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+        [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     fi
 }
 
