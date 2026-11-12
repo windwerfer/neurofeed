@@ -50,8 +50,8 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Core crates stay wasm-clean
-        run: cargo check --target wasm32-unknown-unknown -p nf-types -p nf-dsp -p nf-format -p nf-sim -p nf-feedback -p nf-store -p nf-core
-      - run: cargo clippy --target wasm32-unknown-unknown -p neurofeed-egui -- -D warnings
+        run: cargo check --locked --target wasm32-unknown-unknown -p nf-types -p nf-dsp -p nf-format -p nf-sim -p nf-feedback -p nf-store -p nf-core
+      - run: cargo clippy --locked --target wasm32-unknown-unknown -p neurofeed-egui -- -D warnings
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: trunk@0.22.1
