@@ -55,7 +55,7 @@ setup_cmdline_tools() {
 
         # -C - : resume if partial file exists (server must support Range requests — Google does)
         # --retry : be a bit more resilient to flaky networks
-        if curl -fSL -C - --retry 3 --retry-delay 2 "$CMDLINE_URL" -o "$partial"; then
+        if curl --proto '=https' --tlsv1.2 -fSL -C - --retry 3 --retry-delay 2 "$CMDLINE_URL" -o "$partial"; then
             mv -f "$partial" "$cached_zip"
             echo "    Verifying archive integrity..."
             if ! unzip -tq "$cached_zip" >/dev/null 2>&1; then
