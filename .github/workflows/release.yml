@@ -89,7 +89,7 @@ jobs:
         run: |
           .ci-workflow/scripts/ci-apt-install.sh libasound2-dev libdbus-1-dev pkg-config libfuse2 file desktop-file-utils
           rm -rf .ci-workflow
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; toolchain set via with:
         with: { toolchain: "${{ env.RUST_VERSION }}" }
       - run: scripts/package-linux.sh --version "${{ needs.meta.outputs.version }}"
       - uses: actions/upload-artifact@v6
@@ -109,7 +109,7 @@ jobs:
         run: |
           python3 -m pip install --user aiohttp tomlkit 2>/dev/null || { dnf install -y python3-aiohttp python3-tomlkit || true; }
           scripts/package-flatpak.sh --version "${{ needs.meta.outputs.version }}" --sources-only
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
         with:
           bundle: neurofeed-${{ needs.meta.outputs.version }}-x86_64.flatpak
           manifest-path: flatpak/org.windwerfer.neurofeed.yml
@@ -124,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.meta.outputs.checkout }}" }
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; toolchain set via with:
         with: { toolchain: "${{ env.RUST_VERSION }}", targets: x86_64-pc-windows-msvc }
       - run: pwsh scripts/package-windows.ps1 -Version "${{ needs.meta.outputs.version }}"
       - uses: actions/upload-artifact@v6
@@ -139,7 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.meta.outputs.checkout }}" }
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; toolchain set via with:
         with: { toolchain: "${{ env.RUST_VERSION }}", targets: "aarch64-apple-darwin,x86_64-apple-darwin" }
       - run: scripts/package-macos.sh --version "${{ needs.meta.outputs.version }}"
       - uses: actions/upload-artifact@v6
@@ -151,10 +151,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.meta.outputs.checkout }}" }
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; toolchain set via with:
         with: { toolchain: "${{ env.RUST_VERSION }}", targets: wasm32-unknown-unknown }
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with: { tool: trunk@0.22.1 }
       - run: scripts/package-web.sh --version "${{ needs.meta.outputs.version }}"
       - uses: actions/upload-artifact@v6
