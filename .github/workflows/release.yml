@@ -30,6 +30,10 @@ env:
 jobs:
   meta:
     runs-on: ubuntu-24.04
+    # gh release view can't see draft releases with contents: read; without this a
+    # dispatch against a draft silently skips the upload.
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.v.outputs.version }}
       tag: ${{ steps.v.outputs.tag }}
