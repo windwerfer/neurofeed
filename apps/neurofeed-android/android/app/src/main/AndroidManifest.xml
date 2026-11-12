@@ -26,6 +26,7 @@
         android:label="NeuroFeed"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
         android:hasCode="true"
         android:theme="@style/Theme.NeuroFeed">
 
