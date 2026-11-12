@@ -19,9 +19,9 @@ done
 VERSION="$("$ROOT/scripts/version.sh")"
 export NEUROFEED_VERSION="$VERSION"
 # Pinned flatpak-builder-tools commit for the generator.
-GEN_REV=master
+GEN_REV=9d86d336a39b9af38b86f114b6ce5820fe260f91 # master as of 2026-11-12
 GEN="${TMPDIR:-/tmp}/flatpak-cargo-generator.py"
-curl -fsSL -o "$GEN" "https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/$GEN_REV/cargo/flatpak-cargo-generator.py"
+curl --proto '=https' --tlsv1.2 -fsSL -o "$GEN" "https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/$GEN_REV/cargo/flatpak-cargo-generator.py"
 python3 "$GEN" "$ROOT/Cargo.lock" -o "$ROOT/flatpak/cargo-sources.json"
 printf '%s\n' "$VERSION" >"$ROOT/flatpak/VERSION"
 # Release entry in the metainfo for this build.
