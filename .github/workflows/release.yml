@@ -132,14 +132,15 @@ jobs:
 
   macos:
     needs: meta
-    # Apple Silicon. macos-14 was retired 2026-11-02; jobs on that label are
-    # cancelled at queue time ("macos-14-arm64-us-default is not supported").
+    # Apple Silicon runner; builds arm64 + x86_64 and lipo's a universal .app/DMG.
+    # macos-14 was retired 2026-11-02; jobs on that label are cancelled at queue
+    # time ("macos-14-arm64-us-default is not supported").
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.meta.outputs.checkout }}" }
       - uses: dtolnay/rust-toolchain@master
-        with: { toolchain: "${{ env.RUST_VERSION }}", targets: aarch64-apple-darwin }
+        with: { toolchain: "${{ env.RUST_VERSION }}", targets: "aarch64-apple-darwin,x86_64-apple-darwin" }
       - run: scripts/package-macos.sh --version "${{ needs.meta.outputs.version }}"
       - uses: actions/upload-artifact@v6
         with: { name: release-macos, path: "dist/*", if-no-files-found: error }

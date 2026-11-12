@@ -9,7 +9,7 @@ every platform and attaches the assets with `gh release upload`:
 | `neurofeed-X.Y.Z-linux-x86_64.tar.gz`, `neurofeed-X.Y.Z-x86_64.AppImage` | `linux` (Ubuntu 22.04, glibc 2.35) | `scripts/package-linux.sh` |
 | `neurofeed-X.Y.Z-x86_64.flatpak` | `flatpak` (`flatpak/org.windwerfer.neurofeed.yml`) | `scripts/package-flatpak.sh` |
 | `neurofeed-X.Y.Z-windows-x64.zip` (portable) | `windows` | `scripts/package-windows.ps1` |
-| `neurofeed-X.Y.Z-macos-arm64.dmg` | `macos` | `scripts/package-macos.sh` |
+| `neurofeed-X.Y.Z-macos-universal.dmg` (arm64 + x86_64) | `macos` | `scripts/package-macos.sh` |
 | `neurofeed-web-X.Y.Z.zip` (static wasm site, unzip and serve over HTTP) | `web` (trunk) | `scripts/package-web.sh` |
 | `SHA256SUMS.txt` | `upload` | |
 
@@ -22,7 +22,8 @@ everything builds, the artifacts stay on the run, nothing is uploaded. With a `t
 `dry-run` off, the workflow on `main` checks out that tag (it does not move it) and uploads
 to the existing release with `gh release upload --clobber`.
 
-The macOS job runs on `macos-15` (Apple Silicon). GitHub retired `macos-14` on 2026-11-02;
+The macOS job runs on `macos-15` (Apple Silicon) and builds both `aarch64-apple-darwin` and
+`x86_64-apple-darwin`, combined with `lipo` into one universal binary. GitHub retired `macos-14` on 2026-11-02;
 jobs on that label are cancelled at queue time. Platform jobs already run in parallel; the
 `upload` job still attaches whatever built if one platform is cancelled or fails, then fails
 the workflow so a missing platform is not silent.
@@ -62,7 +63,8 @@ unset). The version is a pure function of the commit, so reproducible builds sta
 
 ## macOS
 
-Same approach as PhotoCraft: `NeuroFeed.app` (Apple Silicon, macOS 11+) on a drag-to-Applications
+Same approach as PhotoCraft: `NeuroFeed.app` (universal: Apple Silicon + Intel, macOS 11+;
+`MACOSX_DEPLOYMENT_TARGET=11.0` for both slices, `lipo -create`, `lipo -info` printed in the job log) on a drag-to-Applications
 DMG built with `hdiutil makehybrid` + `convert` on the `macos-15` runner, signed inside-out.
 Without a Developer ID it is ad-hoc signed (`MACOS_SIGN_IDENTITY=-`, not notarized): users open
 it once via right-click → Open. There is no Apple Developer ID or notarization in CI.
