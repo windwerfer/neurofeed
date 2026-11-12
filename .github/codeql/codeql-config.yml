@@ -1,0 +1,6 @@
+name: neurofeed CodeQL config
+# Vendored third-party crates, build output and local scratch data are not our code.
+paths-ignore:
+  - vendor
+  - target
+  - .local
