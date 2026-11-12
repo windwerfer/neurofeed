@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter};
+use btleplug::api::{Central, CentralState, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::Manager;
 use muse_rs::prelude::{MuseClient, MuseClientConfig, MuseEvent};
 use tokio::runtime::Runtime;
@@ -207,37 +207,17 @@ impl MuseProvider {
     }
 }
 
+type Active = Vec<(btleplug::platform::Adapter, HashSet<String>)>;
+
 /// Scan on every adapter that starts, polling while discovery is active
 /// (BlueZ drops `Device1.RSSI` once discovery stops).
 async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> Result<(), String> {
-    let manager = Manager::new().await.map_err(|e| e.to_string())?;
-    let adapters = manager.adapters().await.map_err(|e| e.to_string())?;
-    let mut active = Vec::new();
-    let mut errors = Vec::new();
-    for adapter in adapters {
-        let label = adapter.adapter_info().await.unwrap_or_else(|_| "adapter".into());
-        let ours = lock(shared).linked.clone();
-        release_stale(&adapter, &ours).await;
-        // Devices BlueZ already knows (paired, or seen earlier) before we scan.
-        let cached: HashSet<String> = match adapter.peripherals().await {
-            Ok(ps) => ps.iter().map(|p| p.id().to_string()).collect(),
-            Err(_) => HashSet::new(),
-        };
-        match adapter.start_scan(ScanFilter::default()).await {
-            Ok(()) => {
-                log::debug!("BLE scan started on {label}");
-                active.push((adapter, cached));
-            }
-            Err(e) => {
-                log::warn!("BLE scan on {label}: {e}");
-                errors.push(format!("{label}: {e}"));
-            }
-        }
-    }
-    if active.is_empty() {
-        return Err(if errors.is_empty() { "No Bluetooth adapter found".into() } else { errors.join("; ") });
-    }
     let started = tokio::time::Instant::now();
+    let Some(active) = start_adapters(shared, epoch, started, limit).await? else {
+        return Ok(()); // stopped while waiting for the adapter
+    };
+    let mut logged = HashSet::new();
+    let mut summary = tokio::time::Instant::now();
     loop {
         let hold = {
             let s = lock(shared);
@@ -250,8 +230,14 @@ async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> R
             break;
         }
         let mut live = HashMap::new();
+        let mut seen = 0;
         for (adapter, cached) in &active {
-            harvest(adapter, cached, &mut live).await;
+            seen += harvest(adapter, cached, &mut live, &mut logged).await;
+        }
+        // Says "0 peripherals" out loud: tells "radio hears nothing" apart from "filtered out".
+        if summary.elapsed() >= Duration::from_secs(3) {
+            summary = tokio::time::Instant::now();
+            log::info!("BLE scan {:.0} s: {seen} peripheral(s) seen, {} Muse", started.elapsed().as_secs_f64(), live.len());
         }
         record(shared, epoch, live, Instant::now());
         tokio::time::sleep(Duration::from_millis(400)).await;
@@ -267,9 +253,150 @@ async fn discover(shared: &Arc<Mutex<Shared>>, epoch: u64, limit: Duration) -> R
     Ok(())
 }
 
+/// Open the BLE manager and start an unfiltered scan on every adapter that is
+/// powered on. `Ok(None)`: the scan was stopped while waiting.
+async fn start_adapters(
+    shared: &Arc<Mutex<Shared>>,
+    epoch: u64,
+    started: tokio::time::Instant,
+    limit: Duration,
+) -> Result<Option<Active>, String> {
+    let manager = Manager::new().await.map_err(|e| {
+        log::warn!("BLE manager: {e}");
+        match e {
+            btleplug::Error::PermissionDenied => PERMISSION_HINT.to_owned(),
+            e => e.to_string(),
+        }
+    })?;
+    let adapters = manager.adapters().await.map_err(|e| e.to_string())?;
+    log::info!("BLE: {} adapter(s)", adapters.len());
+    let mut active = Vec::new();
+    let mut errors = Vec::new();
+    for adapter in adapters {
+        let label = adapter.adapter_info().await.unwrap_or_else(|_| "adapter".into());
+        log::info!("BLE adapter {label}: state {:?}", adapter.adapter_state().await);
+        if !powered_on(shared, epoch, &adapter, &label, started, limit).await {
+            if lock(shared).epoch != epoch {
+                return Ok(None);
+            }
+            errors.push(format!("{label}: {NOT_POWERED_HINT}"));
+            continue;
+        }
+        log_events(shared.clone(), epoch, &adapter, label.clone()).await;
+        let ours = lock(shared).linked.clone();
+        release_stale(&adapter, &ours).await;
+        // Devices BlueZ already knows (paired, or seen earlier) before we scan.
+        let cached: HashSet<String> = match adapter.peripherals().await {
+            Ok(ps) => ps.iter().map(|p| p.id().to_string()).collect(),
+            Err(_) => HashSet::new(),
+        };
+        // No service filter: CoreBluetooth would hide a Muse whose advertisement
+        // leaves 0xFE8D out; we match by name or service ourselves (`classify`).
+        match adapter.start_scan(ScanFilter::default()).await {
+            Ok(()) => {
+                log::info!("BLE scan started on {label} (unfiltered, {} known before)", cached.len());
+                active.push((adapter, cached));
+            }
+            Err(e) => {
+                log::warn!("BLE scan on {label}: {e}");
+                errors.push(format!("{label}: {e}"));
+            }
+        }
+    }
+    if active.is_empty() {
+        return Err(if errors.is_empty() { "No Bluetooth adapter found".into() } else { errors.join("; ") });
+    }
+    Ok(Some(active))
+}
+
+/// Log the adapter's raw event stream until this scan ends: state changes and
+/// first discoveries at info, every advertisement at trace
+/// (`RUST_LOG=nf_device=trace`).
+async fn log_events(shared: Arc<Mutex<Shared>>, epoch: u64, adapter: &btleplug::platform::Adapter, label: String) {
+    use btleplug::api::CentralEvent as E;
+    use futures_util::StreamExt as _;
+    let mut events = match adapter.events().await {
+        Ok(ev) => ev,
+        Err(e) => return log::warn!("BLE events on {label}: {e}"),
+    };
+    tokio::spawn(async move {
+        while lock(&shared).epoch == epoch {
+            let Ok(next) = tokio::time::timeout(Duration::from_millis(500), events.next()).await else { continue };
+            match next {
+                None => break,
+                Some(E::StateUpdate(st)) => log::info!("BLE {label}: state -> {st:?}"),
+                Some(E::DeviceDiscovered(id)) => log::info!("BLE {label}: discovered {id}"),
+                Some(E::ManufacturerDataAdvertisement { id, manufacturer_data }) => {
+                    log::trace!("BLE {label}: {id} manufacturer data {manufacturer_data:02x?}");
+                }
+                Some(ev) => log::trace!("BLE {label}: {ev:?}"),
+            }
+        }
+    });
+}
+
+/// Shown when the OS refuses Bluetooth to this process (macOS TCC).
+const PERMISSION_HINT: &str = "Bluetooth permission denied. Allow NeuroFeed (or the Terminal it was started from) in System Settings > Privacy & Security > Bluetooth, then try again.";
+/// Shown when the adapter never reports powered on (off, or permission pending/denied).
+const NOT_POWERED_HINT: &str = "Bluetooth is off or not allowed for NeuroFeed (System Settings > Privacy & Security > Bluetooth).";
+
+/// Wait until `adapter` reports PoweredOn. CoreBluetooth silently ignores a scan
+/// started before that (unknown/unauthorized while the permission prompt is
+/// open), and a watch would then stay dead until the dialog is reopened. A
+/// timed scan waits at most its `limit`; a watch waits until it is stopped,
+/// showing the hint meanwhile. BlueZ/WinRT report PoweredOn at once, or the
+/// scan below fails with its own error, so other platforms do not block.
+async fn powered_on(
+    shared: &Arc<Mutex<Shared>>,
+    epoch: u64,
+    adapter: &btleplug::platform::Adapter,
+    label: &str,
+    started: tokio::time::Instant,
+    limit: Duration,
+) -> bool {
+    let mut hinted = false;
+    loop {
+        let state = adapter.adapter_state().await;
+        if matches!(state, Ok(CentralState::PoweredOn)) {
+            if hinted {
+                log::info!("BLE adapter {label}: powered on");
+                let mut s = lock(shared);
+                if s.epoch == epoch {
+                    s.error = None;
+                }
+            }
+            return true;
+        }
+        if !cfg!(target_os = "macos") {
+            log::warn!("BLE adapter {label}: state {state:?}, scanning anyway");
+            return true;
+        }
+        let (current, hold) = {
+            let s = lock(shared);
+            (s.epoch == epoch, s.hold)
+        };
+        if !current || (!hold && started.elapsed() >= limit) {
+            log::warn!("BLE adapter {label}: still {state:?}, not scanning");
+            return false;
+        }
+        if !hinted && started.elapsed() >= Duration::from_secs(2) {
+            hinted = true;
+            log::warn!("BLE adapter {label}: {state:?} after 2 s, waiting for Bluetooth on / permission");
+            lock(shared).error = Some(format!("BLE scan: {NOT_POWERED_HINT}"));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
 /// Collect the Muses one adapter sees right now (id -> name, rssi).
-async fn harvest(adapter: &btleplug::platform::Adapter, cached: &HashSet<String>, live: &mut HashMap<String, (String, Option<i16>)>) {
-    let Ok(peripherals) = adapter.peripherals().await else { return };
+async fn harvest(
+    adapter: &btleplug::platform::Adapter,
+    cached: &HashSet<String>,
+    live: &mut HashMap<String, (String, Option<i16>)>,
+    logged: &mut HashSet<(String, bool)>,
+) -> usize {
+    let Ok(peripherals) = adapter.peripherals().await else { return 0 };
+    let n = peripherals.len();
     for p in peripherals {
         let Ok(Some(props)) = p.properties().await else { continue };
         let id = p.id().to_string();
@@ -283,10 +410,23 @@ async fn harvest(adapter: &btleplug::platform::Adapter, cached: &HashSet<String>
             cached.contains(&id),
             if hit.is_some() { "listed" } else { "ignored" }
         );
+        // Once per peripheral (and again when it becomes a Muse): `RUST_LOG=nf_device=info`
+        // shows what the radio sees without the 400 ms debug flood.
+        if logged.insert((id.clone(), hit.is_some())) {
+            log::info!(
+                "BLE saw id={id} name={:?} rssi={:?} services={:?} manufacturer={:02x?} -> {}",
+                props.local_name,
+                props.rssi,
+                props.services,
+                props.manufacturer_data,
+                if hit.is_some() { "Muse" } else { "not a Muse" }
+            );
+        }
         if let Some(name) = hit {
             live.insert(id, (name, props.rssi));
         }
     }
+    n
 }
 
 /// A Muse the OS still holds connected without a link of ours: left over from

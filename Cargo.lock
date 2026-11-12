@@ -3139,6 +3139,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "btleplug",
+ "futures-util",
  "log",
  "muse-rs",
  "nf-types",

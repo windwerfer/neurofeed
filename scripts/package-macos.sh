@@ -53,6 +53,11 @@ ts=(--timestamp); [[ "$IDENTITY" = "-" ]] && ts=(--timestamp=none)
 codesign --force --sign "$IDENTITY" "${ts[@]}" --options runtime "$APP/Contents/MacOS/NeuroFeed"
 codesign --force --sign "$IDENTITY" "${ts[@]}" --options runtime "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"
+# macOS kills a CoreBluetooth client whose bundle lacks the usage string, and TCC
+# keys the Bluetooth grant to the signed bundle id: print both so the CI log shows them.
+/usr/libexec/PlistBuddy -c 'Print :NSBluetoothAlwaysUsageDescription' "$APP/Contents/Info.plist"
+codesign -dv --verbose=2 "$APP" 2>&1 | grep -E '^(Identifier|Format|Signature|CodeDirectory|Info.plist)'
+codesign -dv "$APP" 2>&1 | grep -q '^Identifier=org.windwerfer.neurofeed$'
 
 STAGE="$WORK/dmg"; mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/NeuroFeed.app"
