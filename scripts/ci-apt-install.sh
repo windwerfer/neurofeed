@@ -7,7 +7,7 @@
 # rust-ci and dropped Linux release assets. Fix DNS first, then fall
 # back to archive.ubuntu.com and retry apt.
 set -euo pipefail
-if [ "$#" -eq 0 ]; then
+if [[ "$#" -eq 0 ]]; then
   echo "usage: $0 package [package...]" >&2
   exit 2
 fi
@@ -18,7 +18,7 @@ fix_dns() {
     return 0
   fi
   echo "Runner DNS failed; switching /etc/resolv.conf to 1.1.1.1 / 8.8.8.8"
-  if [ -L /etc/resolv.conf ]; then
+  if [[ -L /etc/resolv.conf ]]; then
     sudo rm -f /etc/resolv.conf
   fi
   printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\noptions timeout:2 attempts:3\n' | sudo tee /etc/resolv.conf >/dev/null
@@ -26,7 +26,7 @@ fix_dns() {
 
 fallback_mirrors() {
   echo "Falling back to archive.ubuntu.com (runner apt mirror / DNS unreachable)"
-  if [ -f /etc/apt/apt-mirrors.txt ]; then
+  if [[ -f /etc/apt/apt-mirrors.txt ]]; then
     printf 'http://archive.ubuntu.com/ubuntu\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
   fi
   sudo sed -i \
