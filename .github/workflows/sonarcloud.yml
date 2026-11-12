@@ -1,0 +1,74 @@
+# SonarQube Cloud CI-based analysis: Rust Clippy JSON report + LCOV coverage (cargo-llvm-cov).
+# Project settings live in sonar-project.properties. Automatic Analysis must be OFF in SonarCloud
+# (Administration > Analysis Method), otherwise this scan fails.
+# Free plan: only the main branch and pull requests targeting it are analyzed.
+name: SonarCloud
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+concurrency:
+  group: sonarcloud-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  sonarcloud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # Secrets cannot be read in a job-level `if`, and fork PRs get no secrets: check here and
+      # skip the remaining steps cleanly when the token is missing.
+      - name: Check for SONAR_TOKEN
+        id: token
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SONAR_TOKEN is not available (fork pull request or secret not set); skipping SonarCloud analysis."
+          fi
+      - if: steps.token.outputs.available == 'true'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0 # full history for SonarCloud blame / new-code detection
+          persist-credentials: false
+      - name: System libs (ALSA for cpal, D-Bus for btleplug), as in rust-ci.yml
+        if: steps.token.outputs.available == 'true'
+        run: scripts/ci-apt-install.sh libasound2-dev libdbus-1-dev pkg-config
+      - if: steps.token.outputs.available == 'true'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch
+        with:
+          components: clippy, llvm-tools-preview
+      - if: steps.token.outputs.available == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - if: steps.token.outputs.available == 'true'
+        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-llvm-cov
+      - name: Clippy JSON report
+        if: steps.token.outputs.available == 'true'
+        # Lint findings are imported into SonarCloud, so a lint error must not stop the scan.
+        run: |
+          cargo clippy --locked --workspace --all-targets --message-format=json > clippy-report.json \
+            || echo "::warning::cargo clippy exited non-zero; its findings are still imported"
+          test -s clippy-report.json
+      - name: Coverage (LCOV)
+        if: steps.token.outputs.available == 'true'
+        env:
+          # Coverage comes from instrumentation, not DWARF; skipping debuginfo keeps target/ small.
+          CARGO_PROFILE_DEV_DEBUG: "0"
+        run: cargo llvm-cov --locked --workspace --lcov --output-path lcov.info
+      - name: SonarCloud scan
+        if: steps.token.outputs.available == 'true'
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io

@@ -74,3 +74,7 @@ dist/
 /.flatpak-repo/
 /flatpak/VERSION
 .local/
+
+# SonarCloud CI reports (.github/workflows/sonarcloud.yml)
+clippy-report.json
+lcov.info
