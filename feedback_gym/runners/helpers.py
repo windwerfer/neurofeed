@@ -295,7 +295,8 @@ def warn_rate_health(
     # Triangular peak at target within [low, high]
     if rate <= target:
         return float((rate - low) / (target - low)) if target > low else 1.0
-    return float((high - rate) / (high - target)) if high > target else 1.0
+    # Here target < rate <= high, so high > target and the division is safe.
+    return float((high - rate) / (high - target))
 
 
 def guard_feature_score(
