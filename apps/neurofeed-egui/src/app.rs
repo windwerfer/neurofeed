@@ -73,6 +73,8 @@ impl NeuroFeedApp {
             session.set_ai_runtime(Box::new(nf_ai::NativeAi::with_default_root()));
         }
         let mut app = Self::with_session(session);
+        // Restored Appearance before the first frame (no dark flash in light mode).
+        ui::theme::follow(&cc.egui_ctx, app.session.state().settings.appearance);
         #[cfg(not(target_arch = "wasm32"))]
         if param("bridge").is_some_and(|v| v != "0") {
             app.set_bridge(&cc.egui_ctx, true);
