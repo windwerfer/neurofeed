@@ -7,6 +7,7 @@ pub mod i18n;
 pub mod audio;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod bridge;
+pub mod os_theme;
 pub mod platform;
 pub mod store;
 pub mod ui;

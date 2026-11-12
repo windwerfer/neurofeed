@@ -25,6 +25,30 @@ fn settings_survive_a_restart_and_a_rolled_back_batch() {
     assert!((s2.state().audio.master - 0.3).abs() < 1e-9);
 }
 
+/// Appearance defaults to `system`; an explicit `settings.set` (dark, light or
+/// system) survives a restart, while an old doc with the former `dark` default
+/// and no choice flag comes back as `system`.
+#[test]
+fn appearance_defaults_to_system_and_a_choice_persists() {
+    let mut s = Session::new().with_store(Box::new(MemoryStore::default()));
+    let user = |s: &mut Session| run(s, "settings.get", Value::Null).unwrap()["user"].clone();
+    assert_eq!(user(&mut s)["appearance"], "system");
+    assert_eq!(user(&mut s)["appearance_chosen"], false);
+    run(&mut s, "settings.set", json!({ "appearance": "dark" })).unwrap();
+    assert_eq!((user(&mut s)["appearance"].clone(), user(&mut s)["appearance_chosen"].clone()), (json!("dark"), json!(true)));
+    let doc = s.store().get_doc("settings").unwrap().unwrap();
+    let mut store = MemoryStore::default();
+    store.put_doc("settings", Some(&doc)).unwrap();
+    let s2 = Session::new().with_store(Box::new(store));
+    assert_eq!(s2.state().settings.appearance, nf_core::settings::Appearance::Dark);
+
+    let mut old = MemoryStore::default();
+    old.put_doc("settings", Some(r#"{"user":{"appearance":"dark","subject":"p07"}}"#)).unwrap();
+    let s3 = Session::new().with_store(Box::new(old));
+    assert_eq!((s3.state().settings.appearance, s3.state().settings.subject.as_str()), (nf_core::settings::Appearance::System, "p07"));
+    assert!(run(&mut s, "settings.set", json!({ "appearance": "sepia" })).is_err());
+}
+
 #[test]
 fn notes_are_validated_saved_and_rolled_back() {
     let mut s = Session::new();

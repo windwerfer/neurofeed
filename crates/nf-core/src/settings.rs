@@ -12,9 +12,10 @@ pub const MAX_SUBJECT: usize = 40;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Appearance {
+    /// Follow the OS light/dark preference, live (the default).
+    #[default]
     System,
     Light,
-    #[default]
     Dark,
 }
 
@@ -45,6 +46,10 @@ pub enum Language {
 #[serde(default)]
 pub struct UserSettings {
     pub appearance: Appearance,
+    /// The user picked `appearance` (Settings or `settings.set`). Documents
+    /// saved before this flag existed always stored the old `dark` default, so
+    /// an unpicked appearance is read back as `system` (see [`Persisted::restore`]).
+    pub appearance_chosen: bool,
     /// Pseudonymous subject id written into recordings ("" = anonymous).
     pub subject: String,
     /// The first-run tour was finished or skipped.
@@ -99,7 +104,8 @@ pub enum QualitySource {
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
-            appearance: Appearance::Dark,
+            appearance: Appearance::System,
+            appearance_chosen: false,
             subject: String::new(),
             onboarded: false,
             debug: true,
@@ -169,6 +175,7 @@ pub fn apply(s: &mut UserSettings, p: &SettingsPatch) -> Result<(), String> {
     }
     if let Some(v) = p.appearance {
         s.appearance = v;
+        s.appearance_chosen = true;
     }
     if let Some(v) = &p.subject {
         v.trim().clone_into(&mut s.subject);
@@ -303,6 +310,11 @@ impl Persisted {
 
     pub fn restore(self, s: &mut crate::AppState) {
         s.settings = self.user;
+        if !s.settings.appearance_chosen {
+            // Never picked (incl. docs from before the flag, which saved the old
+            // `dark` default): follow the OS.
+            s.settings.appearance = Appearance::System;
+        }
         s.audio = self.audio;
         s.mains_mode = self.mains;
         s.band_scale = self.band_scale;
@@ -336,16 +348,49 @@ mod tests {
         let mut s = UserSettings::default();
         let bad = SettingsPatch { appearance: Some(Appearance::Light), subject: Some("a/b".into()), ..Default::default() };
         assert!(apply(&mut s, &bad).is_err());
-        assert_eq!(s.appearance, Appearance::Dark);
+        assert_eq!((s.appearance, s.appearance_chosen), (Appearance::System, false));
         apply(&mut s, &SettingsPatch { subject: Some("  p-07 ".into()), ..Default::default() }).unwrap();
         assert_eq!(s.subject, "p-07");
+        assert!(!s.appearance_chosen, "other settings do not count as an appearance choice");
     }
 
     #[test]
     fn persisted_round_trips_and_tolerates_missing_fields() {
         let p: Persisted = serde_json::from_str(r#"{"user":{"subject":"x"}}"#).unwrap();
-        assert_eq!((p.user.subject.as_str(), p.user.appearance), ("x", Appearance::Dark));
+        assert_eq!((p.user.subject.as_str(), p.user.appearance), ("x", Appearance::System));
         let j = serde_json::to_string(&p).unwrap();
         assert_eq!(serde_json::from_str::<Persisted>(&j).unwrap(), p);
+    }
+
+    fn restored(doc: &str) -> crate::AppState {
+        let mut st = crate::AppState::default();
+        serde_json::from_str::<Persisted>(doc).unwrap().restore(&mut st);
+        st
+    }
+
+    #[test]
+    fn default_appearance_follows_the_os() {
+        assert_eq!(UserSettings::default().appearance, Appearance::System);
+        assert_eq!(crate::AppState::default().settings.appearance, Appearance::System);
+    }
+
+    #[test]
+    fn old_docs_with_the_dark_default_migrate_to_system() {
+        // Saved by <= 0.64.2: `dark` was the default and always written.
+        let st = restored(r#"{"user":{"appearance":"dark","subject":"p07"}}"#);
+        assert_eq!((st.settings.appearance, st.settings.subject.as_str()), (Appearance::System, "p07"));
+        assert_eq!(restored(r#"{"user":{"appearance":"light"}}"#).settings.appearance, Appearance::System);
+    }
+
+    #[test]
+    fn an_explicit_choice_overrides_and_persists() {
+        for a in [Appearance::Dark, Appearance::Light, Appearance::System] {
+            let mut st = crate::AppState::default();
+            apply(&mut st.settings, &SettingsPatch { appearance: Some(a), ..Default::default() }).unwrap();
+            assert!(st.settings.appearance_chosen);
+            let doc = serde_json::to_string(&Persisted::of(&st)).unwrap();
+            let back = restored(&doc);
+            assert_eq!((back.settings.appearance, back.settings.appearance_chosen), (a, true), "{doc}");
+        }
     }
 }

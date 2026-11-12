@@ -13,8 +13,9 @@ pub const SCRIM: Color32 = Color32::from_black_alpha(110);
 /// Monitor toolbar row height (regular; compact uses the touch height).
 pub const MONITOR_TOOLBAR: f32 = 40.0;
 
+/// Fonts. Both egui styles stay installed (egui's own dark and light
+/// visuals); [`follow`] picks one, so nothing is forced to dark here.
 pub fn apply(ctx: &egui::Context) {
-    ctx.set_visuals(egui::Visuals::dark());
     ctx.set_fonts(fonts());
 }
 
@@ -29,17 +30,43 @@ pub fn fonts() -> egui::FontDefinitions {
     f
 }
 
-/// Follow the Appearance setting (cheap; egui ignores an unchanged value).
+/// Follow the Appearance setting every frame (cheap; unchanged values are
+/// not written). `System` keeps egui on [`egui::ThemePreference::System`]:
+/// eframe feeds the OS theme on macOS, Windows and the web (live). Where it
+/// reports none (X11, Android, some Wayland) our own probe
+/// ([`crate::os_theme`]) becomes egui's fallback theme.
 pub fn follow(ctx: &egui::Context, a: nf_core::settings::Appearance) {
-    use nf_core::settings::Appearance;
-    let want = match a {
-        Appearance::System => egui::ThemePreference::System,
-        Appearance::Light => egui::ThemePreference::Light,
-        Appearance::Dark => egui::ThemePreference::Dark,
-    };
+    let want = preference(a);
     if ctx.options(|o| o.theme_preference) != want {
         ctx.set_theme(want);
     }
+    if let Some(t) = fallback(a, ctx.system_theme(), crate::os_theme::get) {
+        if ctx.options(|o| o.fallback_theme) != t {
+            ctx.options_mut(|o| o.fallback_theme = t);
+        }
+    }
+}
+
+/// egui theme preference for an Appearance setting.
+#[must_use]
+pub fn preference(a: nf_core::settings::Appearance) -> egui::ThemePreference {
+    use nf_core::settings::Appearance;
+    match a {
+        Appearance::System => egui::ThemePreference::System,
+        Appearance::Light => egui::ThemePreference::Light,
+        Appearance::Dark => egui::ThemePreference::Dark,
+    }
+}
+
+/// The fallback theme to install: only for `System`, only when eframe gave
+/// no system theme, and only when the probe knows one (`probe` is not even
+/// called otherwise).
+pub fn fallback(
+    a: nf_core::settings::Appearance,
+    system: Option<egui::Theme>,
+    probe: impl FnOnce() -> Option<egui::Theme>,
+) -> Option<egui::Theme> {
+    (a == nf_core::settings::Appearance::System && system.is_none()).then(probe).flatten()
 }
 
 /// Band palette of the legacy app (`charts/band_style.dart`).
@@ -103,3 +130,50 @@ pub const QUALITY_NONE: Color32 = Color32::from_rgb(0x75, 0x75, 0x75);
 /// Record button dot.
 pub const RECORD_RED: Color32 = Color32::from_rgb(0xE5, 0x39, 0x35);
 pub const STREAM_ON: Color32 = Color32::from_rgb(0x4C, 0xAF, 0x50);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::{Theme, ThemePreference};
+    use nf_core::settings::Appearance;
+
+    /// One frame with the OS reporting `system`, Appearance `a`.
+    fn frame(ctx: &egui::Context, a: Appearance, system: Option<Theme>) -> Theme {
+        let input = egui::RawInput { system_theme: system, ..Default::default() };
+        ctx.run_ui(input, |ui| follow(ui.ctx(), a)).textures_delta.clear();
+        // The theme of the next frame (preference changes apply from there).
+        ctx.run_ui(egui::RawInput { system_theme: system, ..Default::default() }, |_| {}).textures_delta.clear();
+        ctx.theme()
+    }
+
+    #[test]
+    fn system_follows_the_os_live_and_a_choice_overrides_it() {
+        let ctx = egui::Context::default();
+        assert_eq!(frame(&ctx, Appearance::System, Some(Theme::Light)), Theme::Light);
+        assert_eq!(frame(&ctx, Appearance::System, Some(Theme::Dark)), Theme::Dark, "OS switched while running");
+        assert_eq!(frame(&ctx, Appearance::System, Some(Theme::Light)), Theme::Light);
+        assert_eq!(frame(&ctx, Appearance::Dark, Some(Theme::Light)), Theme::Dark);
+        assert_eq!(frame(&ctx, Appearance::Light, Some(Theme::Dark)), Theme::Light);
+        assert_eq!(ctx.options(|o| o.theme_preference), ThemePreference::Light);
+    }
+
+    #[test]
+    fn both_styles_keep_egui_visuals_for_their_theme() {
+        let ctx = egui::Context::default();
+        apply(&ctx);
+        assert!(!ctx.style_of(Theme::Light).visuals.dark_mode);
+        assert!(ctx.style_of(Theme::Dark).visuals.dark_mode);
+    }
+
+    #[test]
+    fn probe_only_fills_a_missing_os_theme_for_system() {
+        let light = || Some(Theme::Light);
+        assert_eq!(fallback(Appearance::System, None, light), Some(Theme::Light));
+        assert_eq!(fallback(Appearance::System, None, || None), None);
+        let never = || -> Option<Theme> { panic!("probe must not run") };
+        assert_eq!(fallback(Appearance::System, Some(Theme::Dark), never), None);
+        assert_eq!(fallback(Appearance::Dark, None, never), None);
+        assert_eq!(fallback(Appearance::Light, None, never), None);
+        assert_eq!(preference(Appearance::System), ThemePreference::System);
+    }
+}

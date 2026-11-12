@@ -35,6 +35,11 @@ pub trait Platform: Send + Sync {
     fn min_top_inset_pt(&self) -> f32 {
         0.0
     }
+    /// The OS dark-mode setting when the windowing layer reports none
+    /// (Android: `Configuration.uiMode`). `None`: unknown.
+    fn system_dark(&self) -> Option<bool> {
+        None
+    }
 }
 
 /// Safe-area insets in points (`[left, top, right, bottom]`): the reported

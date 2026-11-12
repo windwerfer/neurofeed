@@ -135,6 +135,51 @@ impl Platform for Hooks {
         poll_insets();
         INSETS.each_ref().map(|a| f32::from_bits(a.load(Ordering::Relaxed)))
     }
+    fn system_dark(&self) -> Option<bool> {
+        poll_night();
+        match NIGHT.load(Ordering::Relaxed) {
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        }
+    }
+}
+
+/// System dark mode (`Configuration.uiMode & UI_MODE_NIGHT_MASK`): 0 unknown,
+/// 1 light, 2 dark. winit reports no theme on Android.
+static NIGHT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Re-read the night mode (at most once a second; the manifest handles
+/// `uiMode` changes itself, so the activity is not recreated on a switch).
+fn poll_night() {
+    static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+    {
+        let Ok(mut last) = LAST.lock() else { return };
+        if last.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(1)) {
+            return;
+        }
+        *last = Some(std::time::Instant::now());
+    }
+    let r = with_activity(|env, a| {
+        let res = env.call_method(a, jni::jni_str!("getResources"), jni::jni_sig!("()Landroid/content/res/Resources;"), &[])?.l()?;
+        let cfg =
+            env.call_method(&res, jni::jni_str!("getConfiguration"), jni::jni_sig!("()Landroid/content/res/Configuration;"), &[])?.l()?;
+        env.get_field(&cfg, jni::jni_str!("uiMode"), jni::jni_sig!("I"))?.i()
+    });
+    match r {
+        // UI_MODE_NIGHT_MASK 0x30: NO 0x10, YES 0x20, UNDEFINED 0x00.
+        Ok(mode) => {
+            let v = match mode & 0x30 {
+                0x10 => 1,
+                0x20 => 2,
+                _ => 0,
+            };
+            if NIGHT.swap(v, Ordering::Relaxed) != v {
+                log::info!("Android night mode: uiMode=0x{mode:x}");
+            }
+        }
+        Err(e) => log::debug!("night mode poll: {e}"),
+    }
 }
 
 /// Status bar height used when Android reports no insets at all.
