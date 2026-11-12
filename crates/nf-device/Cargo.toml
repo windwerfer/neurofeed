@@ -11,7 +11,7 @@ default = ["ble", "osc", "lsl"]
 ## Lab Streaming Layer outlets (pure Rust, `pure-lsl`).
 lsl = ["dep:pure-lsl"]
 ## Muse over Bluetooth LE (muse-rs + btleplug; Linux needs libdbus-1-dev).
-ble = ["dep:muse-rs", "dep:btleplug", "dep:tokio", "dep:anyhow"]
+ble = ["dep:muse-rs", "dep:btleplug", "dep:tokio", "dep:anyhow", "dep:futures-util"]
 ## Neurosity Crown over OSC/UDP (port 9000 by default).
 osc = ["dep:rosc"]
 
@@ -24,6 +24,7 @@ rosc = { version = "0.11", optional = true }
 muse-rs = { git = "https://github.com/windwerfer/muse-rs", rev = "fe7cfd6d87f72d049c4bdf28af3a3f3b4dfeb71a", default-features = false, optional = true }
 btleplug = { version = "0.13.5", optional = true }
 anyhow = { version = "1", optional = true }
+futures-util = { version = "0.3", default-features = false, optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"], optional = true }
 
 [lints]

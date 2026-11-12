@@ -3,6 +3,11 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(i) = args.iter().position(|a| a == "--ble-scan") {
+        let secs = args.get(i + 1).and_then(|s| s.parse::<f64>().ok()).unwrap_or(10.0);
+        std::process::exit(ble_scan(secs));
+    }
     env_logger::init();
     // NF_WINDOW=WxH (screenshot runs, e.g. 400x850 or 850x400): initial size, and no minimum.
     let fixed = std::env::var("NF_WINDOW").ok().and_then(|v| {
@@ -17,6 +22,41 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     eframe::run_native("NeuroFeed", options, Box::new(|cc| Ok(Box::new(neurofeed_egui::NeuroFeedApp::new(cc)))))
+}
+
+/// `NeuroFeed --ble-scan [SECONDS]`: Bluetooth troubleshooting without the UI.
+/// Scans for Muse headsets the same way the Device dialog does, logs what the
+/// radio sees (RUST_LOG overrides the default filter) and prints the result.
+/// Exit code 0 = at least one Muse found, 1 = none, 2 = scan error.
+#[cfg(not(target_arch = "wasm32"))]
+fn ble_scan(secs: f64) -> i32 {
+    use nf_device::DeviceProvider as _;
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,nf_device=info,muse_rs=debug,btleplug=info")).init();
+    let secs = secs.clamp(1.0, 60.0);
+    log::info!("NeuroFeed {} BLE scan for {secs} s ({} {})", nf_core::APP_VERSION, std::env::consts::OS, std::env::consts::ARCH);
+    let mut p = nf_device::MuseProvider::default();
+    if let Err(e) = p.scan(secs) {
+        eprintln!("scan failed to start: {e}");
+        return 2;
+    }
+    let until = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs + 15.0);
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    while p.scanning() && std::time::Instant::now() < until {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    p.stop_scan();
+    let found = p.list();
+    if let Some(e) = p.last_error() {
+        eprintln!("error: {e}");
+        if found.is_empty() {
+            return 2;
+        }
+    }
+    println!("{} Muse headset(s) found", found.len());
+    for d in &found {
+        println!("  {}  {}  rssi {:?}", d.id, d.name, d.rssi);
+    }
+    i32::from(found.is_empty())
 }
 
 #[cfg(target_arch = "wasm32")]
