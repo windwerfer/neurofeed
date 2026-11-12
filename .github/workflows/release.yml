@@ -18,8 +18,9 @@ on:
         required: false
         type: boolean
         default: true
+# Read-only by default; only the upload job gets contents: write.
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: release-${{ github.event.release.tag_name || inputs.tag || github.ref }}
   cancel-in-progress: false
@@ -107,7 +108,7 @@ jobs:
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Offline cargo sources + metainfo release entry
         run: |
-          python3 -m pip install --user aiohttp tomlkit 2>/dev/null || { dnf install -y python3-aiohttp python3-tomlkit || true; }
+          python3 -m pip install --user --only-binary :all: aiohttp==3.14.5 tomlkit==0.15.2 2>/dev/null || { dnf install -y python3-aiohttp python3-tomlkit || true; }
           scripts/package-flatpak.sh --version "${{ needs.meta.outputs.version }}" --sources-only
       - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
         with:
@@ -168,6 +169,8 @@ jobs:
     needs: [meta, android, linux, flatpak, windows, macos, web]
     if: ${{ always() && needs.meta.result == 'success' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v7
         with: { pattern: "release-*", path: out, merge-multiple: true }
