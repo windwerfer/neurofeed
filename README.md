@@ -1,5 +1,7 @@
 # NeuroFeed
 
+[![Scanned by SonarCloud](https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=alert_status)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed)
+
 <p align="center">
   <a href="https://getartcraft.com/">
     <picture>
@@ -85,3 +87,13 @@ Feedback → "New protocol…" (starts from the selected protocol) or "Edit …"
 ### Streaming (OSC)
 
 Streaming → enable, set IP/port/prefix. Messages `<prefix>/eeg|ppg|imu|bands` with `[t, values…]` float32. MCP: `streaming.set`, `streaming.status`. Desktop only (browsers cannot send UDP). LSL is not available yet.
+
+## Security
+
+[SonarQube Cloud](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) automatic analysis runs on `main` and reports code quality, bugs, vulnerabilities, and security hotspots. It is on the free plan, so only the `main` branch is analyzed (not other branches or pull requests).
+
+CI also runs `cargo deny check advisories bans licenses sources` on the Rust dependency tree (`.github/workflows/rust-ci.yml`), and third-party (non-`actions/*`) GitHub Actions in the workflows are pinned to commit SHAs.
+
+This is static analysis only. It catches some classes of problems and misses others; it is not an audit and not a guarantee that the code is secure.
+
+**Reporting a vulnerability:** please do not open a public issue. Email [windwerfer@gmail.com](mailto:windwerfer@gmail.com) with a description and, if you can, steps to reproduce. If GitHub's private vulnerability reporting is enabled for this repo, you can also use **Report a vulnerability** on the repo's **Security** tab.
