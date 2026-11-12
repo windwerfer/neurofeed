@@ -13,7 +13,7 @@ NC="\033[0m"   # No Color
 print_check() {
     local label="$1"
     local state="$2"
-    if [ "$state" = "ok" ]; then
+    if [[ "$state" = "ok" ]]; then
         printf "  ${GREEN}[x]${NC} %-42s\n" "$label"
     else
         printf "  ${RED}[ ]${NC} %-42s\n" "$label"
@@ -87,37 +87,37 @@ else
     print_check "Java 21" "missing/wrong version"
 fi
 
-if [ -n "${ANDROID_HOME}" ] && [ -d "${ANDROID_HOME}" ]; then
+if [[ -n "${ANDROID_HOME}" ]] && [[ -d "${ANDROID_HOME}" ]]; then
     print_check "ANDROID_HOME set + directory exists" "ok"
 else
     print_check "ANDROID_HOME" "missing"
 fi
 
-if [ -x "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" ]; then
+if [[ -x "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" ]]; then
     print_check "cmdline-tools + sdkmanager" "ok"
 else
     print_check "cmdline-tools + sdkmanager" "missing"
 fi
 
-if [ -d "${ANDROID_HOME}/platform-tools" ] && [ -x "${ANDROID_HOME}/platform-tools/adb" ]; then
+if [[ -d "${ANDROID_HOME}/platform-tools" ]] && [[ -x "${ANDROID_HOME}/platform-tools/adb" ]]; then
     print_check "platform-tools (adb)" "ok"
 else
     print_check "platform-tools (adb)" "missing"
 fi
 
-if [ -d "${ANDROID_HOME}/build-tools/35.0.0" ]; then
+if [[ -d "${ANDROID_HOME}/build-tools/35.0.0" ]]; then
     print_check "build-tools;35.0.0" "ok"
 else
     print_check "build-tools;35.0.0" "missing"
 fi
 
-if [ -d "${ANDROID_HOME}/platforms/android-35" ]; then
+if [[ -d "${ANDROID_HOME}/platforms/android-35" ]]; then
     print_check "platforms;android-35" "ok"
 else
     print_check "platforms;android-35" "missing"
 fi
 
-if [ -d "${ANDROID_HOME}/ndk/27.2.12479018" ]; then
+if [[ -d "${ANDROID_HOME}/ndk/27.2.12479018" ]]; then
     print_check "NDK 27.2.12479018" "ok"
 else
     print_check "NDK 27.2.12479018" "missing"

@@ -33,7 +33,7 @@ else
 fi
 
 # shellcheck disable=SC1091
-[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
 rustup toolchain install stable
 rustup default stable

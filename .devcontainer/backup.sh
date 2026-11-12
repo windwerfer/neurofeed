@@ -250,7 +250,7 @@ do_restore() {
 # =====================
 # Main
 # =====================
-if [ $# -eq 0 ]; then
+if [[ $# -eq 0 ]]; then
     echo "Usage: $0 [backup|restore] [backup_directory]"
     echo "   backup  - Create timestamped zstd-compressed tar backups of rust, gradle, agents (~/.local/share/zed), and android-sdk"
     echo "   restore - Selectively restore one backup run of each component"
