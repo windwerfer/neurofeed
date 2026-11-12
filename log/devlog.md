@@ -157,3 +157,11 @@
 - A workflow_dispatch that checks out tag 0.64.0 cannot run `scripts/ci-apt-install.sh`
   from the tagged tree (exit 127). The release Linux job now also checks out the
   workflow SHA to get that script, then builds the tagged source.
+
+## 2026-11-12: Universal macOS DMG
+
+- The DMG was arm64 only, so Intel Macs could not run it. The `macos` job (macos-15) now adds
+  `aarch64-apple-darwin` + `x86_64-apple-darwin`, `scripts/package-macos.sh` builds both with
+  `MACOSX_DEPLOYMENT_TARGET=11.0` and `lipo -create`s one universal binary into the .app
+  (`lipo -verify_arch arm64 x86_64`, `lipo -info` on the mounted DMG). Asset renamed to
+  `neurofeed-X.Y.Z-macos-universal.dmg`. First shipped in 0.64.1.
