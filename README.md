@@ -1,6 +1,6 @@
 # NeuroFeed
 
-[![Scanned by SonarCloud](https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=alert_status)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed)
+[![Scanned by SonarCloud](https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=alert_status)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![CodeQL](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml/badge.svg)](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml)
 
 <p align="center">
   <a href="https://getartcraft.com/">
@@ -91,6 +91,8 @@ Streaming → enable, set IP/port/prefix. Messages `<prefix>/eeg|ppg|imu|bands` 
 ## Security
 
 [SonarQube Cloud](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) CI analysis (`.github/workflows/sonarcloud.yml`) runs on every push to `main` and on pull requests, with Clippy and coverage imported. It reports code quality, bugs, vulnerabilities, and security hotspots. It is on the free plan, so other branches are not analyzed, and only pull requests that target `main` are.
+
+[GitHub CodeQL](https://codeql.github.com/) code scanning (`.github/workflows/codeql.yml`) runs as a second, separate check on every push to `main`, on pull requests that target `main`, and weekly. It analyzes the Rust, Python and Java sources and the GitHub Actions workflows (Kotlin is not analyzed without a full Gradle build, and Dart is not supported by CodeQL). Results are in the repo's **Security › Code scanning** tab.
 
 CI also runs `cargo deny check advisories bans licenses sources` on the Rust dependency tree (`.github/workflows/rust-ci.yml`), and third-party (non-`actions/*`) GitHub Actions in the workflows are pinned to commit SHAs.
 
