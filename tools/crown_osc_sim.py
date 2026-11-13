@@ -106,7 +106,7 @@ def osc_message(address, args):
 def local_ipv4():
     probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        probe.connect(("10.255.255.255", 1))
+        probe.connect(("10.255.255.255", 1))  # NOSONAR: UDP-connect to a non-routable addr to discover local IP; no packet is sent
         return probe.getsockname()[0]
     except OSError:
         return None
