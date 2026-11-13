@@ -21,7 +21,7 @@ log.workspace = true
 pure-lsl = { path = "../pure-lsl", optional = true }
 rosc = { version = "0.11", optional = true }
 # windwerfer/muse-rs main (Optics event, default p1041). Default features pull a TUI.
-muse-rs = { git = "https://github.com/windwerfer/muse-rs", rev = "ba14d513db728e474c3d5c19c8ea4518cc8c6cd2", default-features = false, optional = true }
+muse-rs = { git = "https://github.com/windwerfer/muse-rs", rev = "bb0425f2443b26d0415512a825f76ff34e9d73aa", default-features = false, optional = true }
 btleplug = { version = "0.13.5", optional = true }
 anyhow = { version = "1", optional = true }
 futures-util = { version = "0.3", default-features = false, optional = true }
