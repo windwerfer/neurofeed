@@ -27,6 +27,10 @@
     "remoteUser": "vscode",
     "containerUser": "vscode",
     "updateRemoteUserUID": true,
+
+    // fix:  display wayland-0 is not found on newer kde, symlink wayland-1 to wayland-0 on each start
+    // same as: ln -sf $XDG_RUNTIME_DIR/wayland-1 $XDG_RUNTIME_DIR/wayland-0
+    "initializeCommand": "ln -sf \"${localEnv:XDG_RUNTIME_DIR}/wayland-1\" \"${localEnv:XDG_RUNTIME_DIR}/wayland-0\"",
     "runArgs": [
         "--userns=keep-id:uid=1000,gid=1000",
         "--name",
@@ -47,9 +51,6 @@
         "-e", "WAYLAND_DISPLAY=${localEnv:WAYLAND_DISPLAY}",
         "-e", "XDG_RUNTIME_DIR=/tmp",
         "-e", "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/user_bus",
-
-        // fix: if display 1 is not found (is rm after restart)
-        // ln -sf $XDG_RUNTIME_DIR/wayland-1 $XDG_RUNTIME_DIR/wayland-0
 
         // Mount host's PulseAudio / PipeWire-Pulse socket into the container
         "-v", "${localEnv:XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse-socket:ro",
