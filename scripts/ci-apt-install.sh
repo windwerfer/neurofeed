@@ -27,11 +27,11 @@ fix_dns() {
 fallback_mirrors() {
   echo "Falling back to archive.ubuntu.com (runner apt mirror / DNS unreachable)"
   if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-    printf 'http://archive.ubuntu.com/ubuntu\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+    printf 'https://archive.ubuntu.com/ubuntu\n' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
   fi
   sudo sed -i \
-    -e 's|https\?://azure\.archive\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
-    -e 's|https\?://security\.ubuntu\.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+    -e 's|https\?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+    -e 's|https\?://security\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
     /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
 }
 
