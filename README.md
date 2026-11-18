@@ -3,12 +3,10 @@
 [![Scanned by SonarCloud](https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=alert_status)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![CodeQL](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml/badge.svg)](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml)
 
 <p align="center">
-  <a href="https://getartcraft.com/">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/neurofeed_icon.png">
       <img alt="NeuroFeed" src="assets/neurofeed_icon.png" width="200">
     </picture>
-  </a>
 </p>
 
 ## Notice

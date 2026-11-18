@@ -22,6 +22,11 @@
             "type": "volume",
             "source": "shared_backups",
             "target": "/opt/backups"
+        },
+        {
+            "type": "volume",
+            "source": "neurofeed_tmp",
+            "target": "/tmp"
         }
     ],
     "remoteUser": "vscode",
