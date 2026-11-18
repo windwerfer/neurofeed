@@ -33,5 +33,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "pm install failed $($p.ExitCode)" }
           Select-String -Path $env:RUNNER_TEMP\pm.log -Pattern "APPLICATIONFOLDER property|ARPPRODUCTICON" | select -First 60 | % Line; Get-ChildItem "$env:ProgramFiles\NeuroFeed" -ErrorAction SilentlyContinue; Get-ChildItem "$env:PUBLIC\Desktop" -Filter Neuro*
           Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue | ? DisplayName -eq NeuroFeed | select DisplayName,DisplayVersion,DisplayIcon,InstallLocation
+          Get-ItemProperty "HKLM:\SOFTWARE\Classes\Installer\Products\*" | ? ProductName -eq NeuroFeed | select ProductName,ProductIcon
+          Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products\*\InstallProperties" | ? DisplayName -eq NeuroFeed | select DisplayIcon
           $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/x `"$msi`" /qn"
           if (Test-Path "$env:ProgramFiles\NeuroFeed\neurofeed.exe") { throw "pm uninstall left file" }
