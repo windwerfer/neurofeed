@@ -71,6 +71,9 @@
       <RegistryValue Root="HKMU" Key="Software\NeuroFeed" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
+    <!-- WixUI defaults the per-user folder to %LocalAppData%\Apps; the convention for per-user apps is Programs. -->
+    <SetProperty Id="WixPerUserFolder" Value="[LocalAppDataFolder]Programs\[ApplicationFolderName]" After="WixSetDefaultPerUserFolder" Sequence="both" />
+
     <!-- Wizard: Welcome + licence, then "Customize": install scope, folder, features (desktop shortcut checkbox). -->
     <ui:WixUI Id="WixUI_Advanced" />
   </Package>
