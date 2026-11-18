@@ -104,8 +104,12 @@ jobs:
     needs: meta
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08@sha256:c91a88269eee8fcdd73ecf43064232fbebe27411f926f63f38bdf70c51f2ceae
       options: --privileged
+      # A volume keeps the runtime install tree on one filesystem: on some runners
+      # (AWS-hosted) renames inside the overlayfs layer fail with EXDEV ("Invalid cross-device link").
+      volumes:
+        - flatpak-store:/var/lib/flatpak
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, ref: "${{ needs.meta.outputs.checkout }}" }
