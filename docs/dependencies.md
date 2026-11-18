@@ -8,7 +8,7 @@ CI: `deny` job in `.github/workflows/rust-ci.yml` on every push and weekly (Mon 
 
 | Advisory | Crate | Via | Why acceptable now | Removed by |
 |---|---|---|---|---|
-| RUSTSEC-2026-0367/0368/0369 | zip 0.6.6, 2.6.1, 8.6.0 | rlx 0.2.19 (npyz, rlx-dduf), candle-core 0.11 | only `extract()` to disk is affected; never called | rlx / candle releases on zip >= 9 |
+| RUSTSEC-2026-0545/0548 | zip 0.6.6, 2.6.1 (candle now on 9.7) | rlx 0.2.19 (npyz, rlx-dduf), candle-core 0.11 | only `extract()` to disk is affected; never called | rlx / candle releases on zip >= 9 |
 | RUSTSEC-2026-0391/0398/0403 | zstd 0.13.3, zstd-safe 5.0.2 / 7.3.0 | rlx-pkg, zip 0.6 | decodes only model packages we bundle (trusted) | rlx update |
 
 Cleared by the 2026-10-31 update round: RUSTSEC-2026-0194/0195 (quick-xml 0.30,
