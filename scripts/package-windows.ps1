@@ -1,7 +1,9 @@
 # Windows x64 release artifact (same steps as the `windows` job in .github/workflows/release.yml):
 #   dist/neurofeed-<version>-windows-x64.zip   portable: neurofeed.exe + licence files
-# Usage: pwsh scripts/package-windows.ps1 [-Version 1.2.3] [-SkipBuild]
-param([string]$Version = "", [switch]$SkipBuild)
+# Usage: pwsh scripts/package-windows.ps1 [-Version 1.2.3] [-SkipBuild] [-BuildOnly] [-Exe path]
+#   -BuildOnly  build, stage the unsigned exe at target/windows-unsigned/neurofeed.exe, stop (CI signs it next)
+#   -Exe path   package this exe (e.g. the SignPath-signed one) instead of the cargo output
+param([string]$Version = "", [switch]$SkipBuild, [switch]$BuildOnly, [string]$Exe = "")
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 # Version: -Version > $env:NEUROFEED_VERSION > git tag > Cargo.toml (same rules as scripts/version.sh).
@@ -22,11 +24,17 @@ if (-not $SkipBuild) {
   if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
   Pop-Location
 }
+if ($BuildOnly) {
+  New-Item -ItemType Directory -Force "$TargetDir/windows-unsigned" | Out-Null
+  Copy-Item "$TargetDir/x86_64-pc-windows-msvc/release/neurofeed-egui.exe" "$TargetDir/windows-unsigned/neurofeed.exe"
+  return
+}
+if (-not $Exe) { $Exe = "$TargetDir/x86_64-pc-windows-msvc/release/neurofeed-egui.exe" }
 $Name = "neurofeed-$Version-windows-x64"
 $Work = "$TargetDir/windows-package/$Name"
 Remove-Item -Recurse -Force "$TargetDir/windows-package" -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $Work, "$Root/dist" | Out-Null
-Copy-Item "$TargetDir/x86_64-pc-windows-msvc/release/neurofeed-egui.exe" "$Work/neurofeed.exe"
+Copy-Item $Exe "$Work/neurofeed.exe"
 Copy-Item "$Root/LICENSE.txt", "$Root/THIRD_PARTY_NOTICES.md", "$Root/README.md" $Work
 $Zip = "$Root/dist/$Name.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue

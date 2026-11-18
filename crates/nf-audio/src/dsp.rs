@@ -234,6 +234,18 @@ mod tests {
     }
 
     #[test]
+    fn looping_clip_wraps_without_gap() {
+        // A constant clip stays constant across many wraps: no silent frame at the seam.
+        let mut v = Voice::new(1000.0, 900.0, 0.01);
+        v.gain = Slew::new(1.0, 0.01, 1000.0);
+        v.set_pcm(Some(Arc::new(Pcm { rate: 1000, channels: 1, data: vec![0.5; 700] })));
+        let mut out = vec![0.0f32; 2 * 5000];
+        v.render(&mut out);
+        assert!(out.iter().all(|x| (*x - 0.5).abs() < 1e-6), "gap at loop seam");
+        assert!(!v.finished());
+    }
+
+    #[test]
     fn slew_reaches_target_with_time_constant() {
         let mut s = Slew::new(0.0, 0.5, 1000.0);
         s.target = 1.0;

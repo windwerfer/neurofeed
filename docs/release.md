@@ -68,3 +68,23 @@ Same approach as PhotoCraft: `NeuroFeed.app` (universal: Apple Silicon + Intel, 
 DMG built with `hdiutil makehybrid` + `convert` on the `macos-15` runner, signed inside-out.
 Without a Developer ID it is ad-hoc signed (`MACOS_SIGN_IDENTITY=-`, not notarized): users open
 it once via right-click → Open. There is no Apple Developer ID or notarization in CI.
+
+## Windows code signing (SignPath Foundation)
+
+Free signing for open source via [SignPath](https://signpath.org) (policy in `README.md`, "Code signing policy").
+The `windows` job builds `neurofeed.exe` unsigned, uploads it as the `windows-unsigned` artifact, submits it with
+`signpath/github-action-submit-signing-request` (pinned by SHA) and zips the **signed** exe into the release
+`neurofeed-X.Y.Z-windows-x64.zip`. Signing is skipped, and the zip holds the unsigned exe, unless all of these are set:
+
+| Where | Name | Value |
+|---|---|---|
+| Secret | `SIGNPATH_API_TOKEN` | API token of a SignPath CI user |
+| Variable | `SIGNPATH_ORGANIZATION_ID` | organization id (SignPath dashboard) |
+| Variable | `SIGNPATH_PROJECT_SLUG` | project slug |
+| Variable | `SIGNPATH_POLICY_SLUG` | signing policy slug (e.g. `release-signing`) |
+
+SignPath setup: install the SignPath GitHub App / trusted build system on the repo, create the project with this
+repository as origin, and an artifact configuration whose root is a zip containing `neurofeed.exe` (Authenticode-sign
+`/zip-file/pe-file`). The exe carries version info and the icon from `apps/neurofeed-egui/build.rs`.
+Local build: `pwsh scripts/package-windows.ps1` (unsigned).
+

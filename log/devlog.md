@@ -165,3 +165,11 @@
   `MACOSX_DEPLOYMENT_TARGET=11.0` and `lipo -create`s one universal binary into the .app
   (`lipo -verify_arch arm64 x86_64`, `lipo -info` on the mounted DMG). Asset renamed to
   `neurofeed-X.Y.Z-macos-universal.dmg`. First shipped in 0.64.1.
+
+## 2026-11-18 SignPath prep
+- Alarm clip replaced: CC BY-NC "Alarm Clock Digital" (zanox) -> CC0 "Alarm Clock SFX" (haydenrem, freesound 557616),
+  `assets/audio/guardrail-alarm-02.opus`; `ogg/guard-alarm.ogg` re-encoded and trimmed to 2.69 s (no edge silence).
+  The mixer's alarm voice already loops while the warning is active (ramps over 60 s); added a seam test in `nf-audio` dsp.
+- `apps/neurofeed-egui/build.rs` (winresource, Windows host+target only) embeds version info + icon (`assets/neurofeed.ico`).
+- README code signing policy + privacy statement; release.yml windows job signs via SignPath when configured (docs/release.md).
+- Open: `cargo deny check advisories` fails on main already (chrono unmaintained, zip advisories); not touched here.

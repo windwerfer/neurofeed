@@ -3,10 +3,12 @@
 [![Scanned by SonarCloud](https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=alert_status)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![CodeQL](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml/badge.svg)](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml)
 
 <p align="center">
+  <a href="https://github.com/windwerfer/neurofeed">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/neurofeed_icon.png">
       <img alt="NeuroFeed" src="assets/neurofeed_icon.png" width="200">
     </picture>
+  </a>
 </p>
 
 ## Notice
@@ -97,3 +99,12 @@ CI also runs `cargo deny check advisories bans licenses sources` on the Rust dep
 This is static analysis only. It catches some classes of problems and misses others; it is not an audit and not a guarantee that the code is secure.
 
 **Reporting a vulnerability:** please do not open a public issue. Email [windwerfer@gmail.com](mailto:windwerfer@gmail.com) with a description and, if you can, steps to reproduce. If GitHub's private vulnerability reporting is enabled for this repo, you can also use **Report a vulnerability** on the repo's **Security** tab.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org)
+
+- Committers and reviewers: windwerfer (Thomas Barth)
+- Approvers: windwerfer (Thomas Barth)
+
+**Privacy policy:** NeuroFeed does not collect or transmit any data about you, your recordings or your device. It makes no network requests on its own (no telemetry, no update check). The only outgoing request is the optional AI model download in Settings, which is sent to the model's public host (Hugging Face) only when you press Download; you can import the model file manually instead. Recordings and settings stay on your computer, and EEG devices are reached over Bluetooth or your local network.
