@@ -22,16 +22,16 @@ jobs:
           Get-ChildItem "$env:LOCALAPPDATA\Programs\NeuroFeed"
           Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter NeuroFeed*
           if (-not (Test-Path $exe)) { Get-Content $env:RUNNER_TEMP\i.log -Tail 80; throw "not installed per-user" }
-          Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*,HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue | ? DisplayName -eq NeuroFeed | select PSParentPath,DisplayName,DisplayVersion,DisplayIcon
+          Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*,HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue | ? DisplayName -eq NeuroFeed | fl *
           $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/x `"$msi`" /qn"
           if ((Test-Path $exe) -or $p.ExitCode -ne 0) { throw "uninstall failed" }
       - name: per-machine
         shell: pwsh
         run: |
           $msi = (Get-ChildItem out/*.msi).FullName
-          $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/i `"$msi`" /qn ALLUSERS=1 ADDLOCAL=ALL"
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/i `"$msi`" /qn ALLUSERS=1 ADDLOCAL=ALL /l*v $env:RUNNER_TEMP\pm.log"
           if ($p.ExitCode -ne 0) { throw "pm install failed $($p.ExitCode)" }
-          Get-ChildItem "$env:ProgramFiles\NeuroFeed"; Get-ChildItem "$env:PUBLIC\Desktop" -Filter Neuro*
+          Select-String -Path $env:RUNNER_TEMP\pm.log -Pattern "APPLICATIONFOLDER|Doing action|ALLUSERS|ExitCode|Return value 3" | select -First 60 | % Line; Get-ChildItem "$env:ProgramFiles\NeuroFeed" -ErrorAction SilentlyContinue; Get-ChildItem "$env:PUBLIC\Desktop" -Filter Neuro*
           Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue | ? DisplayName -eq NeuroFeed | select DisplayName,DisplayVersion,DisplayIcon,InstallLocation
           $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/x `"$msi`" /qn"
           if (Test-Path "$env:ProgramFiles\NeuroFeed\neurofeed.exe") { throw "pm uninstall left file" }
