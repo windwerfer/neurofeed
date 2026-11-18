@@ -74,6 +74,9 @@
     <!-- WixUI defaults the per-user folder to %LocalAppData%\Apps; the convention for per-user apps is Programs. -->
     <SetProperty Id="WixPerUserFolder" Value="[LocalAppDataFolder]Programs\[ApplicationFolderName]" After="WixSetDefaultPerUserFolder" Sequence="both" />
 
+    <!-- The stock WixUI 5.0 default points at "Program Files (x86)" for 64-bit packages. -->
+    <SetProperty Id="WixPerMachineFolder" Value="[ProgramFiles64Folder][ApplicationFolderName]" After="WixSetDefaultPerMachineFolder" Sequence="both" />
+
     <!-- Wizard: Welcome + licence, then "Customize": install scope, folder, features (desktop shortcut checkbox). -->
     <ui:WixUI Id="WixUI_Advanced" />
   </Package>
