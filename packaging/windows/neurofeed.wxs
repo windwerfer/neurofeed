@@ -42,6 +42,7 @@
     <Feature Id="Main" Title="NeuroFeed" Level="1" AllowAdvertise="no">
       <ComponentRef Id="MainExe" />
       <ComponentRef Id="Docs" />
+      <ComponentRef Id="ThirdParty" />
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
     </Feature>
@@ -51,7 +52,9 @@
     </Component>
     <Component Id="Docs" Directory="APPLICATIONFOLDER" Guid="*">
       <File Id="LicenseTxt" Name="LICENSE.txt" Source="$(LicenseTxt)" KeyPath="yes" />
-      <File Id="ThirdParty" Name="THIRD_PARTY_NOTICES.md" Source="$(ThirdPartyNotices)" />
+    </Component>
+    <Component Id="ThirdParty" Directory="APPLICATIONFOLDER" Guid="*">
+      <File Id="ThirdPartyNotices" Name="THIRD_PARTY_NOTICES.md" Source="$(ThirdPartyNotices)" KeyPath="yes" />
     </Component>
 
     <!-- Shortcuts use a registry value as key path (required for per-user installs). -->
