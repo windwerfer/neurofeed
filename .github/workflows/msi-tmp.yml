@@ -19,7 +19,7 @@ jobs:
           $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/i `"$msi`" /qn MSIINSTALLPERUSER=1 /l*v $env:RUNNER_TEMP\i.log"
           if ($p.ExitCode -ne 0) { Get-Content $env:RUNNER_TEMP\i.log -Tail 60; throw "install failed: $($p.ExitCode)" }
           $exe = "$env:LOCALAPPDATA\Programs\NeuroFeed\neurofeed.exe"
-          Get-ChildItem "$env:LOCALAPPDATA\Programs\NeuroFeed"
+          Select-String -Path $env:RUNNER_TEMP\i.log -Pattern 'APPLICATIONFOLDER|ALLUSERS|MSIINSTALLPERUSER|neurofeed.exe' | select -First 30 | % Line
           Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter NeuroFeed*
           if (-not (Test-Path $exe)) { Get-Content $env:RUNNER_TEMP\i.log -Tail 80; throw "not installed per-user" }
           Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | ? DisplayName -eq NeuroFeed | select DisplayName,DisplayVersion,DisplayIcon
