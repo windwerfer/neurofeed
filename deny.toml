@@ -30,6 +30,16 @@ ignore = [
   { id = "RUSTSEC-2026-0368", reason = "zip extract() unused; via candle-core/rlx" },
   { id = "RUSTSEC-2026-0369", reason = "zip extract() unused; via candle-core/rlx" },
   { id = "RUSTSEC-2026-0429", reason = "zip extract() unused; via candle-core/rlx" },
+  # zip 0.6.6 (npyz via rlx-mlx-io) and 2.6.1 (rlx-dduf/rlx-pkg) are the only zip
+  # versions left after candle-core 0.11.1 moved to zip 9.7; rlx 0.2.19 is the
+  # newest rlx and pins them. We never open user-supplied ZIPs, AES entries or use
+  # ZipStreamReader (rlx reads only our bundled model packs). Revisit when rlx
+  # releases on zip >= 9.0.5 (see docs/dependencies.md).
+  { id = "RUSTSEC-2026-0545", reason = "zip AES entries unused; rlx-only, bundled files" },
+  { id = "RUSTSEC-2026-0548", reason = "zip ZipStreamReader unused; rlx-only, bundled files" },
+  # chrono unmaintained: transitive via rmcp and schemars (and a small direct use in
+  # the egui app); no maintained drop-in. Revisit when rmcp/schemars drop chrono.
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained notice only; via rmcp/schemars" },
   # zstd/zstd-safe: decoder issues on malformed input. Only used by rlx to read
   # model packages we bundle ourselves (trusted input). Pinned rlx =0.2.19.
   { id = "RUSTSEC-2026-0391", reason = "rlx-pkg reads only bundled model files" },

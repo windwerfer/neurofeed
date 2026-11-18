@@ -126,12 +126,38 @@ jobs:
   windows:
     needs: meta
     runs-on: windows-latest
+    env:
+      # Secrets/vars are unavailable to `if:` directly; true only when SignPath is fully configured.
+      SIGNPATH_ENABLED: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' && vars.SIGNPATH_PROJECT_SLUG != '' && vars.SIGNPATH_POLICY_SLUG != '' }}
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ needs.meta.outputs.checkout }}" }
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; toolchain set via with:
         with: { toolchain: "${{ env.RUST_VERSION }}", targets: x86_64-pc-windows-msvc }
-      - run: pwsh scripts/package-windows.ps1 -Version "${{ needs.meta.outputs.version }}"
+      - name: Build neurofeed.exe (unsigned)
+        run: pwsh scripts/package-windows.ps1 -Version "${{ needs.meta.outputs.version }}" -BuildOnly
+      # Signing only runs when SignPath is configured (docs/release.md); otherwise the zip holds the unsigned exe.
+      - name: Upload unsigned exe
+        id: unsigned
+        if: ${{ env.SIGNPATH_ENABLED == 'true' }}
+        uses: actions/upload-artifact@v6
+        with: { name: windows-unsigned, path: target/windows-unsigned/neurofeed.exe, if-no-files-found: error }
+      - name: Sign with SignPath
+        if: ${{ env.SIGNPATH_ENABLED == 'true' }}
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: target/windows-signed
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $exe = if ($env:SIGNPATH_ENABLED -eq 'true') { 'target/windows-signed/neurofeed.exe' } else { 'target/windows-unsigned/neurofeed.exe' }
+          pwsh scripts/package-windows.ps1 -Version "${{ needs.meta.outputs.version }}" -SkipBuild -Exe $exe
       - uses: actions/upload-artifact@v6
         with: { name: release-windows, path: "dist/*", if-no-files-found: error }
 

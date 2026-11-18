@@ -43,7 +43,7 @@ from Hugging Face with SHA-256 verification; REVE (gated) is user-imported.
 ## Third-party → Audio
 
 Sound assets are bundled by file. Attribution and license follow Freesound
-(CC0 / CC BY 4.0 / CC BY-NC 4.0). Attribution links are the canonical IDs.
+(CC0 / CC BY 4.0). Attribution links are the canonical IDs.
 
 | Asset file | Original work / author | Source | License |
 |------------|------------------------|--------|---------|
@@ -54,14 +54,10 @@ Sound assets are bundled by file. Attribution and license follow Freesound
 | `assets/audio/bowl/bowl_high-421829__dersinnsspace__tibetan-bowl_center-hit.opus` | "Tibetan bowl center hit" by dersinnsspace | https://freesound.org/s/421829/ | CC0 1.0 |
 | `assets/audio/bell/864397__valerie-vivegnis__2607.opus` | "26.07.24 Tibetan Singing Bowl – Octave Pitch-Shifted Scale" by Valerie-Vivegnis | https://freesound.org/s/864397/ | CC BY 4.0 |
 | `assets/audio/guardrail-cough-01.opus` (…02, …03) | "Coughing 001.wav" by frenkfurth | https://freesound.org/s/650914/ | CC0 1.0 |
-| `assets/audio/guardrail-alarm-01.opus` | "Alarm Clock Digital" by zanox | https://freesound.org/s/233645/ | **CC BY-NC 4.0** |
+| `assets/audio/guardrail-alarm-02.opus` | "Alarm Clock SFX" by haydenrem | https://freesound.org/s/557616/ | CC0 1.0 |
 | `assets/audio/guardrail-chime-01.opus` | Same work as `864397__valerie-vivegnis` (Bell chime) | https://freesound.org/s/864397/ | CC BY 4.0 |
 | `assets/audio/guardrail-softBowl-01.opus` | Same work as `bowl_high-421829__dersinnsspace` (Soft bowl) | https://freesound.org/s/421829/ | CC0 1.0 |
 | `assets/audio/calibration/grok-reve-*.opus` | Generated narration clips | — | see note |
-
-> **NonCommercial flag:** `guardrail-alarm-01.opus` is **CC BY-NC 4.0**
-> (NonCommercial). Keep it unless the app is distributed commercially, or
-> swap it for a CC0/CC BY alarm. Consider before any commercial store listing.
 
 > **Narrator clips (`calibration/grok-reve-*.opus`):** produced by the user via
 > Grok (xAI) text-to-speech reading their own sentences. These are generated
@@ -81,7 +77,6 @@ Sound assets are bundled by file. Attribution and license follow Freesound
   CBraMod encoder path); `rlx` 0.2.19 and vendored `rlx-cpu` 0.2.19 (REVE).
 - **CC0 1.0** — most freesound audio.
 - **CC BY 4.0** — rain, singing-bowl, bell/chime freesound audio.
-- **CC BY-NC 4.0** — `guardrail-alarm-01.opus` (NonCommercial).
 
 ## DejaVu Sans (subset) — apps/neurofeed-egui/assets/arrows.ttf
 
