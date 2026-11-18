@@ -2,7 +2,7 @@
 #   release published          -> build everything, upload to that release
 #   workflow_dispatch tag=0.64.0  -> same for an existing release (dry-run = build only)
 # Local equivalents: scripts/build-android.sh, scripts/package-{linux,flatpak,macos,web}.sh,
-# scripts/package-windows.ps1 (docs/release.md).
+# scripts/package-windows.ps1, scripts/package-windows-msi.ps1 (docs/release.md).
 name: release
 on:
   release:
@@ -158,6 +158,48 @@ jobs:
         run: |
           $exe = if ($env:SIGNPATH_ENABLED -eq 'true') { 'target/windows-signed/neurofeed.exe' } else { 'target/windows-unsigned/neurofeed.exe' }
           pwsh scripts/package-windows.ps1 -Version "${{ needs.meta.outputs.version }}" -SkipBuild -Exe $exe
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.UI.wixext/5.0.2
+      - name: Build MSI (contains the exe signed above, when signing is on)
+        shell: pwsh
+        run: |
+          $exe = if ($env:SIGNPATH_ENABLED -eq 'true') { 'target/windows-signed/neurofeed.exe' } else { 'target/windows-unsigned/neurofeed.exe' }
+          pwsh scripts/package-windows-msi.ps1 -Version "${{ needs.meta.outputs.version }}" -Exe $exe -OutDir target/windows-msi-unsigned
+      - name: Smoke test MSI (per-user install, uninstall)
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem target/windows-msi-unsigned/*.msi).FullName
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/i `"$msi`" /qn MSIINSTALLPERUSER=1 /l*v $env:RUNNER_TEMP\msi-install.log"
+          if ($p.ExitCode -ne 0) { Get-Content $env:RUNNER_TEMP\msi-install.log -Tail 60; throw "install failed: $($p.ExitCode)" }
+          $exe = "$env:LOCALAPPDATA\Programs\NeuroFeed\neurofeed.exe"
+          if (-not (Test-Path $exe)) { Get-Content $env:RUNNER_TEMP\msi-install.log -Tail 60; throw "per-user install did not land in $exe" }
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/x `"$msi`" /qn"
+          if ($p.ExitCode -ne 0) { throw "uninstall failed: $($p.ExitCode)" }
+          if (Test-Path $exe) { throw "uninstall left $exe" }
+      - name: Upload unsigned MSI
+        id: msi-unsigned
+        if: ${{ env.SIGNPATH_ENABLED == 'true' && vars.SIGNPATH_MSI_ARTIFACT_CONFIG_SLUG != '' }}
+        uses: actions/upload-artifact@v6
+        with: { name: windows-msi-unsigned, path: "target/windows-msi-unsigned/*.msi", if-no-files-found: error }
+      - name: Sign MSI with SignPath
+        if: ${{ env.SIGNPATH_ENABLED == 'true' && vars.SIGNPATH_MSI_ARTIFACT_CONFIG_SLUG != '' }}
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_MSI_ARTIFACT_CONFIG_SLUG }}
+          github-artifact-id: ${{ steps.msi-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: target/windows-msi-signed
+      - name: Collect MSI
+        shell: pwsh
+        run: |
+          $dir = if (Test-Path target/windows-msi-signed) { 'target/windows-msi-signed' } else { 'target/windows-msi-unsigned' }
+          Copy-Item "$dir/*.msi" dist/
       - uses: actions/upload-artifact@v6
         with: { name: release-windows, path: "dist/*", if-no-files-found: error }
 
