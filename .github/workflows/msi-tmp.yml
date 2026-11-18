@@ -1,0 +1,27 @@
+name: msi-tmp
+on: { push: { branches: [windows-msi], paths: ["packaging/windows/**", ".github/workflows/msi-tmp.yml", "scripts/package-windows-msi.ps1"] } }
+permissions: { contents: read }
+jobs:
+  msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.UI.wixext/5.0.2
+      - shell: pwsh
+        run: |
+          Copy-Item C:\Windows\System32\whoami.exe dummy.exe
+          pwsh scripts/package-windows-msi.ps1 -Version 0.64.0-3-gabc -Exe dummy.exe -OutDir out
+      - shell: pwsh
+        run: |
+          $msi = (Get-ChildItem out/*.msi).FullName
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/i `"$msi`" /qn MSIINSTALLPERUSER=1 /l*v $env:RUNNER_TEMP\i.log"
+          if ($p.ExitCode -ne 0) { Get-Content $env:RUNNER_TEMP\i.log -Tail 60; throw "install failed: $($p.ExitCode)" }
+          $exe = "$env:LOCALAPPDATA\Programs\NeuroFeed\neurofeed.exe"
+          Get-ChildItem "$env:LOCALAPPDATA\Programs\NeuroFeed"
+          Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter NeuroFeed*
+          if (-not (Test-Path $exe)) { Get-Content $env:RUNNER_TEMP\i.log -Tail 80; throw "not installed per-user" }
+          Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | ? DisplayName -eq NeuroFeed | select DisplayName,DisplayVersion,DisplayIcon
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList "/x `"$msi`" /qn"
+          if ((Test-Path $exe) -or $p.ExitCode -ne 0) { throw "uninstall failed" }

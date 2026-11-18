@@ -97,7 +97,7 @@ the install scope: **Just for me** (`%LocalAppData%\Programs\NeuroFeed`, no UAC)
 Programs entry with the icon, and `MajorUpgrade` (newer versions replace older ones). The MSI `ProductVersion` is
 the numeric `X.Y.Z` of the release version. The **UpgradeCode GUID must never change**.
 Silent: `msiexec /i X.msi /qn MSIINSTALLPERUSER=1` (per-user), `ALLUSERS=1` (per-machine, admin),
-`INSTALLDESKTOPSHORTCUT=1` for the desktop shortcut.
+`ADDLOCAL=ALL` to add the desktop shortcut (a checkbox on the wizard's Features page).
 
 Local build (needs `dotnet tool install --global wix --version 5.0.2` and
 `wix extension add --global WixToolset.UI.wixext/5.0.2`): `pwsh scripts/package-windows-msi.ps1 [-Exe signed.exe]`.

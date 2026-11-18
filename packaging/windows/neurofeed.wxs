@@ -8,7 +8,7 @@
     "Everyone"     -> %ProgramFiles%\NeuroFeed, HKLM, UAC prompt
   Silent installs: msiexec /i X.msi /qn MSIINSTALLPERUSER=1   (per-user, no elevation)
                    msiexec /i X.msi /qn ALLUSERS=1            (per-machine, needs admin)
-                   add INSTALLDESKTOPSHORTCUT=1 for the desktop shortcut.
+                   add ADDLOCAL=ALL for the desktop shortcut too.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <!--
@@ -30,7 +30,6 @@
     <!-- Defaults for WixUI_Advanced: per-user is pre-selected, and no admin prompt is needed for it. -->
     <Property Id="ApplicationFolderName" Value="NeuroFeed" />
     <Property Id="WixAppFolder" Value="WixPerUserFolder" />
-    <Property Id="INSTALLDESKTOPSHORTCUT" Value="0" />
     <WixVariable Id="WixUILicenseRtf" Value="$(LicenseRtf)" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
@@ -44,6 +43,9 @@
       <ComponentRef Id="Docs" />
       <ComponentRef Id="ThirdParty" />
       <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+    <!-- Level 1000 = unchecked by default; the user ticks it on the Features page. -->
+    <Feature Id="DesktopShortcutFeature" Title="Desktop shortcut" Level="1000" AllowAdvertise="no">
       <ComponentRef Id="DesktopShortcut" />
     </Feature>
 
@@ -63,32 +65,13 @@
                 Target="[APPLICATIONFOLDER]neurofeed.exe" WorkingDirectory="APPLICATIONFOLDER" />
       <RegistryValue Root="HKMU" Key="Software\NeuroFeed" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
-    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*" Condition="INSTALLDESKTOPSHORTCUT = &quot;1&quot;">
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
       <Shortcut Id="DesktopLink" Name="NeuroFeed" Description="EEG neurofeedback"
                 Target="[APPLICATIONFOLDER]neurofeed.exe" WorkingDirectory="APPLICATIONFOLDER" />
       <RegistryValue Root="HKMU" Key="Software\NeuroFeed" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
-    <!-- Wizard: Welcome, License, Options (desktop shortcut), Install scope, Folder, Ready. -->
+    <!-- Wizard: Welcome + licence, then "Customize": install scope, folder, features (desktop shortcut checkbox). -->
     <ui:WixUI Id="WixUI_Advanced" />
-    <UI>
-      <Dialog Id="OptionsDlg" Width="370" Height="270" Title="!(loc.InstallDirDlg_Title)">
-        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Options" />
-        <Control Id="Desktop" Type="CheckBox" X="25" Y="60" Width="320" Height="18" Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1" Text="Create a &amp;desktop shortcut" />
-        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
-        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
-          <Publish Event="NewDialog" Value="LicenseAgreementDlg" />
-        </Control>
-        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
-          <Publish Event="NewDialog" Value="InstallScopeDlg" />
-        </Control>
-        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
-          <Publish Event="SpawnDialog" Value="CancelDlg" />
-        </Control>
-      </Dialog>
-      <!-- A later Order overrides the stock navigation (License -> Scope becomes License -> Options -> Scope). -->
-      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="OptionsDlg" Order="99" Condition="LicenseAccepted = &quot;1&quot;" />
-      <Publish Dialog="InstallScopeDlg" Control="Back" Event="NewDialog" Value="OptionsDlg" Order="99" />
-    </UI>
   </Package>
 </Wix>
