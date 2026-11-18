@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NeuroFeed Windows installer (WiX v5). Built by scripts/package-windows-msi.ps1.
+    wix build -arch x64 -ext WixToolset.UI.wixext -d ProductVersion=X.Y.Z -d ExePath=... -d LicenseRtf=...
+
+  Dual-purpose package (ALLUSERS=2): the "Install scope" page lets the user pick
+    "Just for me"  -> %LocalAppData%\Programs\NeuroFeed, HKCU, no UAC prompt
+    "Everyone"     -> %ProgramFiles%\NeuroFeed, HKLM, UAC prompt
+  Silent installs: msiexec /i X.msi /qn MSIINSTALLPERUSER=1   (per-user, no elevation)
+                   msiexec /i X.msi /qn ALLUSERS=1            (per-machine, needs admin)
+                   add ADDLOCAL=ALL for the desktop shortcut too.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <!--
+    UpgradeCode identifies the NeuroFeed product family for MajorUpgrade.
+    It was generated once and MUST NEVER CHANGE, otherwise new versions stop
+    replacing old ones and installs pile up in Add/Remove Programs.
+  -->
+  <Package Name="NeuroFeed" Manufacturer="Thomas Barth" Version="$(ProductVersion)"
+           UpgradeCode="377A5552-65DD-4DEC-932F-92EF07B87591"
+           Scope="perUserOrMachine" Compressed="yes" Language="1033">
+    <SummaryInformation Description="NeuroFeed - EEG neurofeedback" />
+    <MediaTemplate EmbedCab="yes" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of NeuroFeed is already installed." />
+
+    <Icon Id="NeuroFeed.ico" SourceFile="$(IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="NeuroFeed.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/windwerfer/neurofeed" />
+
+    <!-- Defaults for WixUI_Advanced: per-user is pre-selected, and no admin prompt is needed for it. -->
+    <Property Id="ApplicationFolderName" Value="NeuroFeed" />
+    <Property Id="WixAppFolder" Value="WixPerUserFolder" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(LicenseRtf)" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="APPLICATIONFOLDER" Name="NeuroFeed" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="Main" Title="NeuroFeed" Level="1" AllowAdvertise="no">
+      <ComponentRef Id="MainExe" />
+      <ComponentRef Id="Docs" />
+      <ComponentRef Id="ThirdParty" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+    <!-- Level 1000 = unchecked by default; the user ticks it on the Features page. -->
+    <Feature Id="DesktopShortcutFeature" Title="Desktop shortcut" Level="1000" AllowAdvertise="no">
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <Component Id="MainExe" Directory="APPLICATIONFOLDER" Guid="*">
+      <File Id="NeuroFeedExe" Name="neurofeed.exe" Source="$(ExePath)" KeyPath="yes" />
+    </Component>
+    <Component Id="Docs" Directory="APPLICATIONFOLDER" Guid="*">
+      <File Id="LicenseTxt" Name="LICENSE.txt" Source="$(LicenseTxt)" KeyPath="yes" />
+    </Component>
+    <Component Id="ThirdParty" Directory="APPLICATIONFOLDER" Guid="*">
+      <File Id="ThirdPartyNotices" Name="THIRD_PARTY_NOTICES.md" Source="$(ThirdPartyNotices)" KeyPath="yes" />
+    </Component>
+
+    <!-- Shortcuts use a registry value as key path (required for per-user installs). -->
+    <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder" Guid="*">
+      <Shortcut Id="StartMenuLink" Name="NeuroFeed" Description="EEG neurofeedback"
+                Target="[APPLICATIONFOLDER]neurofeed.exe" WorkingDirectory="APPLICATIONFOLDER" />
+      <RegistryValue Root="HKMU" Key="Software\NeuroFeed" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="*">
+      <Shortcut Id="DesktopLink" Name="NeuroFeed" Description="EEG neurofeedback"
+                Target="[APPLICATIONFOLDER]neurofeed.exe" WorkingDirectory="APPLICATIONFOLDER" />
+      <RegistryValue Root="HKMU" Key="Software\NeuroFeed" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- WixUI defaults the per-user folder to %LocalAppData%\Apps; the convention for per-user apps is Programs. -->
+    <SetProperty Id="WixPerUserFolder" Value="[LocalAppDataFolder]Programs\[ApplicationFolderName]" After="WixSetDefaultPerUserFolder" Sequence="both" />
+
+    <!-- The stock WixUI 5.0 default points at "Program Files (x86)" for 64-bit packages. -->
+    <SetProperty Id="WixPerMachineFolder" Value="[ProgramFiles64Folder][ApplicationFolderName]" After="WixSetDefaultPerMachineFolder" Sequence="both" />
+
+    <!-- Wizard: Welcome + licence, then "Customize": install scope, folder, features (desktop shortcut checkbox). -->
+    <ui:WixUI Id="WixUI_Advanced" />
+  </Package>
+</Wix>

@@ -9,6 +9,7 @@ every platform and attaches the assets with `gh release upload`:
 | `neurofeed-X.Y.Z-linux-x86_64.tar.gz`, `neurofeed-X.Y.Z-x86_64.AppImage` | `linux` (Ubuntu 22.04, glibc 2.35) | `scripts/package-linux.sh` |
 | `neurofeed-X.Y.Z-x86_64.flatpak` | `flatpak` (`flatpak/org.windwerfer.neurofeed.yml`) | `scripts/package-flatpak.sh` |
 | `neurofeed-X.Y.Z-windows-x64.zip` (portable) | `windows` | `scripts/package-windows.ps1` |
+| `neurofeed-X.Y.Z-windows-x64.msi` (installer) | `windows` | `scripts/package-windows-msi.ps1` |
 | `neurofeed-X.Y.Z-macos-universal.dmg` (arm64 + x86_64) | `macos` | `scripts/package-macos.sh` |
 | `neurofeed-web-X.Y.Z.zip` (static wasm site, unzip and serve over HTTP) | `web` (trunk) | `scripts/package-web.sh` |
 | `SHA256SUMS.txt` | `upload` | |
@@ -87,4 +88,20 @@ SignPath setup: install the SignPath GitHub App / trusted build system on the re
 repository as origin, and an artifact configuration whose root is a zip containing `neurofeed.exe` (Authenticode-sign
 `/zip-file/pe-file`). The exe carries version info and the icon from `apps/neurofeed-egui/build.rs`.
 Local build: `pwsh scripts/package-windows.ps1` (unsigned).
+
+### Windows MSI
+
+`packaging/windows/neurofeed.wxs` (WiX v5) builds `neurofeed-X.Y.Z-windows-x64.msi`. The wizard asks for
+the install scope: **Just for me** (`%LocalAppData%\Programs\NeuroFeed`, no UAC) or **Everyone**
+(`Program Files\NeuroFeed`, UAC); it has a Start menu shortcut, an optional desktop shortcut, an Add/Remove
+Programs entry with the icon, and `MajorUpgrade` (newer versions replace older ones). The MSI `ProductVersion` is
+the numeric `X.Y.Z` of the release version. The **UpgradeCode GUID must never change**.
+Silent: `msiexec /i X.msi /qn MSIINSTALLPERUSER=1` (per-user), `ALLUSERS=1` (per-machine, admin),
+`ADDLOCAL=ALL` to add the desktop shortcut (a checkbox on the wizard's Features page).
+
+Local build (needs `dotnet tool install --global wix --version 5.0.2` and
+`wix extension add --global WixToolset.UI.wixext/5.0.2`): `pwsh scripts/package-windows-msi.ps1 [-Exe signed.exe]`.
+CI builds it from the signed exe, smoke-tests a per-user install/uninstall, and signs the MSI too when the
+variable `SIGNPATH_MSI_ARTIFACT_CONFIG_SLUG` is set (a SignPath artifact configuration whose root is a zip
+containing the `.msi`, signed with `/zip-file/msi-file`); otherwise the MSI is attached unsigned (its exe is still signed).
 
