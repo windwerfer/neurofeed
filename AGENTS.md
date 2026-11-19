@@ -46,17 +46,19 @@ crates/
   nf-feedback         L1  feedback engine math (threshold, adaptation, stability, inhibit, guard); sample-time, no clock
   nf-format           L1  .neurofeed NFED6 container (the only owner of the byte layout)
   nf-core             L2  Session + command registry + event log + Clock (no egui, no tokio, wasm-clean)
-  nf-device nf-store  L3  real devices (btleplug, OSC; native) ; history/storage behind traits
+  nf-store nf-audio nf-import  L1  history/storage behind traits; audio mixer; EDF/CSV import
+  nf-device nf-ai     L3  real devices (btleplug, OSC; native); ML models (optional)
   nf-mcp              L4  MCP server over nf-core (native only)
 apps/
   neurofeed-egui      desktop + web UI (eframe; trunk for web); control channel on desktop
   neurofeed-cli       automation binary: run, batch, serve (JSON lines), mcp; headless Session or bridge to the app (alias neurofeed-mcp = mcp)
-xtask/                cargo xtask ci | layers | wasm   (to add)
+xtask/                cargo xtask ci | layers | wasm (layers table in xtask/src/layers.rs)
 ```
 
-**Layering is enforced** by `cargo xtask layers` (to add). A crate may
-depend only on lower layers, and a new crate must be registered in the
-layers table. Nothing below the apps may use egui, eframe, winit, rfd,
+**Layering is enforced** by `cargo xtask layers`. A crate may
+depend only on its own or lower layers, and a new crate must be registered
+in the layers table (`xtask/src/layers.rs`, which is authoritative over this
+map). Nothing below the apps may use egui, eframe, winit, rfd,
 tokio or btleplug, except `nf-device` (btleplug) and `nf-mcp` (tokio).
 Third-party engines are quarantined to one crate each:
 - BLE and OSC live in `nf-device`;
@@ -105,8 +107,10 @@ must produce an error the user or agent can act on, never a panic.
 - **Every write that matters is atomic** **(ours)**: write a temp file,
   then rename it. A recording is recoverable after a crash.
 - **Prove it.** Every crash fix includes a regression test that failed
-  before the fix. `panic_hunt` (to add) fuzzes every command with
-  adversarial params and must stay green.
+  before the fix. `panic_hunt` (`crates/nf-core/tests/panic_hunt.rs`)
+  fuzzes every command and query with adversarial params in four session
+  states (no panic; a failed call leaves the state unchanged) and must
+  stay green.
 
 ### Rules
 
@@ -275,15 +279,16 @@ Usage and client setup: `docs/automation.md`.
 ## 7. Before you finish a task
 
 ```sh
-cargo xtask ci        # (to add) = all of the below
+cargo xtask ci        # = all of the below (+ cargo deny check when installed)
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace            # or: cargo nextest run --profile ci
-cargo xtask layers                # (to add)
-cargo xtask wasm                  # (to add) = cargo check --target wasm32-unknown-unknown for L0–L2 and the web app
+cargo xtask layers
+cargo xtask wasm                  # = cargo check --target wasm32-unknown-unknown for the wasm crates, clippy for the web app
 ```
 
-If you added or changed commands, also run `panic_hunt` (to add). If you
+If you added or changed commands, `panic_hunt` covers them automatically
+(`cargo test -p nf-core --test panic_hunt`; part of `cargo test`). If you
 touched a hot path, add a benchmark and put the numbers in the devlog. If
 you changed UI, add a screenshot.
 

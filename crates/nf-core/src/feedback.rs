@@ -10,8 +10,10 @@ use nf_feedback::{Calibration, CalibrationResult, Dirty, Engine, HeldBack, Input
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-/// Device gone (or no data) this long ends the session.
-pub const DISCONNECT_GRACE_S: f64 = 10.0;
+/// Device gone (or no data) this long asks the user whether to keep waiting
+/// or end the session. A link loss never ends a session by itself
+/// (`.ai/contracts/feedback-disconnect.md`).
+pub const RECONNECT_PROMPT_S: f64 = 15.0;
 /// This many consecutive seconds without a usable pad auto-pause training.
 pub const BAD_SIGNAL_PAUSE_S: u32 = 10;
 /// Good seconds needed to auto-resume after a bad-signal pause.
@@ -148,6 +150,10 @@ pub struct Trainer {
     pub saved_id: Option<u64>,
     /// Last notice (e.g. why calibration failed).
     pub message: Option<String>,
+    /// The link has been lost for [`RECONNECT_PROMPT_S`]: the UI asks
+    /// "keep waiting or end the session?" (`feedback.keep_waiting` /
+    /// `feedback.stop`).
+    pub reconnect_prompt: bool,
     /// Last baseline per `device|protocol`.
     pub baselines: BTreeMap<String, CalibrationResult>,
     pub device: Option<String>,
@@ -168,6 +174,8 @@ pub struct Trainer {
     bad_for: u32,
     good_for: u32,
     lost_since: Option<f64>,
+    /// The user chose "keep waiting" for the current link loss.
+    keep_waiting: bool,
     was_in_target: bool,
     pauses: u32,
     threshold_start: Option<f64>,
@@ -203,6 +211,8 @@ impl Default for Trainer {
             bad_for: 0,
             good_for: 0,
             lost_since: None,
+            keep_waiting: false,
+            reconnect_prompt: false,
             was_in_target: false,
             pauses: 0,
             threshold_start: None,
@@ -217,6 +227,8 @@ pub enum Change {
     Chime,
     /// Guard warning sound (rate-limited by the engine).
     GuardChime,
+    /// The link has been lost long enough to ask the user what to do.
+    ReconnectPrompt,
 }
 
 fn pad_list(names: &[String]) -> String {
@@ -269,6 +281,22 @@ impl Trainer {
 
     pub fn last(&self) -> Option<&SecondResult> {
         self.results.last()
+    }
+
+    /// Seconds the link has been lost during this session (`None` = connected).
+    pub fn link_lost_s(&self, now: f64) -> Option<f64> {
+        self.lost_since.map(|t| (now - t).max(0.0))
+    }
+
+    /// "Keep waiting" on the reconnect prompt: hide it until the link comes
+    /// back (a later loss asks again).
+    pub fn keep_waiting(&mut self) -> Result<(), String> {
+        if !self.reconnect_prompt {
+            return Err("no reconnect prompt is open".into());
+        }
+        self.reconnect_prompt = false;
+        self.keep_waiting = true;
+        Ok(())
     }
 
     pub fn total_s(&self) -> u32 {
@@ -383,6 +411,9 @@ impl Trainer {
     }
 
     pub fn stop(&mut self, why: &str, out: &mut Vec<Change>) {
+        self.lost_since = None;
+        self.keep_waiting = false;
+        self.reconnect_prompt = false;
         self.cal = None;
         self.calibration = None;
         let res = &self.results;
@@ -422,33 +453,15 @@ impl Trainer {
         let all_green = obs.connected && !self.pads.is_empty() && self.pads.iter().all(|p| p.good);
         let bad: Vec<String> = self.pads.iter().filter(|p| !p.good).map(|p| p.name.clone()).collect();
         if !obs.connected {
-            let since = *self.lost_since.get_or_insert(time);
-            self.green_for = 0;
-            if time - since >= DISCONNECT_GRACE_S {
-                self.lost_since = None;
-                match self.phase {
-                    Phase::Playing | Phase::Paused { .. } => self.stop("device disconnected", out),
-                    Phase::Calibrating | Phase::FitCheck => {
-                        self.cal = None;
-                        self.calibration = None;
-                        self.message = Some("Device disconnected for 10 s; session cancelled.".into());
-                        self.set(Phase::Idle, out);
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            if self.phase == Phase::Playing {
-                self.set(Phase::Paused { reason: PauseReason::Disconnected }, out);
-            }
-            if let Some(c) = self.calibration.as_mut() {
-                c.waiting = Some("device disconnected, waiting for it to come back".into());
-            }
-            self.push(time, None, false, Some(format!("device disconnected ({:.0} s grace left)", DISCONNECT_GRACE_S - (time - since))));
+            self.link_lost(time, out);
             return;
         }
-        if self.lost_since.take().is_some() && self.phase == (Phase::Paused { reason: PauseReason::Disconnected }) {
-            self.resume(out);
+        if self.lost_since.take().is_some() {
+            self.keep_waiting = false;
+            self.reconnect_prompt = false;
+            if self.phase == (Phase::Paused { reason: PauseReason::Disconnected }) {
+                self.resume(out);
+            }
         }
         let input = Input {
             t: self.sample_t,
@@ -491,6 +504,26 @@ impl Trainer {
             }
             _ => {}
         }
+    }
+
+    /// One second without data: pause, keep waiting, and after
+    /// [`RECONNECT_PROMPT_S`] ask the user. Never ends the session.
+    fn link_lost(&mut self, time: f64, out: &mut Vec<Change>) {
+        let since = *self.lost_since.get_or_insert(time);
+        self.green_for = 0;
+        if self.phase == Phase::Playing {
+            self.was_in_target = false;
+            self.set(Phase::Paused { reason: PauseReason::Disconnected }, out);
+        }
+        let waiting = "device disconnected, waiting for it to reconnect";
+        if let Some(c) = self.calibration.as_mut() {
+            c.waiting = Some(waiting.into());
+        }
+        if !self.keep_waiting && !self.reconnect_prompt && time - since >= RECONNECT_PROMPT_S {
+            self.reconnect_prompt = true;
+            out.push(Change::ReconnectPrompt);
+        }
+        self.push(time, None, false, Some(waiting.into()));
     }
 
     fn play_second(&mut self, time: f64, input: &Input, out: &mut Vec<Change>) {

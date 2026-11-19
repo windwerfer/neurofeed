@@ -252,7 +252,7 @@ feedback-collecting = Sammle
 feedback-start-now = Jetzt starten
 feedback-paused = Pausiert
 feedback-paused-waiting-for-good-signal = Pausiert: warte auf gutes Signal
-feedback-paused-device-disconnected = Pausiert: Gerät getrennt
+feedback-paused-device-disconnected = Pausiert: warte, bis das Gerät wieder verbunden ist
 feedback-in-target = Im Ziel
 feedback-training = Training
 feedback-nerd = Details
@@ -664,3 +664,13 @@ settings-athena-preset-16 = p1041 · 16 Spuren
 settings-athena-preset-8 = p1044 · 8 Spuren
 settings-athena-preset-4 = p1045 · 4 Spuren
 settings-athena-preset-hint = Optisches Layout der Muse S Athena (wird beim Verbinden gesetzt). Namen sind Bezeichnungen, keine Wellenlängen.
+
+# Feedback session guards (.ai/contracts/feedback-disconnect.md)
+session-guard-this-device = dieses Gerät
+session-guard-disconnect-title = Sitzung beenden und trennen?
+session-guard-disconnect-body = Auf { $device } läuft eine Feedback-Sitzung. Trennen beendet die Sitzung jetzt und speichert sie, danach wird das Gerät getrennt.
+session-guard-disconnect-confirm = Sitzung beenden und trennen
+session-guard-cancel = Abbrechen
+session-guard-lost-title = Gerät nicht gefunden
+session-guard-lost-body = { $device } ist seit { $s } s weg. Die Sitzung ist pausiert und jeder Ton ist aus. Schalte das Gerät wieder ein oder bring es näher und warte weiter, oder beende die Sitzung.
+session-guard-keep-waiting = Weiter warten

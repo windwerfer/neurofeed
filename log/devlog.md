@@ -173,3 +173,61 @@
 - `apps/neurofeed-egui/build.rs` (winresource, Windows host+target only) embeds version info + icon (`assets/neurofeed.ico`).
 - README code signing policy + privacy statement; release.yml windows job signs via SignPath when configured (docs/release.md).
 - Open: `cargo deny check advisories` fails on main already (chrono unmaintained, zip advisories); not touched here.
+
+## 2026-11-19: Never auto-stop a feedback session (new feedback-disconnect contract)
+- Owner law (`.ai/contracts/feedback-disconnect.md`, decision 2026-11-19): the 10 s disconnect grace end is gone.
+  A lost link pauses (`paused:disconnected`), silences all audio incl. calibration background, freezes training and
+  calibration time, and auto-reconnect looks for the same device. After `RECONNECT_PROMPT_S` = 15 s
+  `feedback.status.reconnect_prompt` + event `reconnect_prompt`; new command `feedback.keep_waiting` (or `feedback.stop`).
+- `device.disconnect {end_session}`: refused during a session unless true; true ends the session ("device disconnected
+  by the user", recording saved) then disconnects. `device.connect` during a session only accepts the session's
+  device and reopens it in place.
+- egui `ui/session_guard.rs`: Disconnect confirmation (Cancel default) and the Device-not-found prompt (no Escape
+  close). EN/DE copy. Tests: nf-mcp `feedback.rs` (long dropout never ends, calibration waits silently), egui
+  `session_guard` click tests. Screenshot of the prompt via bridge; the confirm dialog has no screenshot (no input tool).
+- Open: no explicit `disconnect` annotation span in the recording; `sim.configure` reconnect still stops a session's recording.
+
+## 2026-11-19: cargo xtask (ci | layers | wasm)
+- New `xtask` crate + `.cargo/config.toml` alias. `layers` reads `cargo metadata` edges: every crate registered in
+  `xtask/src/layers.rs` (L0..L4, App, wasm flag), no edge to a higher layer (same layer allowed), egui/eframe/winit/rfd
+  apps only, tokio nf-device/nf-mcp, btleplug/muse-rs/rosc nf-device, rmcp nf-mcp, candle/reve nf-ai (dev-deps exempt
+  from quarantine, not from layers). `wasm` = check of the wasm crates + wasm clippy of neurofeed-egui. `ci` = fmt,
+  clippy, test, layers, wasm, `cargo deny check` if installed. Replaces `crates/nf-core/tests/layers.rs`; rust-ci uses it.
+- AGENTS.md map corrected: nf-store is L1 (nf-core uses it), nf-ai L3. `cargo deny check` is green again on this tree.
+
+## 2026-11-19: panic_hunt fuzzer
+- `crates/nf-core/tests/panic_hunt.rs`: every catalog id (commands + queries) × params from its JSON Schema and catalog
+  example (each property × 23 hostile values, every enum value, property removed, all-hostile, non-object/unknown keys)
+  × 4 fixtures (fresh, connected, recording, training). Asserts no panic and "failed call ⇒ AppState unchanged"
+  (Debug compare). ~30 k calls, deterministic, 17 s debug (one test per fixture, cheap fixture restore).
+- First run: 0 panics, 1 finding: `feedback.start` with a bad `wall_clock_unix_ms` started the trainer (fit check +
+  events) before the recording rejected it. Fixed (validate first); regression test in `tests/session.rs`.
+- Perf: `Request::parse` regenerated the full schemars schema per call to list allowed keys. Now cached per id
+  (`allowed_keys`, equivalence test vs. `schema_keys`). Release, `cargo run --release -p nf-core --example parse_bench`
+  (11 × 2000 calls): before median 486.88 µs/call (463.95..589.66), after 0.45 µs (0.41..22.82, max = cache fill).
+  Every MCP / CLI / bridge call goes through it.
+
+## 2026-11-19: Disconnect annotations; sim.configure keeps the session
+- `nf_types::Annotation {onset, duration, type}` (fileformat_v6 names). The recorder writes a `disconnect` span from the
+  last data to the first data back, by the feedback pause rule (link down or no data for `STALE_S` 1.5 s); touching
+  spans merge, non-finite times are dropped, an outage still open at stop / checkpoint closes at the recording end.
+- Stored with the session: `SessionMeta.annotations`, SQLite schema v5 `annotations_json` (migration from v1..v4),
+  IndexedDB via the meta JSON, crash-recovery doc. Exported in NFED6 metadata `annotations` and as EDF+ TAL.
+- `sim.configure` reopens a running simulator in place (`reconnect`), so a recording / feedback session continues.
+  Regression test `sim_configure_keeps_the_session_and_its_recording` failed before (recording `active: false`).
+- Tests (nf-mcp `feedback.rs`): dropout → one span (onset 10 s, 12 s), stored in `history.get`; open span closed at stop.
+- Open: EDF+ export is continuous, so a disconnect is an instant there (EDF+D starts would carry the gap); imports
+  keep their markers in `import.annotations` (not moved to the root list); no `bad_quality` / `pause` rows yet.
+
+## 2026-11-19: TODO cleanup
+- Removed `.gitmodules` (only stale `.local/*` entries; no gitlinks are tracked) and `.ai/TODO/github actions appimage.md`
+  (an Electron Q&A; the release job already builds a best-effort AppImage, see `.ai/release.md`).
+- `.ai/TODO/README.md`: Athena optics and import/export marked landed. `.ai/feedback/todos.md`: disconnect auto-end bug
+  is fixed (needs the real-device pass); dropped the done Athena and `edf_export` items.
+
+## 2026-11-19: Blink / jaw-clench reward gate (TODO was stale)
+- Already in Rust: `artifacts.rs` (`nf_dsp::GestureDetector`) feeds blink / jaw to the engine (`Dirty::Blink|Jaw`, not
+  counted, no chime); only the movement case was tested. `nf-mcp/tests/artifacts.rs` now checks per second that a
+  blink / clench second never counts or chimes. Finding: on the simulator the blink second usually trips the pad-quality
+  gate first ("no good signal on AF7, AF8"), so `dirty` stays null and the reason is the quality gate; same outcome.
+- Open: real-headset check that natural blinks / EMG are caught (sim artifacts are large).

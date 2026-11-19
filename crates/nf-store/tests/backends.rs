@@ -20,6 +20,7 @@ fn session(name: &str, body: &[u8]) -> StoredSession {
             import: Some(serde_json::json!({ "source_format": "edf" })),
             notes: String::new(),
             context: Some(serde_json::json!({ "app_version": "t" })),
+            annotations: vec![nf_types::Annotation { onset: 12.0, duration: 8.5, kind: "disconnect".into() }],
         },
         device_json: "{}".into(),
         body: body.to_vec(),
@@ -95,7 +96,10 @@ fn sqlite_v1_database_is_migrated() {
     let mut s = nf_store::SqliteStore::open(&path).unwrap();
     assert_eq!(s.list().unwrap()[0].import, None);
     let id = s.insert(session("new", &[2])).unwrap();
-    assert_eq!(s.get(id).unwrap().unwrap().meta.import, Some(serde_json::json!({ "source_format": "edf" })));
+    let got = s.get(id).unwrap().unwrap().meta;
+    assert_eq!(got.import, Some(serde_json::json!({ "source_format": "edf" })));
+    assert_eq!(got.annotations, session("new", &[2]).meta.annotations);
+    assert!(s.list().unwrap()[1].annotations.is_empty());
     std::fs::remove_dir_all(dir).ok();
 }
 
@@ -123,6 +127,7 @@ fn merge_loaded_keeps_ids_and_renumbers_local_rows() {
             import: None,
             notes: String::new(),
             context: None,
+            annotations: Vec::new(),
         },
         device_json: "{}".into(),
         body: vec![id as u8],

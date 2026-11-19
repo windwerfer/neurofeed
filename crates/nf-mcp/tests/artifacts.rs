@@ -82,6 +82,26 @@ fn artifact_seconds_are_dirty_never_counted_and_flagged_in_the_recording() {
     adv(&s, 4.0);
     let last = run(&s, "feedback.result.get", json!({ "last": 1 }));
     assert!(last[0]["record"]["dirty"].is_null(), "{last}");
+    // A blink / jaw-clench second never counts or chimes, whichever gate
+    // (artifact or the pad-quality gate it trips) catches it.
+    for (fault, want) in [("blink", "blink"), ("clench", "jaw")] {
+        run(&s, "sim.fault", json!({ fault: true }));
+        adv(&s, 2.0);
+        let mut hits = 0;
+        for _ in 0..8 {
+            adv(&s, 1.0);
+            let art = run(&s, "artifact.status", Value::Null)["status"].clone();
+            let r = run(&s, "feedback.result.get", json!({ "last": 1 }))[0].clone();
+            if art["artifact"] == want && art["time"] == r["time"] {
+                hits += 1;
+                assert_eq!((r["counted"].as_bool(), r["chime"].as_bool()), (Some(false), Some(false)), "{fault}: {r}");
+                assert!(r["reason"].is_string(), "{fault}: reason given: {r}");
+            }
+        }
+        assert!(hits >= 3, "{fault}: {hits} artifact seconds seen");
+        run(&s, "sim.fault", json!({}));
+        adv(&s, 4.0);
+    }
     run(&s, "recording.stop", Value::Null);
     let rec = &run(&s, "recording.status", Value::Null)["recording"];
     assert!(rec["feedback_seconds"].as_u64().unwrap() >= 15, "{rec}");

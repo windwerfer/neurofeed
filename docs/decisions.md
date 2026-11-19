@@ -46,7 +46,7 @@ The hybrid plan from `docs/review-feedback-engine.md` is approved, with the curr
 - Phases idle → fit_check → calibrating → playing ⇄ paused{user|bad_signal|disconnected} → ended. Driven once per session second by `Session` (injected clock; `clock.advance` in tests).
 - Reward uses the legacy target pads (AF7/AF8, Crown PO3/PO4, else all); the fit check passes after 3 s of all target pads ≥ 80.
 - Calibration: 45 good seconds or 60 s of sample time, whichever first (bad signal extends it to 60 s). Sample time stops while no data arrives, so a dropout does not use up the window. Fewer than 10 good seconds goes back to the fit check. "Start now" (`calibration.skip`) needs ≥ 10. The last baseline is stored per device+protocol for `calibration.reuse`.
-- Timing: no usable target pad for 10 s → auto-pause; it auto-resumes after 2 good s. No data for 1.5 s counts as disconnected: paused, and the session ends after a 10 s grace (before training, it is cancelled to idle).
+- Timing: no usable target pad for 10 s → auto-pause; it auto-resumes after 2 good s. No data for 1.5 s counts as disconnected: paused. (The 10 s grace end is superseded by 2026-11-19: a link loss never ends a session.)
 - Protocol and length are locked while a session runs. `threshold.set` (percentile) is the one live control; it is disabled for stability and during calibration.
 - One `SecondResult` per second (`feedback.result.get`, UI). The reward chime fires on the rising edge into target (`Event::Chime`).
 - The AI sleep guard (`ai.a_vig`) is not ported: Sleep Guard is listed as unavailable, and the other protocols run without a guard.
@@ -321,3 +321,19 @@ the cursor) instead of re-anchoring the newest sample at the right edge.
 - Host Follow re-engages its overview's Follow; overview ≥ host window.
 - 2026-11-08: HR+SpO2 view = dual-axis 1 Hz timeline (SpO2 blue left %, HR red right bpm, gaps for missing/unreliable seconds, mean lines) over an optional raw "Pulse waveform (PPG)" detail (5 min native-rate, all optical channels, saved toggle default on). The timeline is the waveform's overview (shared overview widget: shade drag/resize/tap, bookmarks, span menu). Means: retained hour, or the running recording (sum/count, reset per recording). Optics ingest while paused (Pause freezes the view only). Estimator unchanged except: never across a raw gap, no catch-up burst after a gap, reliability gates (HR conf ≥ 0.6, SpO2 perfusion ≥ 0.1). SpO2 stays uncalibrated and labelled so. Disk-backed loading is a later step (owner approval pending).
 
+
+## 2026-11-19: Never auto-stop a feedback session (owner)
+
+- Supersedes the 10 s disconnect grace end (2026-10-29) and the 2026-10-12
+  contract text. Law: `.ai/contracts/feedback-disconnect.md`.
+- Why: a session is someone's hour of training. A headset that is turned off
+  or out of range for a moment must not throw it away; only the user ends it,
+  after a warning.
+- User Disconnect during a session asks first; Confirm ends the session
+  normally, then disconnects (`device.disconnect {end_session: true}`; without
+  it the command is refused).
+- A lost link pauses everything (feedback, all sound, training and
+  calibration time) and auto-reconnects the same device. After 15 s
+  (`RECONNECT_PROMPT_S`) the user is asked: Keep waiting
+  (`feedback.keep_waiting`) or End session (`feedback.stop`). No timeout.
+- While a session is open only its own device can connect (in place).

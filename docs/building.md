@@ -15,7 +15,9 @@ Linux desktop needs the usual X11/Wayland + OpenGL libraries.
 | Android APKs (per ABI) | `scripts/build-android.sh` (see [release.md](release.md)) |
 | Android quick iteration (arm64 debug) | `scripts/build-android.sh --fast` (not reproducible; see apps/neurofeed-android/README.md) |
 | Release packages | `scripts/package-{linux,flatpak,macos}.sh`, `scripts/package-windows.ps1` ([release.md](release.md)) |
-| WASM type check | `cargo check -p neurofeed-egui --target wasm32-unknown-unknown` (nf-mcp is native only) |
+| WASM type check | `cargo xtask wasm`: `cargo check --target wasm32-unknown-unknown` for every crate marked wasm in `xtask/src/layers.rs`, then wasm clippy for `neurofeed-egui` (nf-mcp is native only) |
+| Layering | `cargo xtask layers`: every crate registered with a layer; no edge to a higher layer; egui/tokio/btleplug/rmcp/candle only in their quarantine crate |
+| Everything | `cargo xtask ci` (fmt, clippy, test, layers, wasm, `cargo deny check` if installed) |
 
 Rendering uses eframe's `glow` (OpenGL / WebGL) backend to keep the dependency
 tree small. Switch to `wgpu` in `Cargo.toml` if needed.

@@ -2,59 +2,71 @@
 
 | Field | Value |
 |---|---|
-| Status | **Frozen.** Law for a live feedback session. The orchestrator still ends the session on link loss (`interruptionGraceSeconds`, and `end()` when `allowAutoReconnect` is false). That end is the bug this contract retires. |
-| Date | 2026-10-12 |
-| Scope | Feedback session while `calibrating`, `playing`, `paused`, or `interrupted`. |
-| Not this | GraphShell recording. Bad-signal wait ([pipeline-contract.md](pipeline-contract.md) gate pads). Annotation vocabulary ([fileformat_v6.md](fileformat_v6.md)). Connect dropdown labels ([../connect-simulator-ux.md](../connect-simulator-ux.md)). SoLoud lifetime ([../audio-engine.md](../audio-engine.md)). |
+| Status | **Frozen.** Law for a live feedback session. Implemented 2026-11-19 (`nf_core::feedback`, `apps/neurofeed-egui/src/ui/session_guard.rs`). |
+| Date | 2026-11-19 (owner). Replaces the 2026-10-12 version and the 2026-10-29 "ends after a 10 s grace" rule in `docs/decisions.md`. |
+| Scope | Feedback session in any active phase: `fit_check`, `calibrating`, `playing`, `paused`. |
+| Not this | Record / Stop recordings outside a feedback session. Bad-signal wait ([pipeline-contract.md](pipeline-contract.md) gate pads). Annotation vocabulary ([fileformat_v6.md](fileformat_v6.md)). |
 
-Do not reopen these decisions. A link loss pauses the session. It does not end it. The session continues only when the same device connects again.
+**Never auto-stop a session.** A session ends only after a warning that the
+user confirms, or when the user ends it, or when its time is up.
 
 ---
 
 ## Law
 
-1. **A disconnect does not end the session.** Headset drop, the forwarder's 30 s silence `Disconnected`, status-bar **Disconnect**, and the device-type dialog's **Disconnect** all leave the feedback session open. Do not call `end()`. Do not assemble a `.neurofeed`. Do not set `phase` to `ended`. Do not open the session summary.
-2. **The session pauses.** Phase becomes `interrupted` with `FeedbackInterruptKind.disconnect`. The content clock (`elapsedSeconds`) stops. Calibration stage countdowns and the baseline wall clock stop with it. Clean seconds already accepted stay. The user **Resume** control does not continue past this wait.
-3. **Audio cues pause with the session.** Call `AudioService.pause()`: reward, guard alarm, background, music, rain, binaural, and calibration clips on that path go silent. On continue, call `AudioService.resume()`. Do not call `AudioService.stop()`. Do not call `SoLoudEngine.deinit()`.
-4. **Continue only for the same device.** Latch `ConnectionStatus.id` while that id is non-empty and the session is open, before the link drops. On the next connect, continue only when the new `ConnectionStatus.id` equals the latched id. Display name is not identity. `sim:muse-2` and `sim:muse-s` are different devices. An empty id is not a match.
-5. **A different device leaves the session paused.** Audio stays silent. Do not rewrite the session `deviceId`. Do not feed the new headset into this session. The session keeps waiting for the latched id, until the user ends it.
-6. **Continue restores the phase from before the link loss.** Playing resumes playing, the ticker, and audio. A user pause stays `paused` with audio still paused. Calibration resumes `calibrating` from the frozen clocks and cues. Close the open `disconnect` annotation when the same device continues.
-7. **There is no grace end.** `interruptionGraceSeconds` must not call `end()`. Do not show `Ending in {n}s if not recovered…`.
-8. **The user can still end.** **End session**, the back-guard **End session**, and the duration elapsed still call `end()`.
+1. **User Disconnect warns first.** Disconnect during a session shows a
+   confirmation that the session will end. Cancel (the default) changes
+   nothing. Confirm ends the session normally (summary, saved recording) and
+   then disconnects the device. Programmatic: `device.disconnect` is refused
+   during a session unless `end_session: true`.
+2. **A lost link pauses.** Headset off, out of range, BLE drop, silent data
+   (no data for 1.5 s): `playing` becomes `paused` (reason `disconnected`).
+   Training seconds, calibration time and the content clock stop. No samples
+   are invented. Clean seconds already accepted stay. User **Resume** does not
+   continue past this wait.
+3. **All sound stops.** Reward, background, music, binaural, guard alarm and
+   the calibration background are silent while the link is lost, in every
+   phase.
+4. **Auto-reconnect looks for the same device** (the session's device id,
+   [device-autoconnect.md](device-autoconnect.md)). When it is back the
+   session continues: `playing` resumes, a user pause stays paused,
+   calibration continues from its frozen clocks.
+5. **A different device may not join.** While a session is open only its own
+   device can connect; it reopens in place so the session and its recording
+   continue.
+6. **Ask after 15 s.** When the device is still gone after
+   `RECONNECT_PROMPT_S` = 15 s, the app asks: **Keep waiting** (e.g. turn the
+   headset back on) or **End session**. The dialog has no countdown and does
+   not close on Escape or an outside click. Keep waiting closes it until the
+   link comes back; a later loss asks again.
+7. **No grace end, no timeout.** Nothing ends the session on a link loss,
+   however long it lasts.
 
-Bad signal is unchanged: all gate pads critical for 10 s still enters `interrupted` / `badSignal`, waits, and resumes when those pads recover. It still never auto-ends. A link loss during that wait uses this contract (annotation type becomes `disconnect`, still no `end()`).
-
-The 30 s silence timer that emits `Disconnected` stays. This contract changes what the session does with that event.
-
-`allowAutoReconnect == false` (manual **Disconnect**) must not end the session. This contract does not require an automatic scan after that tap ([device-autoconnect.md](device-autoconnect.md): a user Disconnect suspends auto-reconnect). A later connect of the latched id still continues the session.
+Bad signal is unchanged: all gate pads bad for 10 s pauses (`bad_signal`)
+and resumes by itself after 2 good seconds. It never ends the session.
 
 ---
 
-## On-screen copy
+## Surfaces
 
-Update [../ui-map.md](../ui-map.md) in the same change that lands these strings.
-
-| Surface | Text |
+| Surface | Command / state |
 |---|---|
-| Disconnect wait | `Paused — waiting for {name} to reconnect.` `{name}` is `ConnectionStatus.name`. Empty name: `Paused — waiting for this device to reconnect.` |
-| Disconnect wait actions | **End session** only. No countdown. |
-| Device-type dialog, playing / paused / interrupted | Title stays `Session in progress`. Body: `Disconnect {name}? The feedback session stays paused until this same device reconnects. NeuroFeed will then look for a {next} device.` Actions stay **Cancel** / **Disconnect**. |
-| Device-type dialog, calibration | Title stays `Session in progress`. Body: `Disconnect {name}? Calibration stays paused until this same device reconnects. NeuroFeed will then look for a {next} device.` |
-| Status-bar **Disconnect** | Tooltip stays `Disconnect`. The tap drops the link and pauses the session. |
-
-Device-type **Recording in progress** is unchanged. That recording stays open.
+| Disconnect confirmation | `device.disconnect {end_session: true}` on Confirm. Copy keys `session-guard-disconnect-*`. |
+| Reconnect prompt | `feedback.status.reconnect_prompt`, `link_lost_s`; event `reconnect_prompt`. Buttons `feedback.keep_waiting` / `feedback.stop`. Copy keys `session-guard-lost-*`. |
+| Training status chip | `Paused: waiting for the device to reconnect`. |
 
 ---
 
-## File
+## Still open
 
-Annotation type for this gap stays `disconnect` (`{onset, duration, type}`). Do not write `pause` for a link loss. User pause still stops raw and computed and still uses type `pause`. During the disconnect gap the content clock is frozen, the capture lease stays, and the writer does not invent samples. Close the open `disconnect` span when the same device continues, or when the user later ends.
+- EDF+ export is continuous (the gap has no length there), so a
+  `disconnect` row is written as an instant at the EDF time where data
+  resumes. EDF+D record starts would carry the real gap.
 
----
-
-## Out of scope
-
-- GraphShell **Record** / **Stop**, and the recording device-type dialog.
-- Changing how long a silent link waits before `Disconnected`.
-- Bad-signal thresholds, gate electrodes, and the 10 s critical-pad wait.
-- New annotation types or a second timeline.
+Landed 2026-11-19: a recording writes `annotations[]` `{onset, duration,
+type: "disconnect"}` from the last data to the first data back (same rule
+as the feedback pause: link down or no data for 1.5 s), closed at the end
+if the device never came back; stored with the session (SQLite v5
+`annotations_json`), in the NFED6 metadata and the crash-recovery doc.
+`sim.configure` reopens a running simulator in place, so the session and
+its recording continue.

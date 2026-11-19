@@ -6,15 +6,14 @@ Crown-start threads.
 
 | Thread | Spec | Handoff |
 |--------|------|---------|
-| Athena optics (raw stream) | [athena-optics-contract.md](athena-optics-contract.md) | [handoff-athena-optics.md](handoff-athena-optics.md) |
+| Athena optics (raw stream) | **Landed 2026-11-11** (first milestone, see `log/devlog.md`). [athena-optics-contract.md](athena-optics-contract.md) | [handoff-athena-optics.md](handoff-athena-optics.md) (do not implement from this) |
 | History Dashboard + Feedback chips | [handoff-history-summary-chips.md](handoff-history-summary-chips.md) | same file |
-| Import / export (EDF · Mind Monitor CSV) | [import-export.md](import-export.md) | — |
-| GitHub Actions AppImage | [github actions appimage.md](github%20actions%20appimage.md) | — |
+| Import / export (EDF · Mind Monitor CSV) | **Landed** in Rust (`crates/nf-import`). [import-export.md](import-export.md) is the Flutter-era spec | — |
 | App folder, cache, models, export | **Landed.** [../contracts/app-folder.md](../contracts/app-folder.md) | [handoff-app-folder.md](handoff-app-folder.md) (do not implement from this) |
 
 When a thread lands, slim the spec to frozen law and move it to
 [`.ai/contracts/`](../contracts/). Keep the full implementer spec here
-until then (Athena still needs packet geometry, types, and work order).
+until then.
 Delete or stub the row here after the move.
 
 Archived (file format): [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md),

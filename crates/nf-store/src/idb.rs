@@ -33,7 +33,7 @@ struct Shared {
 }
 
 enum Op {
-    Put(StoredSession),
+    Put(Box<StoredSession>),
     Delete(u64),
 }
 
@@ -164,7 +164,7 @@ impl Store for IdbStore {
     fn insert(&mut self, s: StoredSession) -> Result<u64> {
         let id = self.cache.insert(s)?;
         if let Some(row) = self.cache.get(id)? {
-            self.write(Op::Put(row));
+            self.write(Op::Put(Box::new(row)));
         }
         Ok(id)
     }
@@ -184,7 +184,7 @@ impl Store for IdbStore {
     fn set_notes(&mut self, id: u64, notes: &str) -> Result<bool> {
         let had = self.cache.set_notes(id, notes)?;
         if let Some(row) = self.cache.get(id)?.filter(|_| had) {
-            self.write(Op::Put(row));
+            self.write(Op::Put(Box::new(row)));
         }
         Ok(had)
     }
@@ -219,7 +219,7 @@ impl Store for IdbStore {
         self.merged = true;
         for id in self.cache.merge_loaded(fresh) {
             if let Ok(Some(row)) = self.cache.get(id) {
-                self.write(Op::Put(row));
+                self.write(Op::Put(Box::new(row)));
             }
         }
         true

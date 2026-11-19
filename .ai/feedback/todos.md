@@ -8,9 +8,6 @@ pipeline-contract Key Decisions.
 - Crown *run* (quality vectors, computed frames, charts device-aware).
 - OSC connect / discovery for Crown / Notion.
 - Phone overnight QA of keepable-capture FGS (screen-off, hours). FGS itself landed; see [../contracts/data-plane-contract.md](../contracts/data-plane-contract.md).
-- EEG artifact flag for jaw-clench / blink EMG (accel gating only catches head motion).
-- Athena raw optical stream — [../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md).
-- Publish `third_party/edf_export` to git+tag after a device export pass.
 
 Historical phase checklists: [../archive/feedback-todos-historical.md](../archive/feedback-todos-historical.md).
 
@@ -19,7 +16,7 @@ Historical phase checklists: [../archive/feedback-todos-historical.md](../archiv
 - Calibration → auto-start; reward chimes; movement gates them.
 - Five volume sliders live; target settings; in-flight recalibrate.
 - Prefs survive restart. `[atr]` threshold stays ≤ ceiling.
-- Disconnect during a feedback session pauses it (no grace end). The same device continues it. Law: [../contracts/feedback-disconnect.md](../contracts/feedback-disconnect.md). The orchestrator still auto-ends; that is the open bug.
+- Disconnect during a feedback session pauses it (no grace end). The same device continues it. Law: [../contracts/feedback-disconnect.md](../contracts/feedback-disconnect.md) (implemented 2026-11-19; needs the real-device pass).
 - Staged REVE calibration (artifacts / eyes-open / eyes-closed).
 - Binaural + music + guard muffle on a real speaker.
 - Streaming to a real LSL / OSC / BrainFlow sink.

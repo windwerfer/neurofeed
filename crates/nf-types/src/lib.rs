@@ -232,6 +232,23 @@ pub enum LinkState {
     },
 }
 
+/// One row of a recording's `annotations[]` timeline (`.ai/contracts/fileformat_v6.md`,
+/// LOCKED names): an interval (`pause`, `bad_quality`, `disconnect`) or an
+/// instant (`duration` 0, gestures). `onset` is seconds from the start of
+/// the recording, `duration` is seconds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Annotation {
+    pub onset: f64,
+    pub duration: f64,
+    #[serde(rename = "type")]
+    pub kind: String,
+}
+
+impl Annotation {
+    /// The `disconnect` annotation type.
+    pub const DISCONNECT: &'static str = "disconnect";
+}
+
 /// Something that can list and open devices: the simulator registry, a
 /// btleplug scanner on desktop, or an Android wrapper that does the BLE scan
 /// and transport via JNI and hands samples to Rust.

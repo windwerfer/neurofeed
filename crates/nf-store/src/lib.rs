@@ -47,6 +47,9 @@ pub struct SessionMeta {
     /// Recording context snapshot (time zone, protocol, settings, app version).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<serde_json::Value>,
+    /// The recording's `annotations[]` timeline (seconds from its start).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub annotations: Vec<nf_types::Annotation>,
 }
 
 /// A full stored session.

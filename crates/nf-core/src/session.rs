@@ -99,6 +99,9 @@ pub enum Event {
     Chime,
     /// Play the guard warning sound.
     GuardChime,
+    /// The device has been gone for `feedback::RECONNECT_PROMPT_S` during a
+    /// session: ask the user to keep waiting or end it.
+    ReconnectPrompt,
     /// A finished recording was saved to history.
     SessionSaved {
         id: u64,
@@ -106,6 +109,14 @@ pub enum Event {
     StoreError {
         message: String,
     },
+}
+
+/// `wall_clock_unix_ms` of `recording.start` / `feedback.start`.
+fn check_wall_clock(wall_clock_unix_ms: Option<f64>) -> Result<(), CoreError> {
+    if wall_clock_unix_ms.is_some_and(|t| !t.is_finite() || t < 0.0) {
+        return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
+    }
+    Ok(())
 }
 
 /// Simulator faults (`sim.fault`).
@@ -268,6 +279,7 @@ impl Session {
             feedback_seconds: r.info.feedback_seconds,
             protocol,
             context: Some(context),
+            annotations: r.annotations(),
         };
         let st = self.store.as_mut();
         let res = st
@@ -394,7 +406,7 @@ impl Session {
             wall_clock_unix_ms: s.meta.started_unix_ms,
             saved_id: Some(id),
         };
-        let f = Finished { device, info, body: s.body };
+        let f = Finished { device, info, body: s.body, annotations: s.meta.annotations };
         let start = f.info.wall_clock_unix_ms.map_or((1985, 1, 1, 0, 0, 0), crate::recording::civil_utc);
         export(&f, format, start).map_err(CoreError::BadRequest)
     }
@@ -478,6 +490,7 @@ impl Session {
             import: None,
             notes: String::new(),
             context: Some(self.context(trained)),
+            annotations: f.annotations.clone(),
         };
         let s = nf_store::StoredSession { meta, device_json: serde_json::to_string(&f.device).unwrap_or_default(), body: f.body.clone() };
         match self.store.insert(s) {
@@ -673,6 +686,7 @@ impl Session {
             self.route_side_streams(&packets, &optical, &accel, &athena);
             let full = self.process_eeg(&mut packets);
             self.flush_stream();
+            self.track_outage(now);
             if let Some(r) = self.live.recorder.as_mut() {
                 r.tick(now);
                 self.state.recording = Some(r.info.clone());
@@ -687,6 +701,16 @@ impl Session {
         self.ai_tick();
         self.feedback_tick(now);
         self.hint_tick(now);
+    }
+
+    /// The recording's `disconnect` spans follow the same rule as the
+    /// feedback pause: the link is down, or no data for [`STALE_S`]. The
+    /// span starts at the last data.
+    fn track_outage(&mut self, now: f64) {
+        let Some(r) = self.live.recorder.as_mut() else { return };
+        let streaming = matches!(self.state.link, Some(LinkState::Streaming));
+        let up = streaming && self.live.last_data.is_some_and(|t| now - t <= STALE_S);
+        r.link(self.live.last_data.unwrap_or(now).min(now), now, up);
     }
 
     /// Contact-quality hint, once per second (suggests; never excludes).
@@ -1132,6 +1156,7 @@ impl Session {
                 Change::Phase(phase) => Event::Feedback { phase },
                 Change::Chime => Event::Chime,
                 Change::GuardChime => Event::GuardChime,
+                Change::ReconnectPrompt => Event::ReconnectPrompt,
             });
         }
     }
@@ -1171,9 +1196,7 @@ impl Session {
     }
 
     fn start_recording(&mut self, wall_clock_unix_ms: Option<f64>) -> Result<(), CoreError> {
-        if wall_clock_unix_ms.is_some_and(|t| !t.is_finite() || t < 0.0) {
-            return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
-        }
+        check_wall_clock(wall_clock_unix_ms)?;
         let dev = self.state.device.clone().ok_or_else(|| CoreError::Device("no device connected".into()))?;
         if crate::replay::is_replay(&dev.id) {
             return Err(CoreError::Device("a replay is not recorded again".into()));
@@ -1437,11 +1460,19 @@ impl Session {
             }
             Command::AnalysisAckRestored => self.state.analysis.restored.clear(),
             Command::DeviceConnect { id } => {
-                self.connect(&id)?;
+                self.connect_during_session(&id)?;
                 self.state.auto.suspended = false;
                 self.persist_settings();
             }
-            Command::DeviceDisconnect => {
+            Command::DeviceDisconnect { end_session } => {
+                if self.state.feedback.phase.active() {
+                    if !end_session {
+                        return Err(CoreError::InvalidArgs(
+                            "a feedback session is running; disconnecting ends it. Pass end_session=true (the UI asks first)".into(),
+                        ));
+                    }
+                    self.feedback(|t, o| t.stop("device disconnected by the user", o));
+                }
                 self.disconnect();
                 self.state.auto.suspended = true;
                 self.state.auto.stop();
@@ -1511,9 +1542,11 @@ impl Session {
                 c.hr_bpm = hr_bpm.unwrap_or(c.hr_bpm);
                 c.spo2_pct = spo2_pct.unwrap_or(c.spo2_pct);
                 c.hrv_ms = hrv_ms.unwrap_or(c.hrv_ms);
+                // Reopen in place: a running recording / feedback session continues
+                // (`.ai/contracts/feedback-disconnect.md`).
                 let reconnect = self.state.device.as_ref().filter(|d| d.simulated).map(|d| d.id.clone());
                 if let Some(id) = reconnect {
-                    self.connect(&id)?;
+                    self.reconnect(&id)?;
                 }
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
@@ -1561,6 +1594,7 @@ impl Session {
                 fb.summary = None;
             }
             Command::FeedbackStart { minutes, wall_clock_unix_ms } => {
+                check_wall_clock(wall_clock_unix_ms)?; // before anything changes
                 let (lo, hi) = crate::feedback::MINUTES;
                 if let Some(m) = minutes {
                     if !(lo..=hi).contains(&m) {
@@ -1588,6 +1622,7 @@ impl Session {
                 self.state.feedback.feature_override = value;
             }
             Command::FeedbackResume => self.feedback(|t, o| t.resume(o)),
+            Command::FeedbackKeepWaiting => self.state.feedback.keep_waiting().map_err(CoreError::InvalidArgs)?,
             Command::CalibrationStart { anyway } => {
                 if !anyway && !self.state.feedback.fit_ready() {
                     let bad: Vec<String> = self.state.feedback.pads.iter().filter(|p| !p.good).map(|p| p.name.clone()).collect();
@@ -1803,6 +1838,23 @@ impl Session {
         }
     }
 
+    /// `device.connect`. While a feedback session is open only its own
+    /// device may connect, and it reopens in place so the session and its
+    /// recording continue (`.ai/contracts/feedback-disconnect.md` rules 4–5).
+    fn connect_during_session(&mut self, id: &str) -> Result<(), CoreError> {
+        let f = &self.state.feedback;
+        if !f.phase.active() {
+            return self.connect(id);
+        }
+        match f.device.as_deref() {
+            Some(d) if d == id => self.reconnect(id),
+            Some(d) => Err(CoreError::InvalidArgs(format!(
+                "a feedback session is waiting for {d}; end the session before connecting another device"
+            ))),
+            None => self.connect(id),
+        }
+    }
+
     /// Reopen the same device in place (keeps the recording and feedback
     /// session, which wait for this id), or connect it from scratch.
     fn reconnect(&mut self, id: &str) -> Result<(), CoreError> {
@@ -1898,6 +1950,8 @@ impl Session {
                     "threshold": f.threshold(),
                     "played_s": f.played_s,
                     "total_s": f.total_s(),
+                    "link_lost_s": f.link_lost_s(s.time),
+                    "reconnect_prompt": f.reconnect_prompt,
                     "last": f.last(),
                     "summary": f.summary,
                     "message": f.message,

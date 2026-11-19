@@ -25,6 +25,9 @@ pub struct Pending {
     pub protocol: Option<String>,
     #[serde(default)]
     pub context: Option<serde_json::Value>,
+    /// `annotations[]` so far; an open outage is closed at the checkpoint.
+    #[serde(default)]
+    pub annotations: Vec<nf_types::Annotation>,
 }
 
 /// Remove every trace of a pending recovery.
@@ -57,6 +60,7 @@ pub fn restore(store: &dyn nf_store::Store, p: &Pending) -> Result<nf_store::Sto
         import: None,
         notes: "Recovered after the app closed unexpectedly.".into(),
         context: p.context.clone(),
+        annotations: p.annotations.clone(),
     };
     Ok(nf_store::StoredSession { meta, device_json: p.device_json.clone(), body })
 }

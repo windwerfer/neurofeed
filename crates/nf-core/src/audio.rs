@@ -87,7 +87,8 @@ pub fn cue(state: &AppState) -> Cue {
     let reward_on = f.phase == Phase::Playing;
     let rec = f.last().and_then(|r| r.record.as_ref()).filter(|_| reward_on);
     Cue {
-        background_on: matches!(f.phase, Phase::Calibrating | Phase::Playing),
+        // A link loss silences everything, calibration included (feedback-disconnect rule 3).
+        background_on: f.link_lost_s(state.time).is_none() && matches!(f.phase, Phase::Calibrating | Phase::Playing),
         reward_on,
         pct: rec.and_then(|r| r.pct),
         muffle: rec.and_then(|r| r.muted) == Some(true),

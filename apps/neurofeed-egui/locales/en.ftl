@@ -252,7 +252,7 @@ feedback-collecting = Collecting
 feedback-start-now = Start now
 feedback-paused = Paused
 feedback-paused-waiting-for-good-signal = Paused: waiting for good signal
-feedback-paused-device-disconnected = Paused: device disconnected
+feedback-paused-device-disconnected = Paused: waiting for the device to reconnect
 feedback-in-target = In target
 feedback-training = Training
 feedback-nerd = Nerd
@@ -664,3 +664,13 @@ settings-athena-preset-16 = p1041 · 16 lanes
 settings-athena-preset-8 = p1044 · 8 lanes
 settings-athena-preset-4 = p1045 · 4 lanes
 settings-athena-preset-hint = Muse S Athena optical layout (applied on connect). Names are labels, not wavelengths.
+
+# Feedback session guards (.ai/contracts/feedback-disconnect.md)
+session-guard-this-device = this device
+session-guard-disconnect-title = End the session and disconnect?
+session-guard-disconnect-body = A feedback session is running on { $device }. Disconnecting ends the session now and saves it, then disconnects the device.
+session-guard-disconnect-confirm = End session and disconnect
+session-guard-cancel = Cancel
+session-guard-lost-title = Device not found
+session-guard-lost-body = { $device } has been gone for { $s } s. The session is paused and all sound is off. Turn the device back on or bring it closer and keep waiting, or end the session.
+session-guard-keep-waiting = Keep waiting
