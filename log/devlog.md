@@ -218,3 +218,9 @@
 - Tests (nf-mcp `feedback.rs`): dropout → one span (onset 10 s, 12 s), stored in `history.get`; open span closed at stop.
 - Open: EDF+ export is continuous, so a disconnect is an instant there (EDF+D starts would carry the gap); imports
   keep their markers in `import.annotations` (not moved to the root list); no `bad_quality` / `pause` rows yet.
+
+## 2026-11-19: TODO cleanup
+- Removed `.gitmodules` (only stale `.local/*` entries; no gitlinks are tracked) and `.ai/TODO/github actions appimage.md`
+  (an Electron Q&A; the release job already builds a best-effort AppImage, see `.ai/release.md`).
+- `.ai/TODO/README.md`: Athena optics and import/export marked landed. `.ai/feedback/todos.md`: disconnect auto-end bug
+  is fixed (needs the real-device pass); dropped the done Athena and `edf_export` items.
