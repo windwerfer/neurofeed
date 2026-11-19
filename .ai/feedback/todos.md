@@ -8,7 +8,6 @@ pipeline-contract Key Decisions.
 - Crown *run* (quality vectors, computed frames, charts device-aware).
 - OSC connect / discovery for Crown / Notion.
 - Phone overnight QA of keepable-capture FGS (screen-off, hours). FGS itself landed; see [../contracts/data-plane-contract.md](../contracts/data-plane-contract.md).
-- EEG artifact flag for jaw-clench / blink EMG (accel gating only catches head motion).
 
 Historical phase checklists: [../archive/feedback-todos-historical.md](../archive/feedback-todos-historical.md).
 

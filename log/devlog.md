@@ -224,3 +224,10 @@
   (an Electron Q&A; the release job already builds a best-effort AppImage, see `.ai/release.md`).
 - `.ai/TODO/README.md`: Athena optics and import/export marked landed. `.ai/feedback/todos.md`: disconnect auto-end bug
   is fixed (needs the real-device pass); dropped the done Athena and `edf_export` items.
+
+## 2026-11-19: Blink / jaw-clench reward gate (TODO was stale)
+- Already in Rust: `artifacts.rs` (`nf_dsp::GestureDetector`) feeds blink / jaw to the engine (`Dirty::Blink|Jaw`, not
+  counted, no chime); only the movement case was tested. `nf-mcp/tests/artifacts.rs` now checks per second that a
+  blink / clench second never counts or chimes. Finding: on the simulator the blink second usually trips the pad-quality
+  gate first ("no good signal on AF7, AF8"), so `dirty` stays null and the reason is the quality gate; same outcome.
+- Open: real-headset check that natural blinks / EMG are caught (sim artifacts are large).
