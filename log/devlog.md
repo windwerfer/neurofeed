@@ -194,3 +194,15 @@
   from quarantine, not from layers). `wasm` = check of the wasm crates + wasm clippy of neurofeed-egui. `ci` = fmt,
   clippy, test, layers, wasm, `cargo deny check` if installed. Replaces `crates/nf-core/tests/layers.rs`; rust-ci uses it.
 - AGENTS.md map corrected: nf-store is L1 (nf-core uses it), nf-ai L3. `cargo deny check` is green again on this tree.
+
+## 2026-11-19: panic_hunt fuzzer
+- `crates/nf-core/tests/panic_hunt.rs`: every catalog id (commands + queries) × params from its JSON Schema and catalog
+  example (each property × 23 hostile values, every enum value, property removed, all-hostile, non-object/unknown keys)
+  × 4 fixtures (fresh, connected, recording, training). Asserts no panic and "failed call ⇒ AppState unchanged"
+  (Debug compare). ~30 k calls, deterministic, 17 s debug (one test per fixture, cheap fixture restore).
+- First run: 0 panics, 1 finding: `feedback.start` with a bad `wall_clock_unix_ms` started the trainer (fit check +
+  events) before the recording rejected it. Fixed (validate first); regression test in `tests/session.rs`.
+- Perf: `Request::parse` regenerated the full schemars schema per call to list allowed keys. Now cached per id
+  (`allowed_keys`, equivalence test vs. `schema_keys`). Release, `cargo run --release -p nf-core --example parse_bench`
+  (11 × 2000 calls): before median 486.88 µs/call (463.95..589.66), after 0.45 µs (0.41..22.82, max = cache fill).
+  Every MCP / CLI / bridge call goes through it.

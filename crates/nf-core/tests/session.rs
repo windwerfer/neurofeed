@@ -179,3 +179,18 @@ fn stream_running_needs_enabled_and_transport() {
     st.lsl_transport = true;
     assert_eq!(st.running(), Some("LSL"));
 }
+
+/// Found by panic_hunt: a bad `wall_clock_unix_ms` used to start the trainer
+/// (fit check, events) before the recording rejected it.
+#[test]
+fn feedback_start_with_a_bad_wall_clock_changes_nothing() {
+    let mut s = Session::new();
+    s.call("device.connect", json!({ "id": "sim:muse_s" })).unwrap_or_default();
+    s.call("clock.advance", json!({ "seconds": 2.0 })).unwrap_or_default();
+    s.call("events.drain", json!({})).unwrap_or_default();
+    let before = format!("{:?}", s.state());
+    let err = s.call("feedback.start", json!({ "minutes": 5, "wall_clock_unix_ms": -1 }));
+    assert!(err.is_err());
+    assert_eq!(format!("{:?}", s.state()), before, "state unchanged");
+    assert_eq!(s.call("events.drain", json!({})).unwrap_or_default(), json!([]), "no events");
+}

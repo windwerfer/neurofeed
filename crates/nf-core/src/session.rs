@@ -111,6 +111,14 @@ pub enum Event {
     },
 }
 
+/// `wall_clock_unix_ms` of `recording.start` / `feedback.start`.
+fn check_wall_clock(wall_clock_unix_ms: Option<f64>) -> Result<(), CoreError> {
+    if wall_clock_unix_ms.is_some_and(|t| !t.is_finite() || t < 0.0) {
+        return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
+    }
+    Ok(())
+}
+
 /// Simulator faults (`sim.fault`).
 #[derive(Clone, Default)]
 struct Fault {
@@ -1175,9 +1183,7 @@ impl Session {
     }
 
     fn start_recording(&mut self, wall_clock_unix_ms: Option<f64>) -> Result<(), CoreError> {
-        if wall_clock_unix_ms.is_some_and(|t| !t.is_finite() || t < 0.0) {
-            return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
-        }
+        check_wall_clock(wall_clock_unix_ms)?;
         let dev = self.state.device.clone().ok_or_else(|| CoreError::Device("no device connected".into()))?;
         if crate::replay::is_replay(&dev.id) {
             return Err(CoreError::Device("a replay is not recorded again".into()));
@@ -1573,6 +1579,7 @@ impl Session {
                 fb.summary = None;
             }
             Command::FeedbackStart { minutes, wall_clock_unix_ms } => {
+                check_wall_clock(wall_clock_unix_ms)?; // before anything changes
                 let (lo, hi) = crate::feedback::MINUTES;
                 if let Some(m) = minutes {
                     if !(lo..=hi).contains(&m) {

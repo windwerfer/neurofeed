@@ -107,8 +107,10 @@ must produce an error the user or agent can act on, never a panic.
 - **Every write that matters is atomic** **(ours)**: write a temp file,
   then rename it. A recording is recoverable after a crash.
 - **Prove it.** Every crash fix includes a regression test that failed
-  before the fix. `panic_hunt` (to add) fuzzes every command with
-  adversarial params and must stay green.
+  before the fix. `panic_hunt` (`crates/nf-core/tests/panic_hunt.rs`)
+  fuzzes every command and query with adversarial params in four session
+  states (no panic; a failed call leaves the state unchanged) and must
+  stay green.
 
 ### Rules
 
@@ -285,7 +287,8 @@ cargo xtask layers
 cargo xtask wasm                  # = cargo check --target wasm32-unknown-unknown for the wasm crates, clippy for the web app
 ```
 
-If you added or changed commands, also run `panic_hunt` (to add). If you
+If you added or changed commands, `panic_hunt` covers them automatically
+(`cargo test -p nf-core --test panic_hunt`; part of `cargo test`). If you
 touched a hot path, add a benchmark and put the numbers in the devlog. If
 you changed UI, add a screenshot.
 

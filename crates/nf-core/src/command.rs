@@ -1363,6 +1363,19 @@ fn base_examples() -> Vec<Request> {
 
 /// Param names a schema accepts: its `properties`, plus those of any
 /// `oneOf` / `anyOf` / `allOf` branch (flattened tagged enums).
+/// Param keys `id` accepts, computed once per process (schema generation
+/// costs ~0.5 ms per call; `parse` runs for every MCP / CLI / bridge call).
+fn allowed_keys(id: &str) -> &'static [String] {
+    static KEYS: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
+    let all = KEYS.get_or_init(|| {
+        SPECS
+            .iter()
+            .map(|s| (s.id, input_schema(s.id).map(|v| schema_keys(&v).into_iter().map(str::to_owned).collect()).unwrap_or_default()))
+            .collect()
+    });
+    all.iter().find(|(i, _)| *i == id).map_or(&[], |(_, k)| k.as_slice())
+}
+
 fn schema_keys(schema: &Value) -> std::collections::BTreeSet<&str> {
     let mut keys: std::collections::BTreeSet<&str> =
         schema.get("properties").and_then(Value::as_object).map(|p| p.keys().map(String::as_str).collect()).unwrap_or_default();
@@ -1390,9 +1403,8 @@ impl Request {
             Value::Object(m) => m,
             _ => return Err(CoreError::InvalidArgs("params must be an object".into())),
         };
-        let schema = input_schema(id).unwrap_or_default();
-        let allowed = schema_keys(&schema);
-        if let Some(key) = map.keys().find(|k| !allowed.contains(k.as_str())) {
+        let allowed = allowed_keys(id);
+        if let Some(key) = map.keys().find(|k| !allowed.iter().any(|a| a == k.as_str())) {
             return Err(CoreError::InvalidArgs(format!("unknown param `{key}` for {id}")));
         }
         map.insert("cmd".into(), Value::String(id.to_owned()));
@@ -1436,6 +1448,17 @@ mod tests {
             }
             assert_eq!(Request::parse(&ex.id(), v), Ok(ex));
         }
+    }
+
+    #[test]
+    fn cached_keys_equal_the_schema_keys() {
+        for spec in SPECS {
+            let schema = input_schema(spec.id).unwrap_or_default();
+            let fresh: Vec<&str> = schema_keys(&schema).into_iter().collect();
+            let cached: Vec<&str> = allowed_keys(spec.id).iter().map(String::as_str).collect();
+            assert_eq!(cached, fresh, "{}", spec.id);
+        }
+        assert!(allowed_keys("nope").is_empty());
     }
 
     #[test]
