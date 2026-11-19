@@ -97,8 +97,10 @@ fn current(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         ui.horizontal(|ui| {
             ui.strong(label(d));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button(t!("device-dialog-disconnect")).clicked() {
-                    out.push(Command::DeviceDisconnect);
+                let b = ui.button(t!("device-dialog-disconnect"));
+                ui.ctx().data_mut(|m| m.insert_temp(super::session_guard::disconnect_pending_id().with("button"), b.rect));
+                if b.clicked() {
+                    super::session_guard::request_disconnect(ui.ctx(), session, out);
                 }
             });
         });

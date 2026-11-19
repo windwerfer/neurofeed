@@ -175,8 +175,13 @@ pub enum Command {
     /// Connect a device by id (`sim:muse`, `sim:crown`, ...).
     #[serde(rename = "device.connect")]
     DeviceConnect { id: String },
+    /// Disconnect the current device. During a feedback session this ends
+    /// the session first and needs `end_session: true` (the UI asks first).
     #[serde(rename = "device.disconnect")]
-    DeviceDisconnect,
+    DeviceDisconnect {
+        #[serde(default)]
+        end_session: bool,
+    },
     /// Open or close the Device dialog. Opening watches Muse BLE and Crown
     /// OSC until the dialog closes (errors show in the dialog, not here).
     #[serde(rename = "device.dialog")]
@@ -362,6 +367,10 @@ pub enum Command {
     },
     #[serde(rename = "feedback.resume")]
     FeedbackResume,
+    /// Reconnect prompt: keep waiting for the session's device (the prompt
+    /// stays closed until the link comes back).
+    #[serde(rename = "feedback.keep_waiting")]
+    FeedbackKeepWaiting,
     /// Fit check → calibration (45 good seconds, at most 60 s).
     #[serde(rename = "calibration.start")]
     CalibrationStart {
@@ -814,6 +823,13 @@ fn fb_paused(s: &AppState) -> Result<(), String> {
         _ => Err("not paused".into()),
     }
 }
+fn fb_reconnect_prompt(s: &AppState) -> Result<(), String> {
+    if s.feedback.reconnect_prompt {
+        Ok(())
+    } else {
+        Err("no reconnect prompt is open".into())
+    }
+}
 fn fb_fit(s: &AppState) -> Result<(), String> {
     if s.feedback.phase == Phase::FitCheck {
         Ok(())
@@ -912,7 +928,7 @@ pub const SPECS: &[CommandSpec] = &[
     spec("device.list", "List devices", "device", true, "Connectable devices (simulators and registered providers).", always),
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
     spec("device.scan", "Scan", "device", false, "Timed discovery (Muse BLE, Crown OSC). The Device dialog watches until it closes instead.", can_scan),
-    spec("device.disconnect", "Disconnect", "device", false, "Disconnect the current device.", needs_device),
+    spec("device.disconnect", "Disconnect", "device", false, "Disconnect the current device. During a feedback session it ends the session first and needs end_session=true.", needs_device),
     spec(
         "device.dialog",
         "Device dialog",
@@ -1115,6 +1131,14 @@ pub const SPECS: &[CommandSpec] = &[
     spec("feedback.override", "Feature override", "feedback", false, "Debug: force the feature value (null = off).", debug_on),
     spec("feedback.pause", "Pause training", "feedback", false, "Pause training.", fb_playing),
     spec("feedback.resume", "Resume training", "feedback", false, "Resume a user pause.", fb_paused),
+    spec(
+        "feedback.keep_waiting",
+        "Keep waiting",
+        "feedback",
+        false,
+        "Reconnect prompt: keep the session paused and keep waiting for its device.",
+        fb_reconnect_prompt,
+    ),
     spec("feedback.status", "Session status", "feedback", true, "Phase, fit, calibration, last second, summary.", always),
     spec("feedback.result.get", "Session results", "feedback", true, "Per-second results of the current or last session.", always),
     spec("calibration.start", "Calibrate", "feedback", false, "Start calibration (45 good s, max 60 s).", fb_fit),
@@ -1224,7 +1248,7 @@ fn base_examples() -> Vec<Request> {
         C(Command::AnalysisAckRestored),
         Q(Query::PsdAverage { window_s: Some(4.0), end_s: None, electrodes: None, max_hz: Some(60.0) }),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
-        C(Command::DeviceDisconnect),
+        C(Command::DeviceDisconnect { end_session: true }),
         C(Command::DeviceDialog { open: true }),
         C(Command::DeviceScan { seconds: Some(5.0) }),
         C(Command::SimConfigure {
@@ -1257,6 +1281,7 @@ fn base_examples() -> Vec<Request> {
         Q(Query::FeedbackNerd),
         C(Command::HistoryNotes { id: 1, notes: "felt calm".into() }),
         C(Command::FeedbackPause),
+        C(Command::FeedbackKeepWaiting),
         C(Command::FeedbackOverride { value: Some(0.4) }),
         C(Command::FeedbackResume),
         C(Command::CalibrationStart { anyway: false }),

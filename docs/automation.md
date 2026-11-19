@@ -106,6 +106,16 @@ input on stdin:
 `feedback.status` reports `phase`: `idle`, `fit_check`, `calibrating`,
 `playing` (or `paused`), then `ended`. End a `feedback.start` you began with `feedback.stop`.
 
+A session never ends by itself on a link loss
+([.ai/contracts/feedback-disconnect.md](../.ai/contracts/feedback-disconnect.md)).
+When data stops it is `paused` (reason `disconnected`) and silent, and
+auto-reconnect looks for the same device. After 15 s `feedback.status` shows
+`"reconnect_prompt": true` (with `link_lost_s`) and the event `reconnect_prompt`
+fires. Answer with `feedback.keep_waiting` or `feedback.stop`. While a session
+is open, `device.connect` accepts only the session's own device, and
+`device.disconnect` is refused unless you pass `{"end_session": true}`. That
+ends the session normally (summary, saved recording), then disconnects.
+
 Simulator faults (headless only): `sim.fault.add {"kind":"disconnect","duration_s":3}`
 returns `{"ends":3.0,"id":1}`. After that, `device.status` shows
 `"link":{"state":"lost","reason":"simulated disconnect"}`. `sim.fault.clear`

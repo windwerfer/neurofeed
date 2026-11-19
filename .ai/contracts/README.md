@@ -14,7 +14,7 @@ Athena optics stays there: [../TODO/athena-optics-contract.md](../TODO/athena-op
 | [protocols_and_features.md](protocols_and_features.md) | **Implemented** | Electrodes: Rust per-device × per-feature defaults, `DeviceConfig` role pairs, protocol overrides, gate pads |
 | [fileformat_v6.md](fileformat_v6.md) | **Implemented / LOCKED** | `.neurofeed` v6 (NFED6): unified recording+feedback metadata, container layout, computed Trust extras. Human spec: [../../README_feedback_format.md](../../README_feedback_format.md) |
 | [app-folder.md](app-folder.md) | **Implemented** | App folder, cache, AI models, export, and the save-folder move. |
-| [feedback-disconnect.md](feedback-disconnect.md) | **Frozen** | Feedback link loss pauses the session and its audio. The same device continues it. A disconnect does not end the session. Code still auto-ends; that end is retired by this contract. |
+| [feedback-disconnect.md](feedback-disconnect.md) | **Frozen** (2026-11-19) | Never auto-stop a session. User Disconnect warns and ends the session on confirm. A lost link pauses (silent), auto-reconnects the same device, and asks keep waiting / end after 15 s. |
 | [i18n.md](i18n.md) | **Implemented** | Fluent UI strings (en, de), `t!`, `settings.language` |
 | [ui-layout.md](ui-layout.md) | **Implemented** | Compact vs Regular layout, `settings.layout`, Android safe-area insets |
 | [device-autoconnect.md](device-autoconnect.md) | **Implemented** | Device dialog scans while open; background burst search reconnects only the last real device; new devices need the user; user Disconnect suspends until the next connect or restart |

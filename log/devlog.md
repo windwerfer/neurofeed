@@ -173,3 +173,16 @@
 - `apps/neurofeed-egui/build.rs` (winresource, Windows host+target only) embeds version info + icon (`assets/neurofeed.ico`).
 - README code signing policy + privacy statement; release.yml windows job signs via SignPath when configured (docs/release.md).
 - Open: `cargo deny check advisories` fails on main already (chrono unmaintained, zip advisories); not touched here.
+
+## 2026-11-19: Never auto-stop a feedback session (new feedback-disconnect contract)
+- Owner law (`.ai/contracts/feedback-disconnect.md`, decision 2026-11-19): the 10 s disconnect grace end is gone.
+  A lost link pauses (`paused:disconnected`), silences all audio incl. calibration background, freezes training and
+  calibration time, and auto-reconnect looks for the same device. After `RECONNECT_PROMPT_S` = 15 s
+  `feedback.status.reconnect_prompt` + event `reconnect_prompt`; new command `feedback.keep_waiting` (or `feedback.stop`).
+- `device.disconnect {end_session}`: refused during a session unless true; true ends the session ("device disconnected
+  by the user", recording saved) then disconnects. `device.connect` during a session only accepts the session's
+  device and reopens it in place.
+- egui `ui/session_guard.rs`: Disconnect confirmation (Cancel default) and the Device-not-found prompt (no Escape
+  close). EN/DE copy. Tests: nf-mcp `feedback.rs` (long dropout never ends, calibration waits silently), egui
+  `session_guard` click tests. Screenshot of the prompt via bridge; the confirm dialog has no screenshot (no input tool).
+- Open: no explicit `disconnect` annotation span in the recording; `sim.configure` reconnect still stops a session's recording.

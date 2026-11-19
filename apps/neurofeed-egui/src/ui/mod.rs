@@ -8,6 +8,7 @@ mod onboarding;
 pub mod overview;
 mod perf;
 mod quality;
+mod session_guard;
 mod sidebar;
 pub mod spectrum;
 pub mod theme;
@@ -120,6 +121,7 @@ fn show_safe(root: &mut egui::Ui, session: &Session, error: Option<&str>, shell:
     }
     device_dialog::show(ctx, session, &mut out);
     topbar::confirm_discard(ctx, session.state(), &mut out);
+    session_guard::show(ctx, session, &mut out);
     if !state.settings.onboarded && !shell.no_tour {
         onboarding::show(ctx, &mut out);
     }

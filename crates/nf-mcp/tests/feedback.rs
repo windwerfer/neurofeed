@@ -42,7 +42,7 @@ fn fault(s: &NfMcp, pads: &[&str], dropout: bool) {
 }
 
 #[test]
-fn full_session_calibration_adaptation_pauses_grace_summary() {
+fn full_session_calibration_adaptation_pauses_reconnect_summary() {
     let s = server();
     start_and_fit_check(&s);
     extended_calibration(&s);
@@ -125,29 +125,58 @@ fn pauses_and_dropouts(s: &NfMcp) {
     assert_eq!(status(&s)["played_s"], p0, "paused time does not count");
     run(&s, "feedback.resume", Value::Null);
 
-    // Short dropout: paused, then resumes inside the 10 s grace.
+    // Short dropout: paused, then resumes when the same device is back.
     fault(&s, &[], true);
     until(&s, "paused:disconnected", 4);
     adv(&s, 4.0);
+    assert_eq!(status(&s)["reconnect_prompt"], false, "no prompt before 15 s");
     fault(&s, &[], false);
     until(&s, "playing", 3);
-    // Long dropout: ends after the grace.
-    fault(&s, &[], true);
-    adv(&s, 14.0);
+    long_dropout_never_ends(&s);
+    // Only the user ends it: Disconnect needs end_session=true.
+    let err = fails(&s, "device.disconnect", json!({}));
+    assert!(err.contains("end_session=true"), "{err}");
+    assert_eq!(phase(&s), "playing", "a refused disconnect changes nothing");
+    run(&s, "device.disconnect", json!({ "end_session": true }));
     assert_eq!(phase(&s), "ended");
     let sum = &status(&s)["summary"];
-    assert_eq!(sum["ended_by"], "device disconnected");
+    assert_eq!(sum["ended_by"], "device disconnected by the user");
     assert!(sum["adapt_steps"].as_u64().unwrap() >= 1, "{sum}");
     assert!(sum["pauses"].as_u64().unwrap() >= 3, "{sum}");
     assert!(sum["success"].as_f64().is_some());
+}
+
+/// A link loss of any length pauses (silent) and never ends the session;
+/// after 15 s the user is asked; a different device may not join.
+fn long_dropout_never_ends(s: &NfMcp) {
+    let s = s.clone();
+    fault(&s, &[], true);
+    until(&s, "paused:disconnected", 4);
+    adv(&s, 16.0);
+    let st = status(&s);
+    assert_eq!(st["reconnect_prompt"], true, "{st}");
+    assert!(st["link_lost_s"].as_f64().unwrap() >= 15.0, "{st}");
     let ev = run(&s, "events.drain", Value::Null);
-    assert!(ev.as_array().unwrap().iter().any(|e| e["event"] == "chime"));
+    assert!(ev.as_array().unwrap().iter().any(|e| e["event"] == "reconnect_prompt"), "{ev}");
+    assert!(ev.as_array().unwrap().iter().any(|e| e["event"] == "chime"), "training chimed before the dropout");
+    let cue = &run(&s, "audio.status", Value::Null)["cue"];
+    assert_eq!((cue["background_on"].as_bool(), cue["reward_on"].as_bool()), (Some(false), Some(false)), "{cue}");
+    let err = fails(&s, "device.connect", json!({ "id": "sim:crown" }));
+    assert!(err.contains("end the session"), "{err}");
+    run(&s, "feedback.keep_waiting", Value::Null);
+    assert_eq!(status(&s)["reconnect_prompt"], false);
+    adv(&s, 120.0);
+    assert_eq!(phase(&s), "paused:disconnected", "never auto-ends");
+    assert_eq!(status(&s)["reconnect_prompt"], false, "keep waiting holds until the link is back");
+    fault(&s, &[], false);
+    until(&s, "playing", 3);
+    assert_eq!(status(&s)["link_lost_s"], Value::Null);
 }
 
 fn reuse_baseline(s: &NfMcp) {
     let s = s.clone();
     // Next session reuses the stored baseline; stop builds a summary.
-    fault(&s, &[], false);
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
     adv(&s, 2.0);
     run(&s, "feedback.start", json!({ "minutes": 1 }));
     run(&s, "calibration.reuse", Value::Null);
@@ -238,4 +267,29 @@ fn recording_carries_feedback_seconds_and_ppg_at_the_end() {
     let flags: Vec<u16> = recs[first..].iter().map(|r| if let Record::Feedback { flags, .. } = r { *flags } else { 0 }).collect();
     assert!(flags.iter().any(|x| x & f::CALIBRATING != 0));
     assert!(flags.iter().any(|x| x & f::COUNTED != 0));
+}
+
+#[test]
+fn calibration_waits_silently_through_a_long_dropout() {
+    let s = server();
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    adv(&s, 3.0);
+    run(&s, "feedback.start", json!({ "minutes": 1 }));
+    run(&s, "calibration.start", json!({ "anyway": true }));
+    adv(&s, 5.0);
+    assert_eq!(phase(&s), "calibrating");
+    fault(&s, &[], true);
+    adv(&s, 3.0); // data counts as gone after 1.5 s
+    let before = status(&s)["calibration"]["wall_s"].clone();
+    adv(&s, 40.0);
+    let st = status(&s);
+    assert_eq!(phase(&s), "calibrating", "not cancelled: {st}");
+    assert_eq!(st["reconnect_prompt"], true);
+    assert_eq!(st["calibration"]["wall_s"], before, "calibration time stops while the device is gone");
+    assert_eq!(run(&s, "audio.status", Value::Null)["cue"]["background_on"], false);
+    fault(&s, &[], false);
+    adv(&s, 3.0);
+    assert_eq!(status(&s)["reconnect_prompt"], false);
+    assert_eq!(run(&s, "audio.status", Value::Null)["cue"]["background_on"], true);
+    assert_eq!(phase(&s), "calibrating");
 }

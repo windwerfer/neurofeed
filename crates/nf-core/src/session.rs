@@ -99,6 +99,9 @@ pub enum Event {
     Chime,
     /// Play the guard warning sound.
     GuardChime,
+    /// The device has been gone for `feedback::RECONNECT_PROMPT_S` during a
+    /// session: ask the user to keep waiting or end it.
+    ReconnectPrompt,
     /// A finished recording was saved to history.
     SessionSaved {
         id: u64,
@@ -1132,6 +1135,7 @@ impl Session {
                 Change::Phase(phase) => Event::Feedback { phase },
                 Change::Chime => Event::Chime,
                 Change::GuardChime => Event::GuardChime,
+                Change::ReconnectPrompt => Event::ReconnectPrompt,
             });
         }
     }
@@ -1437,11 +1441,19 @@ impl Session {
             }
             Command::AnalysisAckRestored => self.state.analysis.restored.clear(),
             Command::DeviceConnect { id } => {
-                self.connect(&id)?;
+                self.connect_during_session(&id)?;
                 self.state.auto.suspended = false;
                 self.persist_settings();
             }
-            Command::DeviceDisconnect => {
+            Command::DeviceDisconnect { end_session } => {
+                if self.state.feedback.phase.active() {
+                    if !end_session {
+                        return Err(CoreError::InvalidArgs(
+                            "a feedback session is running; disconnecting ends it. Pass end_session=true (the UI asks first)".into(),
+                        ));
+                    }
+                    self.feedback(|t, o| t.stop("device disconnected by the user", o));
+                }
                 self.disconnect();
                 self.state.auto.suspended = true;
                 self.state.auto.stop();
@@ -1588,6 +1600,7 @@ impl Session {
                 self.state.feedback.feature_override = value;
             }
             Command::FeedbackResume => self.feedback(|t, o| t.resume(o)),
+            Command::FeedbackKeepWaiting => self.state.feedback.keep_waiting().map_err(CoreError::InvalidArgs)?,
             Command::CalibrationStart { anyway } => {
                 if !anyway && !self.state.feedback.fit_ready() {
                     let bad: Vec<String> = self.state.feedback.pads.iter().filter(|p| !p.good).map(|p| p.name.clone()).collect();
@@ -1803,6 +1816,23 @@ impl Session {
         }
     }
 
+    /// `device.connect`. While a feedback session is open only its own
+    /// device may connect, and it reopens in place so the session and its
+    /// recording continue (`.ai/contracts/feedback-disconnect.md` rules 4–5).
+    fn connect_during_session(&mut self, id: &str) -> Result<(), CoreError> {
+        let f = &self.state.feedback;
+        if !f.phase.active() {
+            return self.connect(id);
+        }
+        match f.device.as_deref() {
+            Some(d) if d == id => self.reconnect(id),
+            Some(d) => Err(CoreError::InvalidArgs(format!(
+                "a feedback session is waiting for {d}; end the session before connecting another device"
+            ))),
+            None => self.connect(id),
+        }
+    }
+
     /// Reopen the same device in place (keeps the recording and feedback
     /// session, which wait for this id), or connect it from scratch.
     fn reconnect(&mut self, id: &str) -> Result<(), CoreError> {
@@ -1898,6 +1928,8 @@ impl Session {
                     "threshold": f.threshold(),
                     "played_s": f.played_s,
                     "total_s": f.total_s(),
+                    "link_lost_s": f.link_lost_s(s.time),
+                    "reconnect_prompt": f.reconnect_prompt,
                     "last": f.last(),
                     "summary": f.summary,
                     "message": f.message,
