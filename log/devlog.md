@@ -206,3 +206,15 @@
   (`allowed_keys`, equivalence test vs. `schema_keys`). Release, `cargo run --release -p nf-core --example parse_bench`
   (11 × 2000 calls): before median 486.88 µs/call (463.95..589.66), after 0.45 µs (0.41..22.82, max = cache fill).
   Every MCP / CLI / bridge call goes through it.
+
+## 2026-11-19: Disconnect annotations; sim.configure keeps the session
+- `nf_types::Annotation {onset, duration, type}` (fileformat_v6 names). The recorder writes a `disconnect` span from the
+  last data to the first data back, by the feedback pause rule (link down or no data for `STALE_S` 1.5 s); touching
+  spans merge, non-finite times are dropped, an outage still open at stop / checkpoint closes at the recording end.
+- Stored with the session: `SessionMeta.annotations`, SQLite schema v5 `annotations_json` (migration from v1..v4),
+  IndexedDB via the meta JSON, crash-recovery doc. Exported in NFED6 metadata `annotations` and as EDF+ TAL.
+- `sim.configure` reopens a running simulator in place (`reconnect`), so a recording / feedback session continues.
+  Regression test `sim_configure_keeps_the_session_and_its_recording` failed before (recording `active: false`).
+- Tests (nf-mcp `feedback.rs`): dropout → one span (onset 10 s, 12 s), stored in `history.get`; open span closed at stop.
+- Open: EDF+ export is continuous, so a disconnect is an instant there (EDF+D starts would carry the gap); imports
+  keep their markers in `import.annotations` (not moved to the root list); no `bad_quality` / `pause` rows yet.

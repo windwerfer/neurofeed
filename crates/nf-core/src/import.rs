@@ -131,6 +131,8 @@ pub fn meta(p: &Prepared) -> nf_store::SessionMeta {
         import: serde_json::to_value(&i.provenance).ok(),
         notes: String::new(),
         context: None,
+        // Import markers stay in `import.annotations` (provenance) for now.
+        annotations: Vec::new(),
     }
 }
 

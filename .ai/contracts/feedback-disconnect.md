@@ -59,8 +59,14 @@ and resumes by itself after 2 good seconds. It never ends the session.
 
 ## Still open
 
-- The recording has no explicit `disconnect` annotation span yet; the gap is
-  visible as missing samples and as per-second feedback records with phase
-  `paused` / reason `disconnected`.
-- `sim.configure` reconnects a running simulator through a full connect,
-  which still stops a session's recording.
+- EDF+ export is continuous (the gap has no length there), so a
+  `disconnect` row is written as an instant at the EDF time where data
+  resumes. EDF+D record starts would carry the real gap.
+
+Landed 2026-11-19: a recording writes `annotations[]` `{onset, duration,
+type: "disconnect"}` from the last data to the first data back (same rule
+as the feedback pause: link down or no data for 1.5 s), closed at the end
+if the device never came back; stored with the session (SQLite v5
+`annotations_json`), in the NFED6 metadata and the crash-recovery doc.
+`sim.configure` reopens a running simulator in place, so the session and
+its recording continue.

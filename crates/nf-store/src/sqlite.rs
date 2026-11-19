@@ -18,14 +18,15 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS sessions (
     body BLOB NOT NULL,
     import_json TEXT,
     notes TEXT NOT NULL DEFAULT '',
-    context_json TEXT
+    context_json TEXT,
+    annotations_json TEXT
 );
 CREATE TABLE IF NOT EXISTS docs (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS blob_chunks (key TEXT NOT NULL, seq INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (key, seq));";
-/// Schema version; v2 added `import_json` (import provenance), v3 `docs`, v4 `notes` + `context_json`.
-const VERSION: i64 = 4;
+/// Schema version; v2 added `import_json` (import provenance), v3 `docs`, v4 `notes` + `context_json`, v5 `annotations_json`.
+const VERSION: i64 = 5;
 
-const META: &str = "id, started_unix_ms, duration_s, device_id, device_name, protocol, summary_json, eeg_samples, ppg_samples, feedback_seconds, length(body), import_json, notes, context_json";
+const META: &str = "id, started_unix_ms, duration_s, device_id, device_name, protocol, summary_json, eeg_samples, ppg_samples, feedback_seconds, length(body), import_json, notes, context_json, annotations_json";
 
 fn err(e: impl std::fmt::Display) -> StoreError {
     StoreError(e.to_string())
@@ -49,6 +50,7 @@ fn meta(r: &Row<'_>) -> rusqlite::Result<SessionMeta> {
         import: import.and_then(|s| serde_json::from_str(&s).ok()),
         notes: r.get(12)?,
         context: r.get::<_, Option<String>>(13)?.and_then(|s| serde_json::from_str(&s).ok()),
+        annotations: r.get::<_, Option<String>>(14)?.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
     })
 }
 
@@ -86,6 +88,9 @@ impl SqliteStore {
             )
             .map_err(err)?;
         }
+        if (1..5).contains(&v) {
+            conn.execute_batch("ALTER TABLE sessions ADD COLUMN annotations_json TEXT").map_err(err)?;
+        }
         conn.execute_batch(&format!("PRAGMA user_version = {VERSION}")).map_err(err)?;
         Ok(Self { conn, location })
     }
@@ -97,10 +102,11 @@ impl Store for SqliteStore {
         let summary = m.summary.as_ref().map(serde_json::Value::to_string);
         let import = m.import.as_ref().map(serde_json::Value::to_string);
         let context = m.context.as_ref().map(serde_json::Value::to_string);
+        let annotations = if m.annotations.is_empty() { None } else { Some(serde_json::to_string(&m.annotations).map_err(err)?) };
         self.conn
             .execute(
-                "INSERT INTO sessions (started_unix_ms, duration_s, device_id, device_name, protocol, summary_json, eeg_samples, ppg_samples, feedback_seconds, device_json, body, import_json, notes, context_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-                params![m.started_unix_ms, m.duration_s, m.device_id, m.device_name, m.protocol, summary, i(m.eeg_samples), i(m.ppg_samples), i(m.feedback_seconds), s.device_json, s.body, import, m.notes, context],
+                "INSERT INTO sessions (started_unix_ms, duration_s, device_id, device_name, protocol, summary_json, eeg_samples, ppg_samples, feedback_seconds, device_json, body, import_json, notes, context_json, annotations_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                params![m.started_unix_ms, m.duration_s, m.device_id, m.device_name, m.protocol, summary, i(m.eeg_samples), i(m.ppg_samples), i(m.feedback_seconds), s.device_json, s.body, import, m.notes, context, annotations],
             )
             .map_err(err)?;
         Ok(self.conn.last_insert_rowid().unsigned_abs())
@@ -115,7 +121,7 @@ impl Store for SqliteStore {
     fn get(&self, id: u64) -> Result<Option<StoredSession>> {
         self.conn
             .query_row(&format!("SELECT {META}, device_json, body FROM sessions WHERE id = ?1"), [i(id)], |r| {
-                Ok(StoredSession { meta: meta(r)?, device_json: r.get(14)?, body: r.get(15)? })
+                Ok(StoredSession { meta: meta(r)?, device_json: r.get(15)?, body: r.get(16)? })
             })
             .optional()
             .map_err(err)

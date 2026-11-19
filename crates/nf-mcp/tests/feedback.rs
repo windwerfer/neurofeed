@@ -293,3 +293,71 @@ fn calibration_waits_silently_through_a_long_dropout() {
     assert_eq!(run(&s, "audio.status", Value::Null)["cue"]["background_on"], true);
     assert_eq!(phase(&s), "calibrating");
 }
+
+/// `sim.configure` on a running simulator reopens it in place: the
+/// feedback session and its recording go on (feedback-disconnect rule 4).
+#[test]
+fn sim_configure_keeps_the_session_and_its_recording() {
+    let s = server();
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    adv(&s, 2.0);
+    run(&s, "feedback.start", json!({ "minutes": 5 }));
+    run(&s, "calibration.start", json!({ "anyway": true }));
+    until(&s, "playing", 60);
+    let before = run(&s, "recording.status", Value::Null)["recording"]["eeg_samples"].as_u64().unwrap();
+    run(&s, "sim.configure", json!({ "alpha_uv": 30.0 }));
+    adv(&s, 5.0);
+    let rec = run(&s, "recording.status", Value::Null)["recording"].clone();
+    assert_eq!(rec["active"], true, "recording survives sim.configure: {rec}");
+    assert!(rec["eeg_samples"].as_u64().unwrap() > before, "{rec}");
+    assert_eq!(phase(&s), "playing");
+}
+
+fn nfed6_annotations(s: &NfMcp) -> Vec<Value> {
+    let b64 = run(s, "recording.export", json!({ "format": "nfed6" }));
+    let c = nf_format::decode_container(&b64decode(b64["base64"].as_str().unwrap())).unwrap();
+    let meta: Value = serde_json::from_slice(&c.metadata_json).unwrap();
+    meta["annotations"].as_array().cloned().unwrap_or_default()
+}
+
+/// A dropout during a recording is one `disconnect` annotation from the
+/// last data to the first data back (seconds from the recording start).
+#[test]
+fn recording_annotates_a_dropout_as_disconnect() {
+    let s = server();
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    adv(&s, 2.0);
+    run(&s, "recording.start", Value::Null);
+    adv(&s, 10.0);
+    fault(&s, &[], true);
+    adv(&s, 12.0);
+    fault(&s, &[], false);
+    adv(&s, 5.0);
+    run(&s, "recording.stop", Value::Null);
+    let a = nfed6_annotations(&s);
+    assert_eq!(a.len(), 1, "{a:?}");
+    assert_eq!(a[0]["type"], "disconnect");
+    let (onset, dur) = (a[0]["onset"].as_f64().unwrap(), a[0]["duration"].as_f64().unwrap());
+    assert!((onset - 10.0).abs() <= 0.2, "onset at the last data: {onset}");
+    assert!((dur - 12.0).abs() <= 0.2, "duration up to the data coming back: {dur}");
+    let id = run(&s, "recording.status", Value::Null)["recording"]["saved_id"].as_u64().unwrap();
+    let saved = run(&s, "history.get", json!({ "id": id }));
+    assert_eq!(saved["meta"]["annotations"].as_array().map(Vec::len), Some(1), "stored with the session: {saved}");
+}
+
+/// Stopping while the device is still gone closes the span at the end.
+#[test]
+fn disconnect_still_open_at_stop_ends_with_the_recording() {
+    let s = server();
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    adv(&s, 2.0);
+    run(&s, "recording.start", Value::Null);
+    adv(&s, 4.0);
+    fault(&s, &[], true);
+    adv(&s, 6.0);
+    run(&s, "recording.stop", Value::Null);
+    let a = nfed6_annotations(&s);
+    assert_eq!(a.len(), 1, "{a:?}");
+    let end = a[0]["onset"].as_f64().unwrap() + a[0]["duration"].as_f64().unwrap();
+    assert!((end - 10.0).abs() <= 0.2, "closed at the recording end: {a:?}");
+}

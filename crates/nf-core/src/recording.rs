@@ -4,7 +4,7 @@
 
 use nf_format::body::BodyWriter;
 use nf_format::Record;
-use nf_types::{BandSnapshot, DeviceInfo, EegPacket, OpticsPacket, PpgPacket};
+use nf_types::{Annotation, BandSnapshot, DeviceInfo, EegPacket, OpticsPacket, PpgPacket};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +42,10 @@ pub struct Recorder {
     accel_seq: u16,
     /// Flushed body bytes already handed out by [`Recorder::checkpoint`].
     checkpointed: usize,
+    /// Closed `annotations[]` rows (onset relative to the recording start).
+    annotations: Vec<Annotation>,
+    /// Session time the link went down, while it is still down.
+    lost_since: Option<f64>,
     pub info: RecordingInfo,
 }
 
@@ -60,7 +64,41 @@ impl Recorder {
             wall_clock_unix_ms,
             saved_id: None,
         };
-        Self { device, writer: BodyWriter::new(), last_flush: now, feedback: Vec::new(), accel_seq: 0, checkpointed: 0, info }
+        Self {
+            device,
+            writer: BodyWriter::new(),
+            last_flush: now,
+            feedback: Vec::new(),
+            accel_seq: 0,
+            checkpointed: 0,
+            annotations: Vec::new(),
+            lost_since: None,
+            info,
+        }
+    }
+
+    /// Track the device: `up` false = link lost or no data. Each outage
+    /// becomes one `disconnect` annotation from `last_data` (when the data
+    /// stopped) to `now` (when it is back).
+    pub fn link(&mut self, last_data: f64, now: f64, up: bool) {
+        match (up, self.lost_since) {
+            (false, None) => self.lost_since = Some(last_data.max(self.info.started)),
+            (true, Some(t0)) => {
+                self.lost_since = None;
+                push_disconnect(&mut self.annotations, t0 - self.info.started, now - self.info.started);
+            }
+            _ => {}
+        }
+    }
+
+    /// The timeline so far; an outage still open is closed at the current
+    /// recording end (used by checkpoints and [`Recorder::finish`]).
+    pub fn annotations(&self) -> Vec<Annotation> {
+        let mut out = self.annotations.clone();
+        if let Some(t0) = self.lost_since {
+            push_disconnect(&mut out, t0 - self.info.started, self.info.duration);
+        }
+        out
     }
 
     /// Returns false once the size cap is reached (caller stops).
@@ -136,6 +174,7 @@ impl Recorder {
     }
 
     pub fn finish(self) -> Finished {
+        let annotations = self.annotations();
         let mut info = self.info;
         info.active = false;
         let mut writer = self.writer;
@@ -145,8 +184,23 @@ impl Recorder {
         }
         let body = writer.finish();
         info.bytes = body.len();
-        Finished { device: self.device, info, body }
+        Finished { device: self.device, info, body, annotations }
     }
+}
+
+/// Append a `disconnect` span `[onset, end]` (recording seconds), merged
+/// into the previous one when they touch (the timeline stays compact).
+fn push_disconnect(list: &mut Vec<Annotation>, onset: f64, end: f64) {
+    if !(onset.is_finite() && end.is_finite()) {
+        return;
+    }
+    let onset = onset.max(0.0);
+    let end = end.max(onset);
+    if let Some(last) = list.last_mut().filter(|a| a.kind == Annotation::DISCONNECT && a.onset + a.duration >= onset) {
+        last.duration = end.max(last.onset + last.duration) - last.onset;
+        return;
+    }
+    list.push(Annotation { onset, duration: end - onset, kind: Annotation::DISCONNECT.into() });
 }
 
 /// `records` as one body frame without the body header.
@@ -165,6 +219,7 @@ pub struct Finished {
     pub device: DeviceInfo,
     pub info: RecordingInfo,
     pub body: Vec<u8>,
+    pub annotations: Vec<Annotation>,
 }
 
 /// Export targets for `recording.export`.
@@ -201,6 +256,31 @@ fn edf_labels(d: &DeviceInfo, records: &[Record]) -> Vec<String> {
     d.channels.iter().chain(&d.aux_channels[..aux]).cloned().collect()
 }
 
+/// The timeline on the EDF+ (continuous) time axis. The EDF concatenates
+/// the samples, so an outage has no length there: each row becomes an
+/// instant at the EDF time where the data resumes (samples of the first
+/// electrode recorded before its onset).
+fn edf_annotations(f: &Finished, records: &[Record]) -> Vec<nf_format::edf::EdfAnnotation> {
+    let rate = f.device.sample_rate_hz;
+    if !(rate.is_finite() && rate > 0.0) {
+        return Vec::new();
+    }
+    f.annotations
+        .iter()
+        .map(|a| {
+            let at = f.info.started + a.onset;
+            let before: usize = records
+                .iter()
+                .filter_map(|r| match r {
+                    Record::Eeg { ts, electrode: 0, samples } if *ts < at => Some(samples.len()),
+                    _ => None,
+                })
+                .sum();
+            nf_format::edf::EdfAnnotation { onset_seconds: before as f64 / rate, duration_seconds: 0.0, text: a.kind.clone() }
+        })
+        .collect()
+}
+
 pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u16, u16)) -> Result<Vec<u8>, String> {
     match format {
         ExportFormat::RawBody => Ok(f.body.clone()),
@@ -213,6 +293,7 @@ pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u1
                 "eeg_samples": f.info.eeg_samples,
                 "wall_clock_unix_ms": f.info.wall_clock_unix_ms,
                 "clock": "record timestamps are session seconds; started = session time at wall_clock_unix_ms",
+                "annotations": f.annotations,
             });
             Ok(nf_format::encode_container(&nf_format::Container {
                 thumbnail: Vec::new(),
@@ -225,13 +306,14 @@ pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u1
         ExportFormat::Edf => {
             let records = nf_format::parse_body(&f.body).map_err(|e| e.0)?;
             let labels = edf_labels(&f.device, &records);
+            let annotations = edf_annotations(f, &records);
             let req = nf_format::edf::EdfRequest {
                 labels: &labels,
                 sample_rate_hz: f.device.sample_rate_hz.round() as usize,
                 start,
                 recording_id: "Startdate X X X neurofeed",
                 prefiltering: "",
-                annotations: &[],
+                annotations: &annotations,
             };
             nf_format::edf::records_to_edf(&records, &req).map_err(|e| e.0)
         }
@@ -305,6 +387,18 @@ mod tests {
         assert_eq!(civil_utc(0.0), (1970, 1, 1, 0, 0, 0));
         assert_eq!(civil_utc(951_782_400_000.0), (2000, 2, 29, 0, 0, 0));
         assert_eq!(civil_utc(1_793_267_696_000.0), (2026, 10, 29, 9, 54, 56));
+    }
+
+    #[test]
+    fn disconnect_spans_merge_when_they_touch_and_reject_hostile_times() {
+        let mut l = Vec::new();
+        push_disconnect(&mut l, 5.0, 7.0);
+        push_disconnect(&mut l, 7.0, 9.0);
+        push_disconnect(&mut l, 20.0, 21.0);
+        push_disconnect(&mut l, f64::NAN, f64::INFINITY);
+        let spans: Vec<(f64, f64)> = l.iter().map(|a| (a.onset, a.duration)).collect();
+        assert_eq!(spans, [(5.0, 4.0), (20.0, 1.0)], "non-finite span dropped");
+        assert!(l.iter().all(|a| a.kind == "disconnect"));
     }
 
     #[test]

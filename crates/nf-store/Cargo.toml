@@ -12,6 +12,7 @@ sqlite = ["dep:rusqlite"]
 indexeddb = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:web-sys"]
 
 [dependencies]
+nf-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

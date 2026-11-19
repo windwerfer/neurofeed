@@ -279,6 +279,7 @@ impl Session {
             feedback_seconds: r.info.feedback_seconds,
             protocol,
             context: Some(context),
+            annotations: r.annotations(),
         };
         let st = self.store.as_mut();
         let res = st
@@ -405,7 +406,7 @@ impl Session {
             wall_clock_unix_ms: s.meta.started_unix_ms,
             saved_id: Some(id),
         };
-        let f = Finished { device, info, body: s.body };
+        let f = Finished { device, info, body: s.body, annotations: s.meta.annotations };
         let start = f.info.wall_clock_unix_ms.map_or((1985, 1, 1, 0, 0, 0), crate::recording::civil_utc);
         export(&f, format, start).map_err(CoreError::BadRequest)
     }
@@ -489,6 +490,7 @@ impl Session {
             import: None,
             notes: String::new(),
             context: Some(self.context(trained)),
+            annotations: f.annotations.clone(),
         };
         let s = nf_store::StoredSession { meta, device_json: serde_json::to_string(&f.device).unwrap_or_default(), body: f.body.clone() };
         match self.store.insert(s) {
@@ -684,6 +686,7 @@ impl Session {
             self.route_side_streams(&packets, &optical, &accel, &athena);
             let full = self.process_eeg(&mut packets);
             self.flush_stream();
+            self.track_outage(now);
             if let Some(r) = self.live.recorder.as_mut() {
                 r.tick(now);
                 self.state.recording = Some(r.info.clone());
@@ -698,6 +701,16 @@ impl Session {
         self.ai_tick();
         self.feedback_tick(now);
         self.hint_tick(now);
+    }
+
+    /// The recording's `disconnect` spans follow the same rule as the
+    /// feedback pause: the link is down, or no data for [`STALE_S`]. The
+    /// span starts at the last data.
+    fn track_outage(&mut self, now: f64) {
+        let Some(r) = self.live.recorder.as_mut() else { return };
+        let streaming = matches!(self.state.link, Some(LinkState::Streaming));
+        let up = streaming && self.live.last_data.is_some_and(|t| now - t <= STALE_S);
+        r.link(self.live.last_data.unwrap_or(now).min(now), now, up);
     }
 
     /// Contact-quality hint, once per second (suggests; never excludes).
@@ -1529,9 +1542,11 @@ impl Session {
                 c.hr_bpm = hr_bpm.unwrap_or(c.hr_bpm);
                 c.spo2_pct = spo2_pct.unwrap_or(c.spo2_pct);
                 c.hrv_ms = hrv_ms.unwrap_or(c.hrv_ms);
+                // Reopen in place: a running recording / feedback session continues
+                // (`.ai/contracts/feedback-disconnect.md`).
                 let reconnect = self.state.device.as_ref().filter(|d| d.simulated).map(|d| d.id.clone());
                 if let Some(id) = reconnect {
-                    self.connect(&id)?;
+                    self.reconnect(&id)?;
                 }
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
