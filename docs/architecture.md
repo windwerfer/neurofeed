@@ -20,4 +20,4 @@ Plan and phases: `design-mcp-core.md`. This section overrides anything below.
 Each egui frame: `session.tick(ctx time)`, draw from `session.state()`,
 apply returned `Command`s via `session.execute`. The MCP server does the same
 per tool call (wall clock) or only on `clock_advance` (`--manual-clock`).
-Layering is checked by `crates/nf-core/tests/layers.rs` until `xtask` exists.
+Layering is checked by `cargo xtask layers` (table in `xtask/src/layers.rs`).

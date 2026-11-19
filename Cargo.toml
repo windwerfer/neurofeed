@@ -1,7 +1,7 @@
 # NeuroFeed Rust workspace (repo root).
 [workspace]
 resolver = "2"
-members = ["crates/*", "apps/*"]
+members = ["crates/*", "apps/*", "xtask"]
 # Patched upstream (vendor) and the Python gym are not workspace crates.
 exclude = ["vendor", "feedback_gym", ".local/*"]
 

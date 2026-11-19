@@ -186,3 +186,11 @@
   close). EN/DE copy. Tests: nf-mcp `feedback.rs` (long dropout never ends, calibration waits silently), egui
   `session_guard` click tests. Screenshot of the prompt via bridge; the confirm dialog has no screenshot (no input tool).
 - Open: no explicit `disconnect` annotation span in the recording; `sim.configure` reconnect still stops a session's recording.
+
+## 2026-11-19: cargo xtask (ci | layers | wasm)
+- New `xtask` crate + `.cargo/config.toml` alias. `layers` reads `cargo metadata` edges: every crate registered in
+  `xtask/src/layers.rs` (L0..L4, App, wasm flag), no edge to a higher layer (same layer allowed), egui/eframe/winit/rfd
+  apps only, tokio nf-device/nf-mcp, btleplug/muse-rs/rosc nf-device, rmcp nf-mcp, candle/reve nf-ai (dev-deps exempt
+  from quarantine, not from layers). `wasm` = check of the wasm crates + wasm clippy of neurofeed-egui. `ci` = fmt,
+  clippy, test, layers, wasm, `cargo deny check` if installed. Replaces `crates/nf-core/tests/layers.rs`; rust-ci uses it.
+- AGENTS.md map corrected: nf-store is L1 (nf-core uses it), nf-ai L3. `cargo deny check` is green again on this tree.
