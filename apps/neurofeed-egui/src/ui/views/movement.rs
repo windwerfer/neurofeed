@@ -363,4 +363,22 @@ mod tests {
             .collect();
         assert!(texts.contains(&t!("movement-no-device-connected-use-connect")), "{texts:?}");
     }
+
+    /// Axis labels are always `m:ss` (never `0.05`), in every layout; only the
+    /// tick spacing differs with the width (5 s regular, 10 s compact).
+    #[test]
+    fn time_axis_labels_are_m_ss_in_every_layout() {
+        let is_mss = |t: &str| {
+            t.split_once(':').is_some_and(|(m, s)| !m.is_empty() && s.len() == 2 && m.bytes().chain(s.bytes()).all(|b| b.is_ascii_digit()))
+        };
+        for (layout, size) in [("regular", Vec2::new(1200.0, 800.0)), ("compact", Vec2::new(400.0, 850.0))] {
+            let texts = render(layout, size, &[]);
+            let axis: Vec<&String> = texts.iter().filter(|t| t.contains(':') && !t.contains(' ')).collect();
+            assert!(axis.len() >= 3, "{layout}: {texts:?}");
+            assert!(axis.iter().all(|t| is_mss(t)), "{layout}: {axis:?}");
+            assert!(!texts.iter().any(|t| t.len() <= 4 && t.starts_with("0.")), "{layout}: no 0.05-style labels: {texts:?}");
+        }
+        assert_eq!(nf_core::rawtrace::elapsed_label(5.0, 5.0), "0:05");
+        assert_eq!(nf_core::rawtrace::elapsed_label(125.0, 5.0), "2:05");
+    }
 }
