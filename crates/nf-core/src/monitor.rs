@@ -35,6 +35,7 @@ pub enum MonitorId {
     SpectrogramOverview,
     Optics,
     OpticsOverview,
+    MovementOverview,
 }
 
 /// Window presets and zoom limits of one monitor (seconds).
@@ -47,7 +48,7 @@ pub struct WindowSpec {
 }
 
 impl MonitorId {
-    pub const ALL: [MonitorId; 15] = [
+    pub const ALL: [MonitorId; 16] = [
         MonitorId::Bands,
         MonitorId::RawEeg,
         MonitorId::Spectrogram,
@@ -63,11 +64,19 @@ impl MonitorId {
         MonitorId::SpectrogramOverview,
         MonitorId::Optics,
         MonitorId::OpticsOverview,
+        MonitorId::MovementOverview,
     ];
 
     /// Views that can show an overview timeline, with its viewport.
-    pub const WITH_OVERVIEW: [MonitorId; 6] =
-        [MonitorId::Bands, MonitorId::RawEeg, MonitorId::Histogram, MonitorId::Psd, MonitorId::Spectrogram, MonitorId::Optics];
+    pub const WITH_OVERVIEW: [MonitorId; 7] = [
+        MonitorId::Bands,
+        MonitorId::RawEeg,
+        MonitorId::Histogram,
+        MonitorId::Psd,
+        MonitorId::Spectrogram,
+        MonitorId::Optics,
+        MonitorId::Movement,
+    ];
 
     /// The overview timeline viewport of a view (`None`: no overview).
     pub fn overview(self) -> Option<MonitorId> {
@@ -75,6 +84,7 @@ impl MonitorId {
             MonitorId::Bands => Some(MonitorId::BandsOverview),
             MonitorId::RawEeg => Some(MonitorId::RawOverview),
             MonitorId::Histogram => Some(MonitorId::HistogramOverview),
+            MonitorId::Movement => Some(MonitorId::MovementOverview),
             MonitorId::Psd => Some(MonitorId::PsdStrip),
             MonitorId::Spectrogram => Some(MonitorId::SpectrogramOverview),
             // The HR+SpO2 timeline is the waveform detail's overview: the
@@ -111,7 +121,8 @@ impl MonitorId {
                 WindowSpec { presets: &[60.0, 120.0, 300.0, 600.0, 1800.0, 3600.0], default_s: 300.0, min_s: 60.0, max_s: 3600.0 }
             }
             MonitorId::HeartDetail => WindowSpec { presets: &[5.0, 10.0, 20.0, 30.0, 60.0], default_s: 10.0, min_s: 2.0, max_s: 60.0 },
-            MonitorId::Movement => WindowSpec { presets: &[15.0, 30.0, 60.0], default_s: 30.0, min_s: 5.0, max_s: 60.0 },
+            // Like Raw EEG, 5 min of detail is kept (`side::ACCEL_S`).
+            MonitorId::Movement => WindowSpec { presets: &[15.0, 30.0, 60.0, 120.0, 300.0], default_s: 30.0, min_s: 5.0, max_s: 300.0 },
             // Flutter `histogramPsdWindowOptions` / `psdDefaultWindowSeconds`.
             MonitorId::Psd => WindowSpec { presets: &[2.0, 4.0, 8.0], default_s: 4.0, min_s: 2.0, max_s: 8.0 },
             MonitorId::Histogram => WindowSpec { presets: &[2.0, 4.0, 8.0], default_s: 4.0, min_s: 2.0, max_s: 8.0 },
@@ -120,7 +131,8 @@ impl MonitorId {
             | MonitorId::RawOverview
             | MonitorId::HistogramOverview
             | MonitorId::SpectrogramOverview
-            | MonitorId::OpticsOverview => WindowSpec {
+            | MonitorId::OpticsOverview
+            | MonitorId::MovementOverview => WindowSpec {
                 presets: &[30.0, 60.0, 90.0, 120.0, 300.0, 600.0, 1800.0, 3600.0],
                 default_s: 90.0,
                 min_s: 10.0,
@@ -138,7 +150,7 @@ impl MonitorId {
             MonitorId::Spectrogram => crate::signal::SPEC_HOP_S * crate::signal::SPEC_COLUMNS as f64,
             MonitorId::HeartOverview => crate::optics::HISTORY_S,
             MonitorId::HeartDetail => crate::optics::PPG_DETAIL_S,
-            MonitorId::Movement => crate::side::SIDE_S,
+            MonitorId::Movement => crate::side::ACCEL_S,
             MonitorId::Psd => crate::signal::BUFFER_S,
             MonitorId::Histogram => crate::signal::BUFFER_S,
             MonitorId::PsdStrip
@@ -146,7 +158,8 @@ impl MonitorId {
             | MonitorId::RawOverview
             | MonitorId::HistogramOverview
             | MonitorId::SpectrogramOverview
-            | MonitorId::OpticsOverview => crate::state::BandHistory::SECONDS,
+            | MonitorId::OpticsOverview
+            | MonitorId::MovementOverview => crate::state::BandHistory::SECONDS,
         }
     }
 
@@ -167,6 +180,7 @@ impl MonitorId {
             MonitorId::SpectrogramOverview => "spectrogram_overview",
             MonitorId::Optics => "optics",
             MonitorId::OpticsOverview => "optics_overview",
+            MonitorId::MovementOverview => "movement_overview",
         }
     }
 }
@@ -420,6 +434,95 @@ impl OpticsDisplay {
     }
 }
 
+/// A Movement trace: one accelerometer axis or the dynamic part of |a|.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MoveTrace {
+    X,
+    Y,
+    Z,
+    /// |a| − 1 g: what the head moves, gravity removed.
+    Magnitude,
+}
+
+impl MoveTrace {
+    pub const ALL: [MoveTrace; 4] = [MoveTrace::X, MoveTrace::Y, MoveTrace::Z, MoveTrace::Magnitude];
+
+    /// Name shown in the UI (and the card title).
+    pub fn label(self) -> &'static str {
+        match self {
+            MoveTrace::X => "x",
+            MoveTrace::Y => "y",
+            MoveTrace::Z => "z",
+            MoveTrace::Magnitude => "|a| − 1 g",
+        }
+    }
+
+    /// The trace's value for one accelerometer sample (g); NaN/inf → 0.
+    pub fn value(self, a: [f32; 3]) -> f32 {
+        let v = match self {
+            MoveTrace::X => a[0],
+            MoveTrace::Y => a[1],
+            MoveTrace::Z => a[2],
+            MoveTrace::Magnitude => (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt() - 1.0,
+        };
+        if v.is_finite() {
+            v
+        } else {
+            0.0
+        }
+    }
+}
+
+/// Movement Y range (± g around zero; `monitor.movement {"range_g"}`, saved).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+pub enum MoveRange {
+    #[serde(rename = "0.5")]
+    G0_5,
+    #[default]
+    #[serde(rename = "1.5")]
+    G1_5,
+    #[serde(rename = "3")]
+    G3,
+    #[serde(rename = "6")]
+    G6,
+}
+
+impl MoveRange {
+    pub const ALL: [MoveRange; 4] = [MoveRange::G0_5, MoveRange::G1_5, MoveRange::G3, MoveRange::G6];
+
+    pub fn half_g(self) -> f32 {
+        match self {
+            MoveRange::G0_5 => 0.5,
+            MoveRange::G1_5 => 1.5,
+            MoveRange::G3 => 3.0,
+            MoveRange::G6 => 6.0,
+        }
+    }
+}
+
+/// What the Movement monitor shows: the range persists, the trace choice
+/// (empty = all) lasts for the session.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct MovementDisplay {
+    #[serde(default)]
+    pub traces: Vec<MoveTrace>,
+    #[serde(default)]
+    pub range: MoveRange,
+}
+
+impl MovementDisplay {
+    /// Traces shown, in fixed order (all when none chosen).
+    pub fn shown(&self) -> Vec<MoveTrace> {
+        let v: Vec<MoveTrace> = MoveTrace::ALL.into_iter().filter(|t| self.traces.contains(t)).collect();
+        if v.is_empty() {
+            MoveTrace::ALL.to_vec()
+        } else {
+            v
+        }
+    }
+}
+
 /// What the Bands monitor shows (also the electrode choice of later
 /// averaged monitors).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -550,6 +653,7 @@ pub struct Monitors {
     pub bands: BandsDisplay,
     pub raw: RawDisplay,
     pub optics: OpticsDisplay,
+    pub movement: MovementDisplay,
     pub psd: PsdDisplay,
     pub histogram: HistogramDisplay,
     pub spectrogram: SpectrogramDisplay,

@@ -4,8 +4,11 @@
 use nf_types::{AccelPacket, DeviceInfo, EegPacket};
 use std::collections::VecDeque;
 
-/// Seconds kept for AUX and accelerometer traces.
+/// Seconds kept for AUX traces.
 pub const SIDE_S: f64 = 30.0;
+/// Seconds of accelerometer kept (the same 5 min as the raw EEG ring;
+/// ~52 Hz × 5 min × 16 B ≈ 250 KB).
+pub const ACCEL_S: f64 = 300.0;
 
 #[derive(Debug, Clone, Default)]
 pub struct Side {
@@ -57,7 +60,7 @@ impl Side {
         for (i, s) in p.samples.iter().enumerate() {
             self.accel.push_back((p.time - (n - 1 - i) as f64 / rate, *s));
         }
-        let cap = (SIDE_S * rate) as usize;
+        let cap = (ACCEL_S * rate) as usize;
         let over = self.accel.len().saturating_sub(cap);
         self.accel.drain(..over);
     }

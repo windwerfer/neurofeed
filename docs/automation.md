@@ -233,6 +233,8 @@ neurofeed-cli run monitor.display '{"electrodes":["AF7","AF8"],"hidden_bands":["
 neurofeed-cli run scale.set '{"scale":"relative"}'                       # dB | % (saved)
 neurofeed-cli run monitor.raw '{"mode":"scroll","scale":"100"}'           # Raw EEG: sweep|scroll, auto|50|100|200 µV (saved)
 neurofeed-cli run monitor.raw '{"electrodes":["TP9","TP10"]}'             # shown panes (empty = all; session only)
+neurofeed-cli run monitor.movement '{"traces":["magnitude"],"range_g":"3"}'  # Movement: x|y|z|magnitude (empty = all; session only), ±0.5|1.5|3|6 g (saved)
+neurofeed-cli run monitor.overview '{"monitor":"movement","on":true}'      # Movement minimap (off by default, saved)
 ```
 
 PSD (display only; analysis exclusions still apply):
@@ -296,8 +298,8 @@ scored, the model's channel schema never changes). Raw endpoints: `raw.get`,
 recordings/exports, LSL/OSC streaming: unchanged.
 
 Monitor ids are `bands`, `raw_eeg`, `spectrogram`, `heart_overview`, `heart_detail`,
-`movement`, `psd` (epoch), `psd_strip` (its overview), `histogram` (epoch) and the
-overviews `"bands_overview"`, `raw_overview`, `histogram_overview`, `spectrogram_overview`. Bands and Raw EEG draw from this viewport (Raw EEG: the 5 min signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
+`movement` (the 5 min accelerometer ring, 15 s … 5 min windows), `psd` (epoch), `psd_strip` (its overview), `histogram` (epoch) and the
+overviews `"bands_overview"`, `raw_overview`, `movement_overview`, `histogram_overview`, `spectrogram_overview`. Bands and Raw EEG draw from this viewport (Raw EEG: the 5 min signal ring; sweep while following, a time-ordered hold in Inspect) (the other screens follow
 in later milestones). Zoom keeps the time under `focal` (0 = left edge, 1 = right
 edge) in place. Zooming at the right edge keeps Follow, while any other focal point
 enters Inspect. The window is clamped to the monitor's range (Bands 5 s to 30 min)

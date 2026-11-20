@@ -365,3 +365,8 @@ the cursor) instead of re-anchoring the newest sample at the right edge.
 - Limits: 4 running jobs, one AI job, the last 8 finished jobs kept. Export
   encoding (EDF, NFED6) and the PDF report are one step each, so they cancel
   only between steps. Base64 output and import banding are chunked.
+
+## 2026-11-20 Movement on the shared monitor chrome
+- Movement uses the core viewport `movement` (presets 15 s, 30 s, 1, 2, 5 min; default 30 s) and the shared toolbar, input, overview and trace code; the view-local viewport is removed. The accelerometer ring grows from 30 s to 5 min (`side::ACCEL_S`, like the raw EEG ring); the window lengths of the monitor follow the retained history.
+- New command `monitor.movement {traces?, range_g?}`: `traces` (x, y, z, magnitude; empty = all, session only), `range_g` (`0.5` | `1.5` | `3` | `6`, saved as `movement_range`). `monitor.get` reports `movement`. Movement joins the views with an overview (`movement_overview`, **off by default**, owner brief; only explicit toggles are saved).
+- Ambiguity in Flutter: its pane drew only |a| (0–1.5 g, orange). We keep all four traces (x, y, z, |a| − 1 g) because the Rust view already had them, and keep the Flutter colour for the dynamic part.

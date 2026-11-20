@@ -551,7 +551,7 @@ mod tests {
             s.state().monitors.overview_on(nf_core::monitor::MonitorId::ALL.into_iter().find(|m| m.name() == view).unwrap())
         };
         assert!(on("psd") && on("spectrogram") && on("histogram"));
-        assert!(!on("bands") && !on("raw_eeg"));
+        assert!(!on("bands") && !on("raw_eeg") && !on("movement"));
     }
 
     #[test]
