@@ -497,6 +497,12 @@ pub trait AiRuntime: Send {
     /// Folder holding the model files (for the model card).
     fn folder(&self, model: AiModel) -> Option<String>;
     fn install(&mut self, model: AiModel, source: AiSource) -> Result<(), String>;
+    /// Stop a running install: partial files are deleted, a previously
+    /// installed copy stays, and the state goes back to `Installed` or
+    /// `Missing`. Runtimes that cannot stop one refuse.
+    fn cancel_install(&mut self, model: AiModel) -> Result<(), String> {
+        Err(format!("this runtime cannot cancel installing {}", model.label()))
+    }
     /// Delete the downloaded / imported weights.
     fn remove(&mut self, model: AiModel) -> Result<(), String>;
     /// Load `model` (unloads any other: one model at a time).

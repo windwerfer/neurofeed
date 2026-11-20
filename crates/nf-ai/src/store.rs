@@ -10,6 +10,10 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 const STAMP: &str = "verified.sha256";
+/// Error text of an install stopped through its progress callback.
+pub const CANCELLED: &str = "install cancelled";
+/// Install progress callback: 0..1 or None (size unknown); `false` stops.
+pub type Progress<'a> = dyn FnMut(Option<f64>) -> bool + 'a;
 
 #[derive(Debug, Clone)]
 pub struct ModelStore {
@@ -47,8 +51,11 @@ impl ModelStore {
         self.weights(m).is_file() && fs::read_to_string(self.dir(m).join(STAMP)).is_ok_and(|s| s.trim() == m.sha256())
     }
 
-    /// Copy (hashing) `src` into the model folder. `progress` gets 0..1.
-    pub fn import(&self, m: AiModel, src: &Path, progress: &mut dyn FnMut(f64)) -> anyhow::Result<()> {
+    /// Copy (hashing) `src` into the model folder. `progress` gets 0..1
+    /// (None while the size is unknown) after every chunk; it returns
+    /// `false` to stop ([`CANCELLED`]): the partial file is deleted and an
+    /// earlier installed copy stays.
+    pub fn import(&self, m: AiModel, src: &Path, progress: &mut Progress<'_>) -> anyhow::Result<()> {
         let f = fs::File::open(src).with_context(|| format!("open {}", src.display()))?;
         let len = f.metadata().map(|md| md.len()).ok();
         self.write_verified(m, f, len, progress)
@@ -56,14 +63,14 @@ impl ModelStore {
 
     /// Download from the model's public URL.
     #[cfg(feature = "download")]
-    pub fn download(&self, m: AiModel, progress: &mut dyn FnMut(f64)) -> anyhow::Result<()> {
+    pub fn download(&self, m: AiModel, progress: &mut Progress<'_>) -> anyhow::Result<()> {
         let url = m.download_url().with_context(|| format!("{} is gated: download it in the browser and import the file", m.label()))?;
         let resp = ureq::get(url).call().with_context(|| format!("download {url}"))?;
         let len = resp.headers().get("content-length").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok());
         self.write_verified(m, resp.into_body().into_reader(), len, progress)
     }
 
-    fn write_verified(&self, m: AiModel, mut src: impl Read, len: Option<u64>, progress: &mut dyn FnMut(f64)) -> anyhow::Result<()> {
+    fn write_verified(&self, m: AiModel, mut src: impl Read, len: Option<u64>, progress: &mut Progress<'_>) -> anyhow::Result<()> {
         let dir = self.dir(m);
         fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
         let part = dir.join(format!("{}.part", m.weights_file()));
@@ -77,8 +84,10 @@ impl ModelStore {
             hasher.update(&buf[..n]);
             out.write_all(&buf[..n])?;
             done += n as u64;
-            if let Some(l) = len.filter(|l| *l > 0) {
-                progress((done as f64 / l as f64).min(1.0));
+            if !progress(len.filter(|l| *l > 0).map(|l| (done as f64 / l as f64).min(1.0))) {
+                drop(out);
+                let _ = fs::remove_file(&part);
+                bail!(CANCELLED);
             }
         }
         out.flush()?;
@@ -117,10 +126,33 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(&src, b"not a model").unwrap();
         let s = ModelStore::new(root.join("models"));
-        let e = s.import(AiModel::CbramodAVig, &src, &mut |_| {}).unwrap_err();
+        let e = s.import(AiModel::CbramodAVig, &src, &mut |_| true).unwrap_err();
         assert!(e.to_string().contains("checksum"));
         assert!(!s.installed(AiModel::CbramodAVig));
         assert!(!s.weights(AiModel::CbramodAVig).exists());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn stopped_install_deletes_the_part_file() {
+        let root = std::env::temp_dir().join(format!("nf-ai-stop-{}", std::process::id()));
+        let src = root.join("x.pth");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&src, vec![7u8; 200_000]).unwrap();
+        let s = ModelStore::new(root.join("models"));
+        let mut seen = Vec::new();
+        let e = s
+            .import(AiModel::CbramodAVig, &src, &mut |p| {
+                seen.push(p);
+                seen.len() < 2
+            })
+            .unwrap_err();
+        assert_eq!(e.to_string(), CANCELLED);
+        assert_eq!(seen.len(), 2, "stops after the chunk that said stop");
+        assert!(seen[0].is_some_and(|p| p > 0.0 && p < 1.0), "{seen:?}");
+        let m = AiModel::CbramodAVig;
+        assert!(!s.installed(m));
+        assert!(!s.dir(m).join(format!("{}.part", m.weights_file())).exists(), "partial file removed");
         fs::remove_dir_all(&root).unwrap();
     }
 }

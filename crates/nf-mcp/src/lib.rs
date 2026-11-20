@@ -10,6 +10,8 @@
 #![forbid(unsafe_code)]
 
 pub mod bridge;
+pub mod jobs;
+pub use jobs::ThreadRunner;
 
 use nf_core::{CoreError, Session};
 #[cfg(feature = "server")]

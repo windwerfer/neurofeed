@@ -92,7 +92,9 @@ This section is only the why.
   default. No MCP on web or Android.
 - Not done yet: output schemas in `command_describe`, a file allow-list for
   `path` arguments (today `recording_export` / `screenshot` write wherever
-  the caller points), a widget-setting tool (ui_set), resources, progress/cancel for long jobs.
+  the caller points), a widget-setting tool (ui_set), resources. Long jobs
+  have progress and cancel through commands (`job.start`, `job.status`,
+  `job.cancel`; decision 2026-11-20), not MCP progress notifications.
 
 ## 5. Simulator design (nf-sim)
 

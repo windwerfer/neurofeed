@@ -213,6 +213,10 @@ async fn build(o: &Opts) -> Result<NfMcp, String> {
     session.set_stream_sink(Box::new(nf_device::UdpSink::new()));
     session.set_stream_outlets(Box::new(nf_device::LslOutlets::new()));
     session.set_ai_runtime(Box::new(nf_ai::NativeAi::with_default_root()));
+    if !o.manual {
+        // Wall clock: jobs run on threads. Manual: stepped by clock.advance (deterministic).
+        session.set_job_runner(Box::new(nf_mcp::ThreadRunner));
+    }
     let server = NfMcp::new(session, clock);
     if let Some(id) = &o.device {
         connect(&server, id).await?;

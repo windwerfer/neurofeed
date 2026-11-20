@@ -122,6 +122,54 @@ returns `{"ends":3.0,"id":1}`. After that, `device.status` shows
 removes all faults, and `sim.fault` lists them. The kinds are `disconnect`,
 `movement`, `blink`, `clench`, `noise`, `spikes`, `glitch` and `out_of_range`.
 
+### Long jobs: progress and cancel
+
+`job.start {"command", "params"}` runs `history.import`, `history.export`,
+`recording.export`, `ai.install` or `ai.load` in the background. The inner
+`params` are exactly those of `command_run`; they are parsed and the inner
+command's `enabled` check runs up front, so a refusal starts nothing. The
+reply is the job: `{id, command, label, state, progress, started_s,
+finished_s, error}`. `state` is `running`, `done`, `failed` or `cancelled`;
+`progress` is 0..1 (null for `ai.load`, which reports no progress).
+
+- `job.status {"id"}` returns `{job, result}`. Once the job is `done`,
+  `result` is the wrapped command's reply, the same as its `command_run`.
+  `job.status` without `id` lists every job, without results. The last 8
+  finished jobs are kept.
+- `job.cancel {"id"}` stops a running job. Nothing is saved or changed:
+  an import is stored only when its job finishes, and a cancelled AI install
+  deletes its partial file and keeps an earlier installed copy. Cancelling a
+  finished or unknown job is an error.
+- Events: `job_started`, `job_progress` (each further tenth), `job_finished`
+  (with `state`, and `error` if it failed).
+- At most 4 jobs run at once, and only one AI job. `job.start` and
+  `job.cancel` are refused inside `command_batch`.
+- Who does the work: with `--manual-clock` the session steps each job on
+  every 0.1 s of `clock.advance`, so runs are deterministic. With the wall
+  clock (and in the desktop app) jobs run on worker threads and ticks only
+  collect the result. AI install and load always run in the model runtime.
+
+Verified (`neurofeed-cli --no-hardware --manual-clock serve`, after 120 s of
+recording; base64 shortened):
+
+```text
+{"id":4,"method":"job.start","params":{"command":"recording.export","params":{"format":"edf"}}}
+{"id":5,"method":"clock_advance","params":{"seconds":0.1}}
+{"id":6,"method":"job.status","params":{"id":1}}
+{"id":7,"method":"clock_advance","params":{"seconds":0.1}}
+{"id":8,"method":"job.status","params":{"id":1}}
+{"id":9,"method":"job.start","params":{"command":"view.set","params":{"view":"psd"}}}
+{"id":10,"method":"job.cancel","params":{"id":1}}
+
+{"id":4,"ok":true,"result":{"command":"recording.export","error":null,"finished_s":null,"id":1,"label":"Export recording","progress":0.0,"started_s":120.0,"state":"running"}}
+{"id":5,"ok":true,"result":{"time":120.1}}
+{"id":6,"ok":true,"result":{"job":{...,"progress":0.5,"state":"running"},"result":null}}
+{"id":7,"ok":true,"result":{"time":120.2}}
+{"id":8,"ok":true,"result":{"job":{...,"progress":1.0,"state":"done"},"result":{"base64":"MCAg...","bytes":...,"extension":"edf","format":"edf"}}}
+{"error":"invalid arguments: `view.set` cannot run as a job; job commands: history.import, history.export, recording.export, ai.install, ai.load","id":9,"invalid":true,"ok":false}
+{"error":"invalid arguments: job 1 already finished (done)","id":10,"invalid":true,"ok":false}
+```
+
 ## The live app (`--bridge`)
 
 1. Start the app with the bridge on: `NF_BRIDGE=1 target/release/neurofeed-egui`,

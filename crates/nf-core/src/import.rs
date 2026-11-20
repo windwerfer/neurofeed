@@ -65,41 +65,76 @@ impl Prepared {
 }
 
 pub fn prepare(bytes: &[u8], file_name: &str, utc_offset_minutes: i32, mains: MainsMode) -> Result<Prepared, CoreError> {
+    let mut b = Bander::new(parse(bytes, file_name, utc_offset_minutes)?, mains);
+    while !b.step(usize::MAX) {}
+    Ok(b.finish())
+}
+
+/// Size check + `nf_import` parse (no bands yet).
+pub fn parse(bytes: &[u8], file_name: &str, utc_offset_minutes: i32) -> Result<Imported, CoreError> {
     if bytes.len() > MAX_IMPORT_BYTES {
         return Err(CoreError::InvalidArgs(format!("file is larger than {} MB", MAX_IMPORT_BYTES >> 20)));
     }
-    let mut imported =
-        nf_import::import(bytes, Options { file_name, utc_offset_minutes }).map_err(|e| CoreError::BadRequest(e.to_string()))?;
-    if imported.needs_bands {
-        add_bands(&mut imported, mains);
-    }
-    let body = write_body(&imported.records);
-    Ok(Prepared { imported, body })
+    nf_import::import(bytes, Options { file_name, utc_offset_minutes }).map_err(|e| CoreError::BadRequest(e.to_string()))
 }
 
-/// Replay EEG through the live pipeline; bands land after the packet that
-/// completed them, as in a live recording.
-fn add_bands(i: &mut Imported, mains: MainsMode) {
-    let mut sig = Signal::new(&i.device, mains);
-    let mut out = Vec::with_capacity(i.records.len() + i.records.len() / 4);
-    for r in i.records.drain(..) {
-        let snap = match &r {
-            Record::Eeg { ts, electrode, samples } => {
-                sig.push(&EegPacket { time: *ts, electrode: u16::try_from(*electrode).unwrap_or(u16::MAX), samples: samples.clone() })
-            }
-            _ => None,
-        };
-        out.push(r);
-        if let Some(s) = snap {
-            out.extend(s.powers.iter().enumerate().map(|(ch, b)| Record::Bands {
-                ts: s.time,
-                electrode: i16::try_from(ch).unwrap_or(i16::MAX),
-                bands: *b,
-            }));
-        }
+/// Replays EEG through the live pipeline in steps (bands land after the
+/// packet that completed them, as in a live recording), then writes the
+/// body. `prepare` runs it in one go; an import job one step at a time.
+pub struct Bander {
+    imported: Imported,
+    input: std::vec::IntoIter<Record>,
+    total: usize,
+    out: Vec<Record>,
+    sig: Option<Signal>,
+}
+
+impl Bander {
+    pub fn new(mut imported: Imported, mains: MainsMode) -> Self {
+        let records = std::mem::take(&mut imported.records);
+        let total = records.len();
+        let sig = imported.needs_bands.then(|| Signal::new(&imported.device, mains));
+        let cap = if sig.is_some() { total.saturating_add(total / 4) } else { total };
+        Self { imported, input: records.into_iter(), total, out: Vec::with_capacity(cap), sig }
     }
-    i.records = out;
-    i.needs_bands = false;
+
+    /// Process up to `n` records; `true` once all are done.
+    pub fn step(&mut self, n: usize) -> bool {
+        for r in self.input.by_ref().take(n) {
+            let snap = match (&r, self.sig.as_mut()) {
+                (Record::Eeg { ts, electrode, samples }, Some(sig)) => {
+                    sig.push(&EegPacket { time: *ts, electrode: u16::try_from(*electrode).unwrap_or(u16::MAX), samples: samples.clone() })
+                }
+                _ => None,
+            };
+            self.out.push(r);
+            if let Some(s) = snap {
+                self.out.extend(s.powers.iter().enumerate().map(|(ch, b)| Record::Bands {
+                    ts: s.time,
+                    electrode: i16::try_from(ch).unwrap_or(i16::MAX),
+                    bands: *b,
+                }));
+            }
+        }
+        self.input.len() == 0
+    }
+
+    /// Share of records processed, 0..1.
+    pub fn fraction(&self) -> f64 {
+        if self.total == 0 {
+            return 1.0;
+        }
+        (self.total - self.input.len()) as f64 / self.total as f64
+    }
+
+    /// Write the body (call after `step` returned `true`).
+    pub fn finish(mut self) -> Prepared {
+        self.out.extend(self.input.by_ref());
+        self.imported.records = self.out;
+        self.imported.needs_bands = false;
+        let body = write_body(&self.imported.records);
+        Prepared { imported: self.imported, body }
+    }
 }
 
 fn write_body(records: &[Record]) -> Vec<u8> {
