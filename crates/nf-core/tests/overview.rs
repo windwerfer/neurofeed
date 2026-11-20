@@ -26,11 +26,11 @@ fn overview_defaults_toggle_and_persist_per_view() {
     let m = s.call("monitor.get", json!({})).unwrap();
     assert_eq!(
         m["overview"],
-        json!({ "bands": false, "raw_eeg": false, "histogram": true, "optics": false, "psd": true, "spectrogram": true })
+        json!({ "bands": false, "raw_eeg": false, "histogram": true, "optics": false, "movement": false, "psd": true, "spectrogram": true })
     );
     s.call("monitor.overview", json!({ "monitor": "bands", "on": true })).unwrap();
     s.call("monitor.overview", json!({ "monitor": "psd", "on": false })).unwrap();
-    assert!(s.call("monitor.overview", json!({ "monitor": "movement", "on": true })).is_err());
+    assert!(s.call("monitor.overview", json!({ "monitor": "heart_detail", "on": true })).is_err());
     assert!(s.call("monitor.overview", json!({ "monitor": "psd_strip", "on": true })).is_err());
     let s2 = reload(&s);
     let st = &s2.state().monitors;
@@ -244,7 +244,7 @@ fn bookmarks_add_go_dedupe_bound_expire_and_reset() {
     let list = s.call("monitor.get", json!({})).unwrap()["bookmarks"]["bands"].clone();
     assert_eq!(list.as_array().unwrap().len(), nf_core::monitor::MAX_BOOKMARKS);
     assert_eq!(list[0]["end_s"], 120.0);
-    assert!(s.call("monitor.bookmark_add", json!({ "monitor": "movement" })).is_err());
+    assert!(s.call("monitor.bookmark_add", json!({ "monitor": "psd_strip" })).is_err());
     assert!(s.call("monitor.bookmark_remove", json!({ "monitor": "bands", "id": 9999 })).is_err());
     let first = list[0]["id"].as_u64().unwrap();
     s.call("monitor.bookmark_remove", json!({ "monitor": "bands", "id": first })).unwrap();

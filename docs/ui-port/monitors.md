@@ -290,7 +290,7 @@ can be reviewed against `compare-bands-regular.png`.
 
 ### Known limits after milestone 1
 
-- Raw EEG, Spectrogram and Movement still use the old view-local viewport (`views/plot.rs::Viewport`).
+- (Superseded: Raw EEG, Spectrogram, HR+SpO2 and Movement now use the core viewport; the view-local `plot::Viewport` is gone.)
   HR+SpO2 has none. Their toolbars are not yet the shared row.
 - Spectrogram and HR+SpO2 still draw their headers in immersive landscape (their own header code).
 - No Follow lead (~1 s) and no smoothed (spline) lines yet. The theme is still stock egui dark, and the
@@ -383,3 +383,16 @@ shade is the waveform window (drag, resize, tap, long-press bookmark). Phone
 landscape: graph only, both parts kept. Older than the 5 min raw detail is
 shaded "No raw PPG kept here".
 
+## Movement (2026-11-20)
+
+`ui/views/movement.rs` on the shared chrome: toolbar (Follow | Inspect, window 15 s / 30 s / 1 / 2 / 5 min, saved),
+trace chips (x, y, z, |a| − 1 g), Y range menu (±0.5 / 1.5 / 3 / 6 g, saved) and the Overview toggle (off by default,
+saved). One full-width pane per shown trace (`raw::pane_height`, scrolls when too small), shared `m:ss` axis under the
+last pane, min/max decimation of `rawtrace::trace_samples`, dropouts (> 0.25 s) break the line and are shaded, including
+a growing trailing gap while the stream is stale. Drag / pinch / Ctrl+wheel / wheel / double-click as everywhere
+(`monitor::interact_with`), Follow glides with presentation time, Inspect freezes where the graph is shown. The
+accelerometer ring keeps 5 min (`side::ACCEL_S`, ≈ 250 KB at 52 Hz; the Flutter pane kept a short sample list), the same
+as the raw EEG ring; AUX stays 30 s. Overview = Bands history with the movement window shaded, detail only inside the ring
+(`monitor movement_overview`, bookmarks work like the other views). Phone landscape: graphs only. The Flutter pane drew
+only a smoothed |a| line (0–1.5 g) in orange; we keep the three axes plus the dynamic |a| − 1 g (orange, as
+`kMovementColor`) and clip at the Y range with the shared off-scale markers.

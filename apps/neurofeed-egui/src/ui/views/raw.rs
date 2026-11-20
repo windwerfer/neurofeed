@@ -19,9 +19,9 @@ const MIN_PANE_REGULAR: f32 = 160.0;
 const MIN_PANE_COMPACT: f32 = 140.0;
 const MIN_PANE_IMMERSIVE: f32 = 96.0;
 /// Height of the time labels under the last pane.
-const X_GUTTER: f32 = 18.0;
+pub(crate) const X_GUTTER: f32 = 18.0;
 /// Right gutter: electrode name and Y labels.
-const RIGHT_GUTTER: f32 = 46.0;
+pub(crate) const RIGHT_GUTTER: f32 = 46.0;
 /// Auto scale re-fit interval (Flutter: 250 ms).
 const AUTO_REFIT_S: f64 = 0.25;
 
@@ -253,7 +253,7 @@ pub(crate) fn time_grid(p: &egui::Painter, plot: Rect, map: Mapping, v: &egui::V
     };
     let target = ((plot.width() / 90.0).floor() as usize).clamp(2, 10);
     let step = m::tick_step_s(end - start, target);
-    let mut t = (start / step).ceil() * step;
+    let mut t = (start.max(0.0) / step).ceil() * step; // no "0:00" repeats before the session start
     let mut n = 0;
     while t <= end + 1e-9 && n < 64 {
         let x = ((t - start) / (end - start).max(1e-9)) as f32;

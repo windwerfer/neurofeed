@@ -242,7 +242,7 @@ fn monitor_get_reports_live_history() {
     assert_eq!(m["raw_eeg"]["history_s"], 300.0);
     assert_eq!(m["heart_overview"]["history_s"], 3600.0);
     assert_eq!(m["heart_detail"]["history_s"], 300.0);
-    assert_eq!(m["movement"]["history_s"], 30.0);
+    assert_eq!(m["movement"]["history_s"], 300.0);
     assert_eq!(m["spectrogram"]["history_s"], 300.0);
     assert_eq!(m["spectrogram"]["max_s"], 300.0);
     // Bands zooms out to the full hour.
@@ -268,4 +268,66 @@ fn sweep_inspect_room_right_of_newest_is_bounded_and_frozen() {
     let scroll = nf_core::rawtrace::raw_span(43.0, nf_core::monitor::RawMode::Scroll, v.window_s);
     v.inspect(scroll, Some(48.0));
     assert_eq!(v.end_s, Some(43.0));
+}
+
+fn movement_session(seconds: f64) -> Session {
+    let mut s = Session::new();
+    s.call("device.connect", json!({ "id": "sim:muse" })).unwrap();
+    s.call("clock.advance", json!({ "seconds": seconds })).unwrap();
+    s
+}
+
+#[test]
+fn movement_ring_keeps_five_minutes_and_no_more() {
+    use nf_core::side::ACCEL_S;
+    let mut s = movement_session(400.0);
+    let side = s.side().unwrap();
+    let rate = side.accel_rate.unwrap();
+    let (first, last) = (side.accel.front().unwrap().0, side.accel.back().unwrap().0);
+    assert!(side.accel.len() as f64 <= ACCEL_S * rate + 1.0, "bounded: {}", side.accel.len());
+    assert!((last - first - ACCEL_S).abs() < 1.0, "5 min kept: {first}..{last}");
+    // The monitor span is the ring; the viewport zooms out to 5 min and no further.
+    let m = s.call("monitor.get", json!({})).unwrap();
+    let mv = &m["monitors"]["movement"];
+    assert_eq!(mv["history_s"], ACCEL_S);
+    assert_eq!(mv["presets"], json!([15.0, 30.0, 60.0, 120.0, 300.0]));
+    assert!((mv["end_s"].as_f64().unwrap() - last).abs() < 0.5);
+    s.call("monitor.zoom", json!({ "monitor": "movement", "factor": 0.0001 })).unwrap();
+    assert_eq!(s.call("monitor.get", json!({})).unwrap()["monitors"]["movement"]["window_s"], 300.0);
+}
+
+#[test]
+fn movement_display_command_validates_persists_and_reports() {
+    let mut s = Session::new();
+    let m = s.call("monitor.get", json!({})).unwrap();
+    assert_eq!(m["movement"], json!({ "traces": [], "range": "1.5" }));
+    s.call("monitor.movement", json!({ "traces": ["magnitude", "x"], "range_g": "3" })).unwrap();
+    let m = s.call("monitor.get", json!({})).unwrap()["movement"].clone();
+    assert_eq!(m, json!({ "traces": ["magnitude", "x"], "range": "3" }));
+    assert_eq!(s.state().monitors.movement.shown(), vec![nf_core::monitor::MoveTrace::X, nf_core::monitor::MoveTrace::Magnitude]);
+    // Bad params fail and change nothing.
+    assert!(s.call("monitor.movement", json!({ "range_g": "2" })).is_err());
+    assert!(s.call("monitor.movement", json!({ "traces": ["w"] })).is_err());
+    assert_eq!(s.call("monitor.get", json!({})).unwrap()["movement"]["range"], "3");
+    // The range is saved, the trace choice is session-only (like Raw's electrodes).
+    let doc = s.store().get_doc(nf_core::settings::DOC_KEY).unwrap().unwrap();
+    let mut store = nf_store::MemoryStore::default();
+    store.put_doc(nf_core::settings::DOC_KEY, Some(&doc)).unwrap();
+    let s2 = Session::new().with_store(Box::new(store));
+    assert_eq!(s2.state().monitors.movement.range, nf_core::monitor::MoveRange::G3);
+    assert!(s2.state().monitors.movement.traces.is_empty());
+    // Empty list = all four again.
+    s.call("monitor.movement", json!({ "traces": [] })).unwrap();
+    assert_eq!(s.state().monitors.movement.shown().len(), 4);
+}
+
+#[test]
+fn movement_trace_values_are_oracles_and_never_nan() {
+    use nf_core::monitor::MoveTrace as T;
+    let a = [0.0, 0.0, 1.0];
+    assert_eq!((T::X.value(a), T::Y.value(a), T::Z.value(a)), (0.0, 0.0, 1.0));
+    assert!(T::Magnitude.value(a).abs() < 1e-6, "at rest |a| = 1 g");
+    assert!((T::Magnitude.value([0.0, 3.0, 4.0]) - 4.0).abs() < 1e-6);
+    assert_eq!(T::Magnitude.value([f32::NAN, 0.0, 0.0]), 0.0);
+    assert_eq!(T::X.value([f32::INFINITY, 0.0, 0.0]), 0.0);
 }

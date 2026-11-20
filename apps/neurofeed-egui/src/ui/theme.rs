@@ -100,6 +100,22 @@ pub fn sweep_cursor(v: &egui::Visuals) -> Color32 {
     v.strong_text_color().gamma_multiply(0.6)
 }
 
+/// Movement traces: x red, y green, z blue and the dynamic |a| − 1 g in the
+/// legacy orange (`kMovementColor`); a deeper shade on the light theme.
+pub fn movement_trace(v: &egui::Visuals, t: nf_core::monitor::MoveTrace) -> Color32 {
+    use nf_core::monitor::MoveTrace as T;
+    match (t, v.dark_mode) {
+        (T::X, true) => Color32::from_rgb(0xEF, 0x53, 0x50),
+        (T::Y, true) => Color32::from_rgb(0x66, 0xBB, 0x6A),
+        (T::Z, true) => Color32::from_rgb(0x4F, 0xC3, 0xF7),
+        (T::Magnitude, true) => Color32::from_rgb(0xFF, 0xA7, 0x26),
+        (T::X, false) => Color32::from_rgb(0xC6, 0x28, 0x28),
+        (T::Y, false) => Color32::from_rgb(0x2E, 0x7D, 0x32),
+        (T::Z, false) => Color32::from_rgb(0x02, 0x77, 0xBD),
+        (T::Magnitude, false) => Color32::from_rgb(0xE6, 0x51, 0x00),
+    }
+}
+
 /// Raw EEG shading: no data (gap) and samples the device sent as invalid.
 pub const GAP_SHADE: Color32 = Color32::from_rgba_premultiplied(0x39, 0x39, 0x39, 40);
 pub const BAD_SHADE: Color32 = Color32::from_rgba_premultiplied(0x2F, 0x10, 0x10, 50);

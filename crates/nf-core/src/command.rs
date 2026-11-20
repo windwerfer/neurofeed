@@ -88,6 +88,15 @@ pub enum Command {
         #[serde(default)]
         lanes: Option<Vec<String>>,
     },
+    /// Movement display: shown traces (x, y, z, magnitude; empty = all) and
+    /// the Y range in ± g (`0.5` / `1.5` / `3` / `6`, saved).
+    #[serde(rename = "monitor.movement")]
+    MonitorMovement {
+        #[serde(default)]
+        traces: Option<Vec<crate::monitor::MoveTrace>>,
+        #[serde(default)]
+        range_g: Option<crate::monitor::MoveRange>,
+    },
     /// Set the Athena optical preset (`p1041` / `p1044` / `p1045`, …). Saved
     /// in settings and applied on the connected device when it has optics.
     #[serde(rename = "optics.preset.set")]
@@ -930,6 +939,7 @@ pub const SPECS: &[CommandSpec] = &[
     spec("monitor.pan", "Pan monitor", "monitor", false, "Move a monitor's time window by seconds; enters Inspect.", always),
     spec("monitor.display", "Bands display", "monitor", false, "Electrodes in the Bands average (empty = all) and hidden bands.", always),
     spec("monitor.raw", "Raw EEG display", "monitor", false, "Raw EEG: sweep or scroll traces, Y scale (auto, ±50/100/200 µV) and shown electrodes (empty = all).", always),
+    spec("monitor.movement", "Movement display", "monitor", false, "Movement: shown traces (x, y, z, magnitude; empty = all) and Y range in ±g (0.5, 1.5, 3, 6).", always),
     spec("monitor.optics", "Optics display", "monitor", false, "Optics: sweep or scroll traces and shown lanes (empty = all).", always),
     spec("monitor.psd", "PSD display", "monitor", false, "PSD: frequency range (60 or 100 Hz) and electrodes in the average (empty = all).", always),
     spec("monitor.overview", "Overview timeline", "monitor", false, "Show/hide a view's overview timeline (saved per view; default on for psd and spectrogram).", always),
@@ -1373,6 +1383,10 @@ fn base_examples() -> Vec<Request> {
         Q(Query::OpticsGet { seconds: Some(3.0), end_s: None }),
         Q(Query::OpticsPresetGet),
         C(Command::OpticsPresetSet { preset: "p1044".into() }),
+        C(Command::MonitorMovement {
+            traces: Some(vec![crate::monitor::MoveTrace::Magnitude]),
+            range_g: Some(crate::monitor::MoveRange::G3),
+        }),
         C(Command::MonitorOptics { mode: None, lanes: Some(vec!["infrared".into()]) }),
         Q(Query::HeartGet { time_s: Some(20.0) }),
         C(Command::MonitorHeart { waveform: Some(false) }),

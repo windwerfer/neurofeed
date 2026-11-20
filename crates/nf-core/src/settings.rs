@@ -270,6 +270,9 @@ pub struct Persisted {
     /// HR+SpO2 view: pulse waveform shown (default on).
     #[serde(default)]
     pub heart: crate::monitor::HeartDisplay,
+    /// Movement view: Y range (the trace choice is session-only).
+    #[serde(default)]
+    pub movement_range: crate::monitor::MoveRange,
     #[serde(default)]
     pub overview: std::collections::BTreeMap<crate::monitor::MonitorId, bool>,
 }
@@ -304,6 +307,7 @@ impl Persisted {
             histogram: s.monitors.histogram.clone(),
             spectrogram: s.monitors.spectrogram.clone(),
             heart: s.monitors.heart.clone(),
+            movement_range: s.monitors.movement.range,
             overview: s.monitors.overview.clone(),
         }
     }
@@ -335,6 +339,7 @@ impl Persisted {
         s.monitors.heart = self.heart;
         s.monitors.spectrogram.electrodes = self.spectrogram.electrodes;
         s.monitors.spectrogram.db_lock = self.spectrogram.db_lock.filter(|(a, b)| crate::monitor::db_range_ok(*a, *b));
+        s.monitors.movement.range = self.movement_range;
         s.monitors.overview = self.overview.into_iter().filter(|(k, _)| k.overview().is_some()).collect();
     }
 }

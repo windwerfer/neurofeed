@@ -1426,6 +1426,14 @@ impl Session {
                 }
                 self.persist_settings();
             }
+            Command::MonitorMovement { traces, range_g } => {
+                let r = &mut self.state.monitors.movement;
+                r.range = range_g.unwrap_or(r.range);
+                if let Some(t) = traces {
+                    r.traces = t.into_iter().take(8).collect();
+                }
+                self.persist_settings();
+            }
             Command::MonitorOptics { mode, lanes } => {
                 let r = &mut self.state.monitors.optics;
                 r.mode = mode.unwrap_or(r.mode);
@@ -1448,7 +1456,7 @@ impl Session {
             Command::MonitorOverview { monitor, on } => {
                 if monitor.overview().is_none() || monitor == crate::monitor::MonitorId::HeartDetail {
                     return Err(CoreError::InvalidArgs(format!(
-                        "{} has no overview (bands, raw_eeg, histogram, psd, spectrogram, optics)",
+                        "{} has no overview (bands, raw_eeg, histogram, psd, spectrogram, optics, movement)",
                         monitor.name()
                     )));
                 }
@@ -2454,6 +2462,7 @@ impl Session {
                 let newest = self.live.signal.as_ref().and_then(|g| g.time).unwrap_or(s.time);
                 crate::rawtrace::raw_span(newest, s.monitors.raw.mode, s.monitors.viewport(id).window_s)
             }
+            (crate::monitor::MonitorId::Movement, _, _) => self.movement_span(),
             (crate::monitor::MonitorId::Optics, _, _) => {
                 let newest = self.live.optical.as_ref().and_then(|g| g.time).unwrap_or(s.time);
                 crate::rawtrace::raw_span(newest, s.monitors.optics.mode, s.monitors.viewport(id).window_s)
@@ -2471,6 +2480,15 @@ impl Session {
             }
             _ => crate::monitor::Span::new((s.time - id.spec().max_s).max(0.0), s.time),
         }
+    }
+
+    /// The accelerometer ring: oldest to newest sample.
+    fn movement_span(&self) -> crate::monitor::Span {
+        let now = self.state.time;
+        let acc = self.live.side.as_ref().map(|s| &s.accel);
+        let newest = acc.and_then(|a| a.back()).map_or(now, |a| a.0);
+        let oldest = acc.and_then(|a| a.front()).map_or(newest, |a| a.0);
+        crate::monitor::Span::new(oldest.min(newest), newest)
     }
 
     fn with_viewport(&mut self, id: crate::monitor::MonitorId, f: impl FnOnce(&mut crate::monitor::Viewport)) {
@@ -2563,7 +2581,7 @@ impl Session {
                 (id.name().to_owned(), list.into())
             })
             .collect();
-        serde_json::json!({ "monitors": views, "bookmarks": bookmarks, "bands": m.bands, "raw": m.raw, "optics": m.optics, "psd": m.psd, "histogram": m.histogram,
+        serde_json::json!({ "monitors": views, "bookmarks": bookmarks, "bands": m.bands, "raw": m.raw, "optics": m.optics, "movement": m.movement, "psd": m.psd, "histogram": m.histogram,
             "spectrogram": m.spectrogram, "heart": m.heart, "overview": overview, "scale": self.state.band_scale })
     }
 

@@ -253,3 +253,16 @@
 - Open: the egui History export / Import dialog still call the sync paths on the UI thread (switch them to `job.start`
   with a progress row + Cancel; needs a screenshot); EDF/NFED6 encode and the PDF report are single steps; MCP-native
   progress notifications; job results are kept in memory (8 × up to ~130 MB base64 worst case).
+
+## 2026-11-20: Movement monitor on the shared chrome
+- `ui/views/movement.rs` rewritten: shared toolbar (Follow | Inspect, window 15 s–5 min), trace chips, Y range menu, overview
+  toggle (off by default, saved per view), stacked panes with the shared decimation, dropout shading, Follow glide, Inspect
+  without jump, immersive landscape = graphs only, theme tokens (`theme::movement_trace`, no literal colours). Removed the
+  view-local viewport and card grid from `plot.rs`.
+- Core: `MonitorId::MovementOverview`, `MoveTrace` / `MoveRange` / `MovementDisplay`, command `monitor.movement`
+  (`traces`, `range_g`; range saved as `movement_range`), accelerometer ring 30 s → 5 min (`ACCEL_S`; ≈ 250 KB at 52 Hz),
+  Movement monitor span from the ring (stale data keeps a trailing gap). `monitor.overview` accepts `movement`.
+- Tests: nf-core `monitor.rs` (ring bounded at 5 min, command validation + persistence, trace-value oracles), `overview.rs`
+  (default off, per-view); app `movement.rs` (gap oracle, line break at dropout, regular / compact / landscape render,
+  overview toggle, no-device message). panic_hunt covers `monitor.movement` via the catalog example.
+- Open: no Flutter-style spline smoothing; real-headset check of the accelerometer axes (sim only).
