@@ -319,6 +319,20 @@ pub enum Command {
     /// into History. Returns the new session id and what was lost.
     #[serde(rename = "history.import")]
     HistoryImport(crate::import::ImportRequest),
+    /// Run a long command in the background: `history.import`,
+    /// `history.export`, `recording.export`, `ai.install` or `ai.load`.
+    /// Returns the job; poll `job.status`, stop it with `job.cancel`.
+    #[serde(rename = "job.start")]
+    JobStart {
+        /// The command id to run, e.g. `history.import`.
+        command: String,
+        /// Its params, exactly as for `command_run`.
+        #[serde(default)]
+        params: Value,
+    },
+    /// Cancel a running job; its result is discarded and nothing changes.
+    #[serde(rename = "job.cancel")]
+    JobCancel { id: u64 },
     /// Band-math drowsiness guard on/off (protocols with a guard lane).
     #[serde(rename = "guard.set")]
     GuardSet { enabled: bool },
@@ -637,6 +651,12 @@ pub enum Query {
     AiStatus,
     #[serde(rename = "audio.status")]
     AudioStatus,
+    /// One job with its result once done, or all jobs (no results).
+    #[serde(rename = "job.status")]
+    JobStatus {
+        #[serde(default)]
+        id: Option<u64>,
+    },
     /// Parse an import without saving: kept / lost summary for the dialog.
     #[serde(rename = "history.import_preview")]
     HistoryImportPreview(crate::import::ImportRequest),
@@ -1101,6 +1121,16 @@ pub const SPECS: &[CommandSpec] = &[
     spec("ai.load", "Load AI model", "ai", false, "Load an installed model; it then scores once per second.", has_ai),
     spec("ai.unload", "Unload AI model", "ai", false, "Unload the model (stays installed).", ai_loaded),
     spec("ai.remove", "Remove AI model", "ai", false, "Delete a model's files; requires confirm=true.", ai_idle),
+    spec(
+        "job.start",
+        "Start job",
+        "job",
+        false,
+        "Run history.import, history.export, recording.export, ai.install or ai.load in the background; returns {id, state, progress}. The result is the command's reply, in job.status.",
+        always,
+    ),
+    spec("job.status", "Job status", "job", true, "One job (state, progress 0..1, error) with its result once done; without id all jobs.", always),
+    spec("job.cancel", "Cancel job", "job", false, "Cancel a running job: its work stops and nothing is saved or changed.", always),
     spec("streaming.status", "Streaming status", "streaming", true, "OSC settings, groups/addresses, packets and bytes sent.", always),
     spec(
         "audio.set",
@@ -1199,6 +1229,9 @@ fn ai_examples() -> Vec<Request> {
         C(Command::AiLoad { model: None }),
         C(Command::AiUnload),
         C(Command::AiRemove { model: nf_types::AiModel::ReveBase, confirm: true }),
+        C(Command::JobStart { command: "history.export".into(), params: serde_json::json!({ "id": 1, "format": "edf" }) }),
+        Q(Query::JobStatus { id: Some(1) }),
+        C(Command::JobCancel { id: 1 }),
     ]
 }
 

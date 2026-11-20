@@ -233,9 +233,13 @@ Usage and client setup: `docs/automation.md`.
 
   Never paste the token anywhere. There is no control channel on web or
   Android.
+- Long jobs (import, export, AI install/load) get progress and cancel
+  through `job.start` / `job.status` / `job.cancel`, not a tool (see
+  `docs/automation.md`). A new long command joins `nf_core::jobs::JOB_COMMANDS`
+  as stepped `Work`.
 - Not implemented yet (do not document them as existing): output schemas,
-  a widget-setting tool (ui_set), a path allow-list for `path` arguments, progress and cancel for
-  long jobs.
+  a widget-setting tool (ui_set), a path allow-list for `path` arguments, and
+  MCP-native progress notifications.
 - Keep `docs/automation.md` and any bundled agent skills in step with the
   commands. `apps/neurofeed-cli/tests/cli.rs` fails when one of those docs
   names a tool or command that does not exist.

@@ -23,6 +23,7 @@ mod command;
 pub mod faults;
 pub mod feedback;
 pub mod import;
+pub mod jobs;
 pub mod monitor;
 pub mod nerd;
 pub mod optical;

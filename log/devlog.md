@@ -231,3 +231,25 @@
   blink / clench second never counts or chimes. Finding: on the simulator the blink second usually trips the pad-quality
   gate first ("no good signal on AF7, AF8"), so `dirty` stays null and the reason is the quality gate; same outcome.
 - Open: real-headset check that natural blinks / EMG are caught (sim artifacts are large).
+
+## 2026-11-20: Long jobs: progress + cancel (`job.start` / `job.status` / `job.cancel`)
+- Before: `recording.export` / `history.export` were sync queries (whole encode + base64 in one call; the History view
+  calls `Session::history_export` on the UI thread), `history.import` sync in `Session::apply`, `ai.install` / `ai.load`
+  already async in `nf-ai` (progress in `AiModelState::Installing`) but not cancellable.
+- Cost, release, 60 min Muse S: export raw_body 121 ms / nfed6 149 ms / edf 373 ms (incl. base64 of ~24 MB), PDF 218 ms,
+  EDF import 3.6 s (band replay dominates). One-off measurement, not a benchmark (no hot path changed).
+- `nf_core::jobs`: stepped `Work` (import: parse → band 1024 records/step → body; export: encode → base64 786 KiB/step),
+  `JobCtl` (cancel flag, progress, outcome), `JobRunner` seam. Session steps inline once per `advance` (manual clock,
+  wasm, tests); `nf_mcp::ThreadRunner` (catch_unwind → failed job) in the desktop app and wall-clock CLI. AI jobs watch
+  the runtime; new `AiRuntime::cancel_install` (default: refuse); `NativeAi` stops between 64 KiB chunks, deletes
+  `.part`, keeps an earlier verified copy. `import::Bander` is now shared by the sync import and the job.
+- Results = the wrapped command's reply; import stored only on completion (cancel ⇒ nothing saved). Jobs live outside
+  `AppState`; no stepping inside `command_batch`, which refuses `job.*` writes. Limits 4 running / 1 AI / 8 kept.
+- Tests: `nf-mcp/tests/jobs.rs` (7): job import == sync import (nfed6 bytes), monotonic progress + events; cancel
+  mid-import saves nothing (revision +2 only); export jobs == sync replies (raw_body > one base64 step); refusals change
+  nothing; 4-job limit; AI install progress/done/cancel + load with a fake runtime; ThreadRunner import + cancel.
+  nf-ai store: stopped install removes `.part`. panic_hunt covers the three new ids (catalog examples added).
+- Docs: decisions 2026-11-20, automation.md "Long jobs" (verified serve exchange), AGENTS.md §4, design-mcp-core.md.
+- Open: the egui History export / Import dialog still call the sync paths on the UI thread (switch them to `job.start`
+  with a progress row + Cancel; needs a screenshot); EDF/NFED6 encode and the PDF report are single steps; MCP-native
+  progress notifications; job results are kept in memory (8 × up to ~130 MB base64 worst case).

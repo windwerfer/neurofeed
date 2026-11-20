@@ -281,7 +281,10 @@ fn edf_annotations(f: &Finished, records: &[Record]) -> Vec<nf_format::edf::EdfA
         .collect()
 }
 
-pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u16, u16)) -> Result<Vec<u8>, String> {
+/// EDF start: (year, month, day, hour, minute, second), UTC.
+pub type EdfStart = (u16, u16, u16, u16, u16, u16);
+
+pub fn export(f: &Finished, format: ExportFormat, start: EdfStart) -> Result<Vec<u8>, String> {
     match format {
         ExportFormat::RawBody => Ok(f.body.clone()),
         ExportFormat::Nfed6 => {

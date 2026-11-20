@@ -21,6 +21,8 @@ type States = Arc<Mutex<HashMap<AiModel, AiModelState>>>;
 
 pub struct NativeAi {
     store: ModelStore,
+    /// Stop flag of each running install.
+    cancels: HashMap<AiModel, Arc<AtomicBool>>,
     states: States,
     jobs: Sender<Job>,
     scores: Receiver<AiScore>,
@@ -44,7 +46,7 @@ impl NativeAi {
         let busy = Arc::new(AtomicBool::new(false));
         let w = Worker { store: store.clone(), states: states.clone(), busy: busy.clone(), scores: tx, loaded: None };
         std::thread::Builder::new().name("nf-ai".into()).spawn(move || w.run(&rx)).ok();
-        Self { store, states, jobs, scores, busy }
+        Self { store, states, jobs, scores, busy, cancels: HashMap::new() }
     }
 
     /// Runtime over the default model folder (temp dir if none).
@@ -70,9 +72,16 @@ impl AiRuntime for NativeAi {
             return Err(format!("{} is gated: download {} on Hugging Face, then import it", model.label(), model.weights_file()));
         }
         set(&self.states, model, AiModelState::Installing { progress: None });
+        let stop = Arc::new(AtomicBool::new(false));
+        self.cancels.insert(model, stop.clone());
         let (store, states) = (self.store.clone(), self.states.clone());
         let run = move || {
-            let mut prog = |p: f64| set(&states, model, AiModelState::Installing { progress: Some(p) });
+            let mut prog = |p: Option<f64>| {
+                if let Some(p) = p {
+                    set(&states, model, AiModelState::Installing { progress: Some(p) });
+                }
+                !stop.load(Ordering::SeqCst)
+            };
             let r = match &source {
                 AiSource::Import { path } => store.import(model, std::path::Path::new(path), &mut prog),
                 #[cfg(feature = "download")]
@@ -80,9 +89,31 @@ impl AiRuntime for NativeAi {
                 #[cfg(not(feature = "download"))]
                 AiSource::Download => Err(anyhow::anyhow!("this build cannot download; import the file instead")),
             };
-            set(&states, model, r.map_or_else(|e| AiModelState::Failed { message: format!("{e:#}") }, |()| AiModelState::Installed));
+            let state = match r {
+                Ok(()) => AiModelState::Installed,
+                // Back to what was there: an earlier verified copy stays.
+                Err(_) if stop.load(Ordering::SeqCst) => {
+                    if store.installed(model) {
+                        AiModelState::Installed
+                    } else {
+                        AiModelState::Missing
+                    }
+                }
+                Err(e) => AiModelState::Failed { message: format!("{e:#}") },
+            };
+            set(&states, model, state);
         };
         std::thread::Builder::new().name("nf-ai-install".into()).spawn(run).map(drop).map_err(|e| e.to_string())
+    }
+
+    fn cancel_install(&mut self, model: AiModel) -> Result<(), String> {
+        match (self.state(model), self.cancels.get(&model)) {
+            (AiModelState::Installing { .. }, Some(stop)) => {
+                stop.store(true, Ordering::SeqCst);
+                Ok(())
+            }
+            _ => Err(format!("{} is not installing", model.label())),
+        }
     }
 
     fn remove(&mut self, model: AiModel) -> Result<(), String> {

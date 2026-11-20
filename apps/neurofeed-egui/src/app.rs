@@ -71,6 +71,7 @@ impl NeuroFeedApp {
             session.set_stream_sink(Box::new(nf_device::UdpSink::new()));
             session.set_stream_outlets(Box::new(nf_device::LslOutlets::new()));
             session.set_ai_runtime(Box::new(nf_ai::NativeAi::with_default_root()));
+            session.set_job_runner(Box::new(nf_mcp::ThreadRunner));
         }
         let mut app = Self::with_session(session);
         // Restored Appearance before the first frame (no dark flash in light mode).

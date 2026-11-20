@@ -1,6 +1,7 @@
 //! The Session: single owner of state; the only way to change it.
 
 mod ai_glue;
+mod jobs_glue;
 
 use crate::command::{find, Command, CommandSpec, Query, Request, SPECS};
 use crate::feedback::{Change, Observation, Phase};
@@ -109,6 +110,23 @@ pub enum Event {
     StoreError {
         message: String,
     },
+    /// `job.start` accepted a job.
+    JobStarted {
+        id: u64,
+        command: String,
+    },
+    /// A job passed another tenth of its work.
+    JobProgress {
+        id: u64,
+        progress: f64,
+    },
+    /// A job finished: done, failed (with `error`) or cancelled.
+    JobFinished {
+        id: u64,
+        command: String,
+        state: crate::jobs::JobState,
+        error: Option<String>,
+    },
 }
 
 /// `wall_clock_unix_ms` of `recording.start` / `feedback.start`.
@@ -197,6 +215,12 @@ pub struct Session {
     last_tick: Option<f64>,
     /// Last settings doc written (or loaded).
     settings_doc: String,
+    /// Background jobs (`job.start`).
+    jobs: jobs_glue::Jobs,
+    /// Runs job work on worker threads (native shells); none = stepped on tick.
+    job_runner: Option<Box<dyn crate::jobs::JobRunner>>,
+    /// Inside `batch` (jobs do not step, so a rollback cannot race one).
+    batching: bool,
 }
 
 impl Default for Session {
@@ -223,6 +247,9 @@ impl Session {
             events: Vec::new(),
             last_tick: None,
             settings_doc: String::new(),
+            jobs: jobs_glue::Jobs::default(),
+            job_runner: None,
+            batching: false,
         }
     }
 
@@ -391,6 +418,12 @@ impl Session {
             let trust = self.history_trust(id)?;
             return Ok(crate::report::pdf(&self.stored(id)?.meta, &trust));
         }
+        let (f, start) = self.history_finished(id)?;
+        export(&f, format, start).map_err(CoreError::BadRequest)
+    }
+
+    /// A saved session as a finished recording, with its EDF start.
+    fn history_finished(&self, id: u64) -> Result<(Finished, crate::recording::EdfStart), CoreError> {
         let s = self.stored(id)?;
         let device: DeviceInfo = serde_json::from_str(&s.device_json).map_err(|e| CoreError::BadRequest(format!("stored device: {e}")))?;
         let info = crate::recording::RecordingInfo {
@@ -408,7 +441,7 @@ impl Session {
         };
         let f = Finished { device, info, body: s.body, annotations: s.meta.annotations };
         let start = f.info.wall_clock_unix_ms.map_or((1985, 1, 1, 0, 0, 0), crate::recording::civil_utc);
-        export(&f, format, start).map_err(CoreError::BadRequest)
+        Ok((f, start))
     }
 
     fn import_prepare(&self, req: &crate::import::ImportRequest) -> Result<crate::import::Prepared, CoreError> {
@@ -603,23 +636,35 @@ impl Session {
                 "step {i}: ai.install / ai.remove write or delete model files (a download runs in the background) and cannot be rolled back; run them on their own, outside a batch"
             )));
         }
+        if let Some(i) = parsed.iter().position(|r| matches!(r, Request::Command(Command::JobStart { .. } | Command::JobCancel { .. }))) {
+            return Err(CoreError::BadRequest(format!(
+                "step {i}: job.start / job.cancel start or stop background work and cannot be rolled back; run them on their own, outside a batch"
+            )));
+        }
         let loaded = self.state.ai.loaded();
         let checkpoint = (self.state.clone(), self.sim.config, self.events.len(), self.live.clone());
         let mut results = Vec::with_capacity(parsed.len());
+        self.batching = true;
+        let r = self.batch_steps(parsed, steps.len(), &mut results);
+        self.batching = false;
+        if let Err(e) = r {
+            self.rollback(checkpoint);
+            self.ai_restore_loaded(loaded);
+            return Err(e);
+        }
+        Ok(json!({ "results": results, "revision": self.state.revision }))
+    }
+
+    fn batch_steps(&mut self, parsed: Vec<Request>, n: usize, results: &mut Vec<Reply>) -> Result<(), CoreError> {
         for (i, req) in parsed.into_iter().enumerate() {
             match self.run(req) {
                 Ok(v) => results.push(v),
                 Err(e) => {
-                    self.rollback(checkpoint);
-                    self.ai_restore_loaded(loaded);
-                    return Err(CoreError::BadRequest(format!(
-                        "step {i} failed: {e}; applied {i}, not run {}, rolled back",
-                        steps.len() - i - 1
-                    )));
+                    return Err(CoreError::BadRequest(format!("step {i} failed: {e}; applied {i}, not run {}, rolled back", n - i - 1)));
                 }
             }
         }
-        Ok(json!({ "results": results, "revision": self.state.revision }))
+        Ok(())
     }
 
     fn rollback(&mut self, (state, sim, events, live): (AppState, nf_sim::SimConfig, usize, Live)) {
@@ -701,6 +746,7 @@ impl Session {
         self.ai_tick();
         self.feedback_tick(now);
         self.hint_tick(now);
+        self.jobs_tick();
     }
 
     /// The recording's `disconnect` spans follow the same rule as the
@@ -1558,6 +1604,8 @@ impl Session {
             | Command::AiUnload
             | Command::AiRemove { .. }) => return self.ai_apply(cmd),
             Command::HistoryImport(req) => return self.history_import(&req),
+            Command::JobStart { command, params } => return self.job_start(&command, params),
+            Command::JobCancel { id } => return self.job_cancel(id),
             Command::GuardSet { enabled } => {
                 self.state.feedback.guard = enabled;
                 return Ok(crate::audio::guard_status(&self.state));
@@ -2030,17 +2078,13 @@ impl Session {
                     .collect();
                 json!({ "meta": s.meta, "device": serde_json::from_str::<serde_json::Value>(&s.device_json).unwrap_or_default(), "records": records.len(), "feedback": feedback })
             }
+            Query::JobStatus { id } => self.job_status(*id)?,
             Query::HistoryExport { id, format } => {
                 let bytes = self.history_export(*id, *format)?;
                 json!({ "id": id, "format": format, "extension": format.extension(), "bytes": bytes.len(), "base64": base64(&bytes) })
             }
             Query::RecordingExport { format, start } => {
-                let f = self.live.finished.as_ref().ok_or_else(|| CoreError::BadRequest("nothing recorded yet".into()))?;
-                let start = match (start, f.info.wall_clock_unix_ms) {
-                    (Some([y, mo, d, h, mi, se]), _) => (*y, *mo, *d, *h, *mi, *se),
-                    (None, Some(ms)) => crate::recording::civil_utc(ms),
-                    (None, None) => (1985, 1, 1, 0, 0, 0),
-                };
+                let (f, start) = self.recording_finished(*start)?;
                 let bytes = export(f, *format, start).map_err(CoreError::BadRequest)?;
                 json!({
                     "format": format,

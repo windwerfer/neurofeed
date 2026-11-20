@@ -337,3 +337,31 @@ the cursor) instead of re-anchoring the newest sample at the right edge.
   (`RECONNECT_PROMPT_S`) the user is asked: Keep waiting
   (`feedback.keep_waiting`) or End session (`feedback.stop`). No timeout.
 - While a session is open only its own device can connect (in place).
+
+## 2026-11-20: Long jobs are commands with stepped work
+
+- `job.start {command, params}` wraps the long commands (`history.import`,
+  `history.export`, `recording.export`, `ai.install`, `ai.load`;
+  `nf_core::jobs::JOB_COMMANDS`). `job.status {id?}` gives state, progress
+  0..1 and, once done, the wrapped command's own reply. `job.cancel {id}`
+  stops a job. The sync commands are unchanged, so callers that do not
+  need progress keep working.
+- Why commands, not MCP progress notifications or a new tool: every shell
+  (UI, CLI, JSON lines, bridge, Android) reaches them the same way, they
+  work on web, and agents poll them with the manual clock like everything
+  else (AGENTS.md §4 "add a command, not a tool").
+- Work is a stepped `nf_core::jobs::Work` that owns a snapshot of its
+  inputs. Without a runner the session steps it once per `advance`
+  (deterministic; wasm-clean, no threads in nf-core). A native shell
+  injects a `JobRunner` (`nf_mcp::ThreadRunner`: desktop app, wall-clock
+  CLI) to run the same steps on a thread. AI jobs watch `AiRuntime` state.
+- A cancelled or failed job changes nothing. The only side effect (storing
+  an import) happens on the session thread when the job finishes. An AI
+  install writes `.part` and renames it at the end, so a cancel
+  (`AiRuntime::cancel_install`) keeps an earlier copy. A cancelled
+  `ai.load` puts back the model loaded before. Jobs live outside
+  `AppState` and do not step inside `command_batch`, which refuses
+  `job.start` and `job.cancel`.
+- Limits: 4 running jobs, one AI job, the last 8 finished jobs kept. Export
+  encoding (EDF, NFED6) and the PDF report are one step each, so they cancel
+  only between steps. Base64 output and import banding are chunked.
