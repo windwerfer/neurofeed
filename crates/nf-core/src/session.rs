@@ -2,6 +2,7 @@
 
 mod ai_glue;
 mod jobs_glue;
+mod layers_glue;
 
 use crate::command::{find, Command, CommandSpec, Query, Request, SPECS};
 use crate::feedback::{Change, Observation, Phase};
@@ -401,6 +402,8 @@ impl Session {
             self.state.feedback.minutes = d.minutes;
             self.state.feedback.protocol = d.protocol;
         }
+        self.recent_forget(id);
+        self.layers_reseed();
         self.persist_protocols()
     }
 
@@ -1604,7 +1607,15 @@ impl Session {
                 }
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
-            Command::AudioSet(patch) => return crate::audio::set(&mut self.state, &patch),
+            Command::FeedbackSetup { open } => self.state.feedback_setup = open,
+            Command::AudioSet(patch) => {
+                let r = crate::audio::set(&mut self.state, &patch);
+                self.layers_pull();
+                return r;
+            }
+            cmd @ (Command::LayersAdd { .. } | Command::LayersRemove { .. } | Command::LayersSet { .. } | Command::LayersReset) => {
+                return self.layers_apply(cmd)
+            }
             Command::StreamingSet(patch) => return crate::streaming::set(&mut self.state.streaming, &patch),
             cmd @ (Command::AiSet(_)
             | Command::AiInstall { .. }
@@ -1616,6 +1627,7 @@ impl Session {
             Command::JobCancel { id } => return self.job_cancel(id),
             Command::GuardSet { enabled } => {
                 self.state.feedback.guard = enabled;
+                self.layers_pull();
                 return Ok(crate::audio::guard_status(&self.state));
             }
             Command::StabilitySet { window, difficulty, reset } => {
@@ -1648,6 +1660,7 @@ impl Session {
                 }
                 fb.protocol = p;
                 fb.summary = None;
+                self.layers_reseed();
             }
             Command::FeedbackStart { minutes, wall_clock_unix_ms } => {
                 check_wall_clock(wall_clock_unix_ms)?; // before anything changes
@@ -1661,6 +1674,11 @@ impl Session {
                 let dev = self.state.device.as_ref().map(|d| d.id.clone()).unwrap_or_default();
                 self.live.fb_next = self.state.time + 1.0;
                 self.feedback(|t, o| t.start(&dev, o));
+                if self.state.feedback.phase.active() {
+                    self.state.feedback_setup = false;
+                    let id = self.state.feedback.protocol.id.clone();
+                    self.recent_touch(&id);
+                }
                 // Every training is recorded (legacy behaviour); a manual
                 // recording already running is kept as is.
                 let replay = crate::replay::is_replay(&dev);
@@ -1971,6 +1989,8 @@ impl Session {
                 };
                 json!(p)
             }
+            Query::ProtocolRecent => layers_glue::recent(s),
+            Query::LayersList => layers_glue::list(s),
             Query::ProtocolDraft { id } => {
                 let p = match id {
                     Some(id) => crate::protocols::find(&s.custom_protocols, id)

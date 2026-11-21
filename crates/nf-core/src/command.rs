@@ -264,6 +264,27 @@ pub enum Command {
         #[serde(default)]
         minutes: Option<u32>,
     },
+    /// Open or close the session setup screen (the layer stack of the
+    /// selected protocol). Closes by itself when a session starts.
+    #[serde(rename = "feedback.setup")]
+    FeedbackSetup { open: bool },
+    /// Add a layer to the session stack; it lands in its section. Returns `{id}`.
+    #[serde(rename = "layers.add")]
+    LayersAdd {
+        kind: crate::layers::LayerKind,
+        /// Initial settings (defaults otherwise).
+        #[serde(default)]
+        settings: crate::layers::LayerPatch,
+    },
+    /// Remove a layer from the session stack.
+    #[serde(rename = "layers.remove")]
+    LayersRemove { id: u32 },
+    /// Change one layer's settings.
+    #[serde(rename = "layers.set")]
+    LayersSet { id: u32, settings: crate::layers::LayerPatch },
+    /// Throw the session's layer edits away and re-seed from the protocol.
+    #[serde(rename = "layers.reset")]
+    LayersReset,
     /// Create or (with `replace`) update a custom protocol.
     #[serde(rename = "protocol.save")]
     ProtocolSave {
@@ -619,6 +640,12 @@ pub enum Query {
     },
     #[serde(rename = "protocol.list")]
     ProtocolList,
+    /// The last used protocols (up to 3), newest first.
+    #[serde(rename = "protocol.recent")]
+    ProtocolRecent,
+    /// The session's layer stack by section: Background, Feedback, Guardrail.
+    #[serde(rename = "layers.list")]
+    LayersList,
     /// One protocol; default the selected one.
     #[serde(rename = "protocol.get")]
     ProtocolGet {
@@ -1090,6 +1117,27 @@ pub const SPECS: &[CommandSpec] = &[
         fb_idle,
     ),
     spec("protocol.delete", "Delete protocol", "feedback", false, "Delete a custom protocol; requires confirm=true.", can_delete_protocol),
+    spec("protocol.recent", "Recent protocols", "feedback", true, "The last used protocols (up to 3), newest first.", always),
+    spec("feedback.setup", "Session setup", "feedback", false, "Open or close the session setup screen (layer stack) of the selected protocol.", fb_idle),
+    spec("layers.list", "Session layers", "feedback", true, "The session's layers by section (background, feedback, guardrail) with ids and settings.", always),
+    spec(
+        "layers.add",
+        "Add layer",
+        "feedback",
+        false,
+        "Add a background, feedback or guardrail layer (kind, optional settings); returns {id}. Several feedback / guardrail layers are allowed.",
+        fb_idle,
+    ),
+    spec("layers.remove", "Remove layer", "feedback", false, "Remove a layer by id.", fb_idle),
+    spec(
+        "layers.set",
+        "Layer settings",
+        "feedback",
+        false,
+        "Change a layer: sound (background), output / binaural (feedback), guard_sound (guardrail), volume 0..=1.",
+        always,
+    ),
+    spec("layers.reset", "Reset layers", "feedback", false, "Re-seed the layers from the selected protocol.", fb_idle),
     spec("protocol.get", "Protocol", "feedback", true, "One protocol (default the selected one).", always),
     spec("protocol.set", "Choose protocol", "feedback", false, "Select the training protocol.", fb_idle),
     spec("stability.set", "Stability settings", "feedback", false, "Band Stability window (1..=30) and difficulty (0..=0.5).", fb_idle),
@@ -1343,6 +1391,13 @@ fn base_examples() -> Vec<Request> {
         C(Command::SimFaultClear { id: None }),
         Q(Query::ProtocolList),
         Q(Query::ProtocolGet { id: None }),
+        Q(Query::ProtocolRecent),
+        Q(Query::LayersList),
+        C(Command::FeedbackSetup { open: true }),
+        C(Command::LayersAdd { kind: crate::layers::LayerKind::Guardrail, settings: crate::layers::LayerPatch::default() }),
+        C(Command::LayersSet { id: 1, settings: crate::layers::LayerPatch { volume: Some(0.5), ..Default::default() } }),
+        C(Command::LayersRemove { id: 1 }),
+        C(Command::LayersReset),
         Q(Query::ProtocolDraft { id: Some("restAwake".into()) }),
         Q(Query::ProtocolValidate { draft: crate::protocols::example_draft(), replace: false }),
         C(Command::ProtocolSave { draft: crate::protocols::example_draft(), replace: false }),

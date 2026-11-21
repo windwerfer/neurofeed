@@ -4,6 +4,7 @@ mod ai;
 pub(crate) mod bands;
 mod devices;
 mod feedback;
+mod feedback_setup;
 mod heart;
 pub(crate) mod histogram;
 mod history;

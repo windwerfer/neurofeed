@@ -266,3 +266,10 @@
   (default off, per-view); app `movement.rs` (gap oracle, line break at dropout, regular / compact / landscape render,
   overview toggle, no-device message). panic_hunt covers `monitor.movement` via the catalog example.
 - Open: no Flutter-style spline smoothing; real-headset check of the accelerometer axes (sim only).
+
+## 2026-11-21: Feedback layer stack, stage 1 (branch feedback-stack)
+- Core: `nf_core::layers` (LayerKind Background < Feedback < Guardrail, LayerConfig, LayerStack with sorted insert, caps 4/kind and 8 total, LayerPatch validation), seeding from the protocol, first-layer ↔ `AudioSettings`/guard mapping (`push`/`pull`) so the single-slot engine is unchanged, recents (6 kept, 3 shown, saved in the settings doc, touched on `feedback.start`).
+- Commands: `layers.list|add|remove|set|reset`, `protocol.recent`, `feedback.setup`. panic_hunt covers them through the catalog examples.
+- UI: tile grid (1/2/3 columns by width) with a Recent row; one generic setup screen with the stack, expandable layer tiles, "+ Add layer", reset, Start. i18n en/de.
+- Tests: layers unit tests (ordering, add/remove/limits, seeding, patches, push/pull round trip, recents), MCP e2e (seed/edit/engine sync, recents persist), egui layout tests (phones, recent row).
+- Open: stage 2 audio for extra layers, per-layer thresholds/hold, Flutter sub-tile dialogs, screenshot of the new screens (not taken: no display here), `cargo clippy` of the app with default features needs libasound (checked with `--no-default-features`).

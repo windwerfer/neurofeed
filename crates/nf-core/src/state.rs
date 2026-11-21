@@ -164,6 +164,12 @@ pub struct AppState {
     /// Feedback session (phases, results, stored baselines).
     pub feedback: crate::feedback::Trainer,
     pub audio: nf_audio::AudioSettings,
+    /// The session's layer stack (seeded by the protocol, then the session's own).
+    pub layers: crate::layers::LayerStack,
+    /// The session setup screen is open (a protocol tile was chosen).
+    pub feedback_setup: bool,
+    /// Protocol ids, most recently started first (persisted).
+    pub recent_protocols: Vec<String>,
     /// Protocols made in the Protocol Builder (built-ins are not listed here).
     pub custom_protocols: Vec<nf_feedback::Protocol>,
     /// OSC streaming out.
@@ -202,6 +208,19 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
+        let mut s = Self::bare();
+        s.reseed_layers();
+        s
+    }
+}
+
+impl AppState {
+    /// The protocol's lanes as a fresh layer stack, with the current sounds.
+    pub fn reseed_layers(&mut self) {
+        self.layers = crate::layers::LayerStack::seed(&self.feedback.protocol, &self.audio, self.feedback.guard);
+    }
+
+    fn bare() -> Self {
         Self {
             view: View::Bands,
             sidebar_open: true,
@@ -215,6 +234,9 @@ impl Default for AppState {
             recording: None,
             feedback: crate::feedback::Trainer::default(),
             audio: nf_audio::AudioSettings::default(),
+            layers: crate::layers::LayerStack::default(),
+            feedback_setup: false,
+            recent_protocols: Vec::new(),
             streaming: crate::streaming::StreamState::default(),
             ai: crate::ai::AiState::default(),
             settings: crate::settings::UserSettings::default(),

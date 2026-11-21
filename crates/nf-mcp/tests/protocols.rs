@@ -79,3 +79,61 @@ fn custom_protocols_persist_and_roll_back() {
     assert!(list.contains(&"calm-focus".to_owned()) && !list.contains(&"second-one".to_owned()), "{list:?}");
     std::fs::remove_file(path).ok();
 }
+
+fn sections(s: &NfMcp) -> Vec<(String, Vec<u64>)> {
+    run(s, "layers.list", Value::Null)["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| {
+            (x["kind"].as_str().unwrap().to_owned(), x["layers"].as_array().unwrap().iter().map(|l| l["id"].as_u64().unwrap()).collect())
+        })
+        .collect()
+}
+
+#[test]
+fn layers_seed_edit_and_follow_the_engine() {
+    let s = NfMcp::new(Session::new(), ClockMode::Manual);
+    run(&s, "protocol.set", json!({ "id": "alertOpen" }));
+    let l = sections(&s);
+    assert_eq!(l.iter().map(|(k, v)| (k.as_str(), v.len())).collect::<Vec<_>>(), [("background", 1), ("feedback", 1), ("guardrail", 0)]);
+    // A second feedback layer and a guardrail: each lands in its section.
+    let added =
+        run(&s, "layers.add", json!({ "kind": "feedback", "settings": { "output": "binaural", "binaural": "deep_sleep", "volume": 0.4 } }));
+    run(&s, "layers.add", json!({ "kind": "guardrail" }));
+    assert_eq!(sections(&s).iter().map(|(_, v)| v.len()).collect::<Vec<_>>(), [1, 2, 1]);
+    assert!(err(&s, "layers.add", json!({ "kind": "background", "settings": { "output": "rain" } })).contains("does not apply"));
+    // The first layer is the engine's: audio.set and layers.set agree both ways.
+    let first = sections(&s)[1].1[0];
+    run(&s, "layers.set", json!({ "id": first, "settings": { "output": "rain" } }));
+    assert_eq!(run(&s, "audio.status", Value::Null)["settings"]["reward"], "rain");
+    run(&s, "audio.set", json!({ "background": "none" }));
+    assert!(sections(&s)[0].1.is_empty());
+    // Editing a layer never touches the protocol; reset re-seeds from it.
+    run(&s, "layers.remove", json!({ "id": added["id"] }));
+    run(&s, "layers.reset", Value::Null);
+    assert_eq!(run(&s, "layers.list", Value::Null)["seeded_from"], "alertOpen");
+    assert!(err(&s, "layers.remove", json!({ "id": 9999 })).contains("no layer"));
+}
+
+#[test]
+fn recent_protocols_follow_started_sessions_and_persist() {
+    let path = std::env::temp_dir().join(format!("nf-recent-{}.sqlite", std::process::id()));
+    let open = || NfMcp::new(Session::new().with_store(Box::new(nf_store::SqliteStore::open(&path).unwrap())), ClockMode::Manual);
+    let s = open();
+    assert!(run(&s, "protocol.recent", Value::Null).as_array().unwrap().is_empty());
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    for id in ["openMonitor", "alertOpen", "openMonitor"] {
+        run(&s, "protocol.set", json!({ "id": id }));
+        run(&s, "feedback.start", Value::Null);
+        run(&s, "feedback.stop", Value::Null);
+    }
+    run(&s, "protocol.set", json!({ "id": "restAwake" })); // chosen, never started
+    let recent = |s: &NfMcp| -> Vec<String> {
+        run(s, "protocol.recent", Value::Null).as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap().to_owned()).collect()
+    };
+    assert_eq!(recent(&s), ["openMonitor", "alertOpen"]);
+    drop(s);
+    assert_eq!(recent(&open()), ["openMonitor", "alertOpen"]);
+    std::fs::remove_file(path).ok();
+}
