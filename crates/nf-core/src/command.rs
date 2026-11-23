@@ -316,6 +316,9 @@ pub enum Command {
     StreamingSet(crate::streaming::StreamPatch),
     #[serde(rename = "audio.set")]
     AudioSet(crate::audio::AudioPatch),
+    /// Group volumes (master, background, feedback, guardrail, intro, end bell), 0..=1.
+    #[serde(rename = "volume.set")]
+    VolumeSet(crate::audio::VolumePatch),
     /// AI guard choices: model / scorer, threshold mode, fixed cut, auto-load.
     #[serde(rename = "ai.set")]
     AiSet(crate::ai::AiPatch),
@@ -687,6 +690,9 @@ pub enum Query {
     AiStatus,
     #[serde(rename = "audio.status")]
     AudioStatus,
+    /// The group volumes and the per-layer volumes (with whether a layer shows its own slider).
+    #[serde(rename = "volume.get")]
+    VolumeGet,
     /// One job with its result once done, or all jobs (no results).
     #[serde(rename = "job.status")]
     JobStatus {
@@ -1199,6 +1205,15 @@ pub const SPECS: &[CommandSpec] = &[
         always,
     ),
     spec(
+        "volume.set",
+        "Volumes",
+        "audio",
+        false,
+        "Group volumes 0..=1: master, background, feedback, guardrail, intro, end_bell; reset=true restores the defaults. Remembered.",
+        always,
+    ),
+    spec("volume.get", "Volumes", "audio", true, "Group volumes plus each layer's own volume and whether its slider is shown (group has several layers).", always),
+    spec(
         "audio.status",
         "Audio status",
         "audio",
@@ -1404,6 +1419,8 @@ fn base_examples() -> Vec<Request> {
         C(Command::ProtocolDelete { id: "calm-focus".into(), confirm: true }),
         Q(Query::FeedbackStatus),
         Q(Query::AudioStatus),
+        Q(Query::VolumeGet),
+        C(Command::VolumeSet(crate::audio::VolumePatch { master: Some(0.5), ..Default::default() })),
         Q(Query::StreamingStatus),
         Q(Query::FeedbackTrust),
         Q(Query::HistoryTrust { id: 1 }),

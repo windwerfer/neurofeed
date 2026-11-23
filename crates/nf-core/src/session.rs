@@ -1613,6 +1613,7 @@ impl Session {
                 self.layers_pull();
                 return r;
             }
+            Command::VolumeSet(patch) => return crate::audio::set_volumes(&mut self.state, &patch),
             cmd @ (Command::LayersAdd { .. } | Command::LayersRemove { .. } | Command::LayersSet { .. } | Command::LayersReset) => {
                 return self.layers_apply(cmd)
             }
@@ -2005,6 +2006,7 @@ impl Session {
                 json!({ "ok": problems.is_empty(), "problems": problems })
             }
             Query::AudioStatus => crate::audio::status(s),
+            Query::VolumeGet => crate::audio::volumes(s),
             Query::FeedbackTrust => {
                 json!(crate::trust::build(crate::trust::rows_from_results(&s.feedback.results), s.feedback.marks.clone()))
             }

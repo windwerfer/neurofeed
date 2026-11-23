@@ -333,7 +333,7 @@ fn bg_asset(b: Background) -> Option<Asset> {
         Background::Drone => Some(Asset::Drone),
         Background::DroneLoop => Some(Asset::DroneLoop),
         Background::Rain => Some(Asset::Rain),
-        Background::Binaural | Background::None => None,
+        Background::Binaural | Background::Music | Background::None => None,
     }
 }
 

@@ -28,6 +28,8 @@ pub enum Background {
     DroneLoop,
     Rain,
     Binaural,
+    /// Tracks from a folder (layer music settings; not rendered by the mixer yet).
+    Music,
     None,
 }
 
@@ -78,6 +80,7 @@ impl BinauralPreset {
 
 /// User audio settings (volumes 0..=1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
 pub struct AudioSettings {
     pub reward: RewardOutput,
     pub background: Background,
@@ -93,6 +96,10 @@ pub struct AudioSettings {
     /// Map 100 - pct instead (filter closes as you succeed).
     pub music_invert: bool,
     pub muted: bool,
+    /// Session intro cue volume (stored; the intro is not rendered by the mixer yet).
+    pub intro_volume: f64,
+    /// End bell volume (stored; see `intro_volume`).
+    pub end_bell_volume: f64,
 }
 
 impl Default for AudioSettings {
@@ -110,6 +117,8 @@ impl Default for AudioSettings {
             music_max_hz: 8000.0,
             music_invert: false,
             muted: false,
+            intro_volume: 0.8,
+            end_bell_volume: 0.8,
         }
     }
 }
@@ -117,7 +126,14 @@ impl Default for AudioSettings {
 impl AudioSettings {
     /// Clamp volumes and the music range into their legal ranges.
     pub fn sanitized(mut self) -> Self {
-        for v in [&mut self.master, &mut self.feedback, &mut self.background_volume, &mut self.guard_volume] {
+        for v in [
+            &mut self.master,
+            &mut self.feedback,
+            &mut self.background_volume,
+            &mut self.guard_volume,
+            &mut self.intro_volume,
+            &mut self.end_bell_volume,
+        ] {
             *v = if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 };
         }
         self.music_min_hz = self.music_min_hz.clamp(50.0, 8000.0);

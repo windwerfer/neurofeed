@@ -1,36 +1,34 @@
-# HANDOFF: Feedback layer stack (stage 1)
+# HANDOFF: Feedback layer stack (stage 1b: music settings + volumes)
 
-**Branch:** `feedback-stack` (from origin/main). **Commit:** see `git log -1` (SHA in the final message).
+**Branch:** `feedback-stack`. **Commit:** see `git log -1`.
 
 ## Goal
-Feedback start screen as a responsive protocol tile grid with a Recent row; one generic setup screen showing the session as a layer stack (Background → Feedback → Guardrail, auto-sorted, only present layers, "+" to add, removable, several feedback / guardrail layers, per-layer settings). A protocol only seeds the stack. Everything reachable over MCP / CLI.
+Per-layer music settings in the tile, a speaker Volume dialog on the setup screen, per-layer volume only when a group has several layers; all over MCP/CLI. UI + state only, engine not wired.
 
 ## Done
-- `crates/nf-core/src/layers.rs` (data model, seeding, push/pull mapping, recents, unit tests), `session/layers_glue.rs` (commands, queries).
-- Commands: `layers.list`, `layers.add {kind, settings?}`, `layers.remove {id}`, `layers.set {id, settings}`, `layers.reset`, `protocol.recent`, `feedback.setup {open}`.
-- Recents persisted in the settings doc; touched when a session starts.
-- UI: `ui/views/feedback_setup.rs` (tiles, Recent, setup screen), wired in `feedback.rs`; en/de strings.
-- Tests: nf-core unit, nf-mcp `tests/protocols.rs`, app layout tests in `feedback.rs`.
+- `nf-core/layers.rs`: `MusicSettings`, patch fields `music_*`, `shows_volume`, push/pull map first feedback layer's music onto `AudioSettings`/`music_dir`; layer volume is relative in-group (default 1).
+- `nf-core/audio.rs`: `volume.set` / `volume.get`; `AudioSettings` + `intro_volume`, `end_bell_volume` (serde default).
+- `nf-audio`: `Background::Music` (mixer silent).
+- UI: `views/layer_music.rs` (folder, track count, two-handle log cutoff slider, invert, shuffle), `views/volume_dialog.rs` (🔊 + dialog, 6 sliders, Reset, Done), wired in `feedback_setup.rs`; en/de strings.
+- Tests: nf-core unit (music, rule, mapping), nf-mcp `protocols.rs` (music, slider rule, volume persistence), app layout tests.
 
 ## Decisions
-See `docs/decisions.md` "2026-11-21 Feedback layer stack" (incl. rejected alternatives).
+`docs/decisions.md` 2026-11-23.
 
 ## Open questions
-- Is a protocol *started* the right meaning of "used" for Recent (we chose start, not open)?
-- Should layer edits be remembered per protocol? (now: no, session only, not persisted)
-
-## Not done / next step (stage 2)
-- The engine plays only the first layer of each kind; render extra layers in `nf_audio::Mixer`.
-- Per-layer threshold / hold ("8 s in zone"), per-layer binaural preset for Background, music folder per layer.
-- Flutter sub-tile dialogs (choose sound, guardrail scorer settings); screenshots of the new screens are NOT taken (no display on the box): do it with the bridge `screenshot` and attach.
-- `docs/automation.md` has no per-command list; nothing to update there yet.
+- Add `rfd` for a real folder dialog (new dependency)?
+- Intro / End bell volumes are stored only: no intro/end sounds exist in the mixer yet.
+- No `docs/ui-map.md` exists, so no name map was updated. No screenshots (no display).
 
 ## Verify
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --exclude neurofeed-egui -- -D warnings
-cargo clippy -p neurofeed-egui --no-default-features --all-targets -- -D warnings -A dead_code   # box lacks libasound; the allow is for a pre-existing native-audio-only fn
+cargo clippy -p neurofeed-egui --no-default-features --all-targets -- -D warnings -A dead_code
 cargo test --workspace --exclude neurofeed-egui
 RUSTFLAGS="-A dead_code" cargo test -p neurofeed-egui --no-default-features
-cargo xtask layers && cargo xtask wasm
+cargo xtask layers   # ok; `cargo xtask wasm` needs `rustup target add wasm32-unknown-unknown` (not installed here, CI runs it)
 ```
+
+## Next step (stage 2)
+Render extra layers and per-layer volume / shuffle / background music in `nf_audio::Mixer`; intro and end-bell sounds; screenshots via the bridge.

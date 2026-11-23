@@ -137,3 +137,61 @@ fn recent_protocols_follow_started_sessions_and_persist() {
     assert_eq!(recent(&open()), ["openMonitor", "alertOpen"]);
     std::fs::remove_file(path).ok();
 }
+
+#[test]
+fn layer_music_settings_and_volume_slider_rule_over_mcp() {
+    let s = NfMcp::new(Session::new(), ClockMode::Manual);
+    run(&s, "protocol.set", json!({ "id": "alertOpen" }));
+    let first = sections(&s)[1].1[0];
+    let set = json!({ "id": first, "settings": { "output": "music", "music_folder": "/m/calm", "music_min_hz": 300, "music_max_hz": 5000, "music_invert": true, "music_shuffle": true } });
+    run(&s, "layers.set", set);
+    // The first feedback layer drives the engine's music slot.
+    let a = run(&s, "audio.status", Value::Null);
+    assert_eq!(
+        (a["music_dir"].as_str(), a["settings"]["music_min_hz"].as_f64(), a["settings"]["music_invert"].as_bool()),
+        (Some("/m/calm"), Some(300.0), Some(true))
+    );
+    let l = run(&s, "layers.list", Value::Null);
+    let summary = l["sections"][1]["layers"][0]["summary"].as_str().unwrap().to_owned();
+    assert_eq!(summary, "calm • low-pass 300–5000 Hz (inverted)");
+    assert!(err(&s, "layers.set", json!({ "id": first, "settings": { "music_min_hz": 10 } })).contains("cutoff"));
+    // A guardrail layer has no music settings.
+    let g = run(&s, "layers.add", json!({ "kind": "guardrail" }));
+    assert!(err(&s, "layers.set", json!({ "id": g["id"], "settings": { "music_shuffle": true } })).contains("does not apply"));
+    // The per-layer slider shows only when the group has several layers.
+    let shown = |s: &NfMcp| {
+        run(s, "volume.get", Value::Null)["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| l["slider_shown"].as_bool().unwrap())
+            .collect::<Vec<_>>()
+    };
+    assert!(shown(&s).iter().all(|b| !b));
+    run(&s, "layers.add", json!({ "kind": "feedback" }));
+    assert_eq!(shown(&s).iter().filter(|b| **b).count(), 2, "both feedback layers");
+}
+
+#[test]
+fn group_volumes_validate_apply_and_persist() {
+    let path = std::env::temp_dir().join(format!("nf-volume-{}.sqlite", std::process::id()));
+    let open = || NfMcp::new(Session::new().with_store(Box::new(nf_store::SqliteStore::open(&path).unwrap())), ClockMode::Manual);
+    let s = open();
+    let v = run(
+        &s,
+        "volume.set",
+        json!({ "master": 0.4, "background": 0.1, "feedback": 0.2, "guardrail": 0.3, "intro": 0.5, "end_bell": 0.6 }),
+    );
+    assert_eq!((v["master"].as_f64(), v["end_bell"].as_f64()), (Some(0.4), Some(0.6)));
+    // Same numbers the old audio.set path sees.
+    assert_eq!(run(&s, "audio.status", Value::Null)["settings"]["feedback"], 0.2);
+    assert!(err(&s, "volume.set", json!({ "master": 1.5, "feedback": 0.9 })).contains("[0, 1]"));
+    assert_eq!(run(&s, "volume.get", Value::Null)["feedback"], 0.2, "a failed call changes nothing");
+    drop(s);
+    let s = open();
+    let v = run(&s, "volume.get", Value::Null);
+    assert_eq!((v["master"].as_f64(), v["intro"].as_f64(), v["guardrail"].as_f64()), (Some(0.4), Some(0.5), Some(0.3)));
+    let v = run(&s, "volume.set", json!({ "reset": true }));
+    assert_eq!(v["master"], 0.8);
+    let _ = std::fs::remove_file(&path);
+}

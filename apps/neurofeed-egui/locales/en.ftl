@@ -695,3 +695,25 @@ feedback-layer-reset = Reset to protocol
 feedback-layer-sound = Sound
 feedback-layer-volume = Volume
 feedback-layer-extra-note = Extra layers are saved with the session setup; the sound engine plays the first of each kind for now.
+
+sound-bg-music = Music
+layer-music-cutoff = Cutoff range (low-pass)
+layer-music-invert = Invert mapping
+layer-music-invert-about = High scores close the filter instead of opening it.
+layer-music-shuffle = Shuffle track order
+layer-music-clear = Clear
+layer-music-no-folder = No music folder chosen.
+layer-music-tracks = { $n ->
+    [one] 1 track
+   *[other] { $n } tracks
+}
+volume-title = Volume
+volume-help = Each slider sets one group. Changes apply at once and are remembered. A layer shows its own slider only when its group has several layers.
+volume-master = Master
+volume-background = Background
+volume-feedback = Feedback
+volume-guardrail = Guardrail
+volume-intro = Intro
+volume-end-bell = End bell
+volume-reset = Reset
+volume-done = Done

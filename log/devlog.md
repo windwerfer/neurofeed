@@ -273,3 +273,6 @@
 - UI: tile grid (1/2/3 columns by width) with a Recent row; one generic setup screen with the stack, expandable layer tiles, "+ Add layer", reset, Start. i18n en/de.
 - Tests: layers unit tests (ordering, add/remove/limits, seeding, patches, push/pull round trip, recents), MCP e2e (seed/edit/engine sync, recents persist), egui layout tests (phones, recent row).
 - Open: stage 2 audio for extra layers, per-layer thresholds/hold, Flutter sub-tile dialogs, screenshot of the new screens (not taken: no display here), `cargo clippy` of the app with default features needs libasound (checked with `--no-default-features`).
+
+## 2026-11-23 feedback-stack stage 1b
+- Layer music settings (folder, cutoff, invert, shuffle), speaker Volume dialog, per-layer volume only for groups with >1 layer; `volume.set`/`volume.get`; `Background::Music`. Engine not wired (shuffle, bg music, layer volumes, intro/end bell). Open: rfd file dialog, wasm check not run locally (target missing).

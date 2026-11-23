@@ -9,6 +9,7 @@ mod heart;
 pub(crate) mod histogram;
 mod history;
 mod import;
+mod layer_music;
 /// egui temp-data key mirroring the gesture-markers setting.
 pub const MARKS_ID: &str = "nf_gesture_markers";
 
@@ -26,6 +27,7 @@ mod sound;
 mod spectrogram;
 mod streaming;
 mod trust;
+mod volume_dialog;
 
 use nf_core::{Command, Session, View};
 

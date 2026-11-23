@@ -20,14 +20,14 @@ impl Session {
     fn layers_push(&mut self) {
         let caps = self.layer_caps();
         let st = &mut self.state;
-        layers::push(&st.layers, &mut st.audio, &mut st.feedback.guard, caps);
+        layers::push(&st.layers, &mut st.audio, &mut st.feedback.guard, &mut st.music_dir, caps);
     }
 
     /// Audio / guard slots → stack (after `audio.set` / `guard.set`).
     pub(super) fn layers_pull(&mut self) {
         let caps = self.layer_caps();
         let st = &mut self.state;
-        layers::pull(&mut st.layers, &st.audio, st.feedback.guard, caps);
+        layers::pull(&mut st.layers, &st.audio, st.feedback.guard, st.music_dir.as_deref(), caps);
     }
 
     /// Re-seed from the selected protocol (`protocol.set`, `layers.reset`).
@@ -49,7 +49,7 @@ impl Session {
         use crate::Command as C;
         let reply = match cmd {
             C::LayersAdd { kind, settings } => {
-                let cfg = settings.apply(LayerConfig::default_of(kind)).map_err(bad)?;
+                let cfg = settings.apply(&LayerConfig::default_of(kind)).map_err(bad)?;
                 let id = self.state.layers.add(cfg).map_err(bad)?;
                 json!({ "id": id })
             }

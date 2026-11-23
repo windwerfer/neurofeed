@@ -217,7 +217,7 @@ impl Default for AppState {
 impl AppState {
     /// The protocol's lanes as a fresh layer stack, with the current sounds.
     pub fn reseed_layers(&mut self) {
-        self.layers = crate::layers::LayerStack::seed(&self.feedback.protocol, &self.audio, self.feedback.guard);
+        self.layers = crate::layers::LayerStack::seed(&self.feedback.protocol, &self.audio, self.feedback.guard, self.music_dir.as_deref());
     }
 
     fn bare() -> Self {

@@ -695,3 +695,25 @@ feedback-layer-reset = Auf Protokoll zurücksetzen
 feedback-layer-sound = Klang
 feedback-layer-volume = Lautstärke
 feedback-layer-extra-note = Weitere Ebenen werden mit dem Aufbau gespeichert; die Klang-Engine spielt vorerst die erste jeder Art.
+
+sound-bg-music = Musik
+layer-music-cutoff = Grenzfrequenz-Bereich (Tiefpass)
+layer-music-invert = Zuordnung umkehren
+layer-music-invert-about = Hohe Werte schließen den Filter, statt ihn zu öffnen.
+layer-music-shuffle = Titel zufällig mischen
+layer-music-clear = Leeren
+layer-music-no-folder = Kein Musikordner gewählt.
+layer-music-tracks = { $n ->
+    [one] 1 Titel
+   *[other] { $n } Titel
+}
+volume-title = Lautstärke
+volume-help = Jeder Regler gilt für eine Gruppe. Änderungen wirken sofort und werden gespeichert. Eine Ebene zeigt einen eigenen Regler nur, wenn ihre Gruppe mehrere Ebenen hat.
+volume-master = Gesamt
+volume-background = Hintergrund
+volume-feedback = Feedback
+volume-guardrail = Leitplanke
+volume-intro = Intro
+volume-end-bell = Schlussglocke
+volume-reset = Zurücksetzen
+volume-done = Fertig
