@@ -1,6 +1,18 @@
 # NeuroFeed
 
-[![Scanned by SonarCloud](https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=alert_status)](https://sonarcloud.io/project/overview?id=windwerfer_neurofeed) [![CodeQL](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml/badge.svg)](https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml)
+<p>
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-native-b7410e?style=flat-square&logo=rust">
+  <img alt="Windows · Linux · macOS · Android · Web" src="https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20Android%20%C2%B7%20Web-native-2f7bf5?style=flat-square">
+  <a href="LICENSE.txt"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square"></a>
+  <img alt="Status: alpha (porting to Rust)" src="https://img.shields.io/badge/status-alpha-d69e2e?style=flat-square">
+  <br>
+  <a href="https://github.com/windwerfer/neurofeed/actions/workflows/rust-ci.yml"><img alt="CI (tests, clippy, cargo-deny)" src="https://github.com/windwerfer/neurofeed/actions/workflows/rust-ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/windwerfer/neurofeed/security/code-scanning"><img alt="CodeQL" src="https://github.com/windwerfer/neurofeed/actions/workflows/codeql.yml/badge.svg?branch=main"></a>
+  <a href="https://sonarcloud.io/project/overview?id=windwerfer_neurofeed"><img alt="Scanned by SonarCloud" src="https://img.shields.io/badge/Scanned_by-SonarCloud-4b9fd5?style=flat-square&logo=sonarqubecloud&logoColor=white"></a>
+  <a href="https://sonarcloud.io/summary/new_code?id=windwerfer_neurofeed"><img alt="Quality Gate Status" src="https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=alert_status"></a>
+  <a href="https://sonarcloud.io/project/security_hotspots?id=windwerfer_neurofeed"><img alt="Security Rating" src="https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=security_rating"></a>
+  <a href="https://sonarcloud.io/project/issues?id=windwerfer_neurofeed&types=VULNERABILITY"><img alt="Vulnerabilities" src="https://sonarcloud.io/api/project_badges/measure?project=windwerfer_neurofeed&metric=vulnerabilities"></a>
+</p>
 
 <p align="center">
   <a href="https://github.com/windwerfer/neurofeed">
