@@ -678,3 +678,42 @@ movement-range-label = ±{ $g } g
 movement-range-hint = Y-Bereich aller Kurven (Beschleunigungssensor, g; x, y, z und |a| − 1 g)
 overview-no-movement = Älter als der 5-min-Bewegungspuffer: keine Details
 movement-traces-hint = Kurve ein- oder ausblenden
+
+feedback-recent = Zuletzt
+feedback-all-protocols = Alle Protokolle
+feedback-setup-back = Zurück zu den Protokollen
+feedback-setup-hint = Ebenen werden von oben nach unten gemischt: Hintergrund, Feedback, Schutz. Änderungen gelten nur für diese Sitzung.
+feedback-layer-background = Hintergrundklänge
+feedback-layer-feedback = Feedback
+feedback-layer-guardrail = Schutz
+feedback-layer-add = + Ebene hinzufügen
+feedback-layer-add-background = Hintergrundklang
+feedback-layer-add-feedback = Feedback-Ebene
+feedback-layer-add-guardrail = Schutz-Ebene
+feedback-layer-remove = Ebene entfernen
+feedback-layer-reset = Auf Protokoll zurücksetzen
+feedback-layer-sound = Klang
+feedback-layer-volume = Lautstärke
+feedback-layer-extra-note = Weitere Ebenen werden mit dem Aufbau gespeichert; die Klang-Engine spielt vorerst die erste jeder Art.
+
+sound-bg-music = Musik
+layer-music-cutoff = Grenzfrequenz-Bereich (Tiefpass)
+layer-music-invert = Zuordnung umkehren
+layer-music-invert-about = Hohe Werte schließen den Filter, statt ihn zu öffnen.
+layer-music-shuffle = Titel zufällig mischen
+layer-music-clear = Leeren
+layer-music-no-folder = Kein Musikordner gewählt.
+layer-music-tracks = { $n ->
+    [one] 1 Titel
+   *[other] { $n } Titel
+}
+volume-title = Lautstärke
+volume-help = Jeder Regler gilt für eine Gruppe. Änderungen wirken sofort und werden gespeichert. Eine Ebene zeigt einen eigenen Regler nur, wenn ihre Gruppe mehrere Ebenen hat.
+volume-master = Gesamt
+volume-background = Hintergrund
+volume-feedback = Feedback
+volume-guardrail = Leitplanke
+volume-intro = Intro
+volume-end-bell = Schlussglocke
+volume-reset = Zurücksetzen
+volume-done = Fertig

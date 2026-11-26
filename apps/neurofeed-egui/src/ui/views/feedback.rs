@@ -127,38 +127,27 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     } else {
         t!("feedback-calibration-takes", s = nf_core::nf_feedback::BASELINE_VALID_S)
     };
-    header(ui, &t!("feedback-choose-a-protocol"), &format!("{} {cal}", t!("feedback-pick-then-start")));
+    if !session.state().feedback_setup {
+        header(ui, &t!("feedback-choose-a-protocol"), &format!("{} {cal}", t!("feedback-pick-then-start")));
+        if let Some(m) = &t.message {
+            chip(ui, m, FAIR);
+            ui.add_space(8.0);
+        }
+        super::feedback_setup::tiles(ui, session, &t.protocol.id, out);
+        ui.add_space(6.0);
+        super::protocol_builder::launcher(ui, session);
+        super::protocol_builder::window(ui.ctx(), session, out);
+        return;
+    }
     if let Some(m) = &t.message {
         chip(ui, m, FAIR);
         ui.add_space(8.0);
     }
-    let narrow = compact(ui);
-    // Regular: three columns. Compact: one full-width column (card frame
-    // adds 12 px margin + stroke on each side).
-    let (cols, w) = if narrow {
-        (1, (ui.available_width() - 2.0 * 14.0).max(120.0))
-    } else {
-        (3, ((ui.available_width() - 3.0 * 26.0 - 24.0) / 3.0).max(200.0))
-    };
-    let all = nf_core::protocols::all(&session.state().custom_protocols);
-    egui::Grid::new("protocol_cards").spacing([12.0, if narrow { 8.0 } else { 12.0 }]).show(ui, |ui| {
-        for (i, p) in all.iter().enumerate() {
-            let selected = p.id == t.protocol.id;
-            let rect = card(ui, p, selected, w).rect;
-            let resp = ui.interact(rect, ui.scope_id().with(&p.id), Sense::click());
-            if resp.clicked() && !selected {
-                out.push(Command::ProtocolSet { id: p.id.clone(), minutes: None });
-            }
-            if i % cols == cols - 1 {
-                ui.end_row();
-            }
-        }
-    });
-    ui.add_space(6.0);
-    super::protocol_builder::launcher(ui, session);
-    super::protocol_builder::window(ui.ctx(), session, out);
-    ui.add_space(14.0);
+    super::feedback_setup::setup(ui, session, out);
+    ui.weak(cal);
+    ui.add_space(8.0);
     super::sound::guard_row(ui, session, out);
+    let narrow = compact(ui);
     let lengths = |ui: &mut egui::Ui, out: &mut Vec<Command>| {
         ui.label(t!("feedback-length"));
         for m in MINUTES {
@@ -681,7 +670,7 @@ mod compact_tests {
     const PHONES: [(f32, f32); 2] = [(400.0, 850.0), (360.0, 800.0)];
 
     #[test]
-    fn compact_overview_fits_and_start_is_fully_visible() {
+    fn compact_overview_fits_one_tile_per_row() {
         for (w, h) in PHONES {
             let mut s = session("compact");
             let t = texts(&mut s, Vec2::new(w, h), 3);
@@ -689,8 +678,7 @@ mod compact_tests {
             // Taller frame so the scrolled-off part is painted too.
             let t = texts(&mut s, Vec2::new(w, 1800.0), 3);
             assert_fits(&t, w, "overview (full)");
-            let start = t.iter().find(|(x, ..)| x.starts_with("Start ")).expect("start button");
-            assert!(start.2 <= w, "{start:?}");
+            assert!(!t.iter().any(|(x, ..)| x.starts_with("Start ")), "Start lives on the setup screen");
             // One card per row: all titles start at the same x.
             let lefts: Vec<f32> = ["Rest Awake", "Open Monitor", "Alert, Eyes Open"]
                 .iter()
@@ -698,6 +686,36 @@ mod compact_tests {
                 .collect();
             assert!(lefts.iter().all(|l| (l - lefts[0]).abs() < 2.0), "{lefts:?}");
         }
+    }
+
+    #[test]
+    fn setup_screen_fits_phones_and_has_start_and_add() {
+        for (w, h) in PHONES {
+            let mut s = session("compact");
+            s.call("feedback.setup", json!({ "open": true })).unwrap();
+            s.call("layers.add", json!({ "kind": "feedback" })).unwrap();
+            s.call("layers.add", json!({ "kind": "guardrail" })).unwrap();
+            let t = texts(&mut s, Vec2::new(w, 1800.0), 3);
+            assert_fits(&t, w, "setup");
+            for n in ["Background sounds", "Feedback", "Guardrail", "+ Add layer"] {
+                assert!(t.iter().any(|(x, ..)| x == n), "{n} missing: {t:?}");
+            }
+            let start = t.iter().find(|(x, ..)| x.starts_with("Start ")).expect("start button");
+            assert!(start.2 <= w, "{start:?}");
+            let _ = h;
+        }
+    }
+
+    #[test]
+    fn recent_row_shows_started_protocols_first() {
+        let mut s = session("regular");
+        s.call("feedback.start", json!({})).unwrap();
+        s.call("feedback.stop", json!({})).unwrap();
+        s.call("protocol.set", json!({ "id": "alertOpen" })).unwrap(); // leaves the summary
+        let t = texts(&mut s, Vec2::new(1280.0, 800.0), 3);
+        assert!(t.iter().any(|(x, ..)| x == "Recent"), "{t:?}");
+        let titles = t.iter().filter(|(x, ..)| x == "Alert, Eyes Open").count();
+        assert_eq!(titles, 2, "once in Recent, once in All protocols");
     }
 
     #[test]

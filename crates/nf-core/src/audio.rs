@@ -81,6 +81,64 @@ pub fn set(state: &mut AppState, p: &AudioPatch) -> Result<Value, CoreError> {
     Ok(json!(state.audio))
 }
 
+/// `volume.set` params; omitted fields keep their value. All 0..=1.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct VolumePatch {
+    #[serde(default)]
+    pub master: Option<f64>,
+    #[serde(default)]
+    pub background: Option<f64>,
+    #[serde(default)]
+    pub feedback: Option<f64>,
+    #[serde(default)]
+    pub guardrail: Option<f64>,
+    #[serde(default)]
+    pub intro: Option<f64>,
+    #[serde(default)]
+    pub end_bell: Option<f64>,
+    /// Restore the default volumes first.
+    #[serde(default)]
+    pub reset: bool,
+}
+
+/// Apply a `volume.set`; nothing changes when any value is out of range.
+pub fn set_volumes(state: &mut AppState, p: &VolumePatch) -> Result<Value, CoreError> {
+    let mut a = state.audio;
+    if p.reset {
+        let d = AudioSettings::default();
+        (a.master, a.background_volume, a.feedback, a.guard_volume) = (d.master, d.background_volume, d.feedback, d.guard_volume);
+        (a.intro_volume, a.end_bell_volume) = (d.intro_volume, d.end_bell_volume);
+    }
+    a.master = volume("master", p.master)?.unwrap_or(a.master);
+    a.background_volume = volume("background", p.background)?.unwrap_or(a.background_volume);
+    a.feedback = volume("feedback", p.feedback)?.unwrap_or(a.feedback);
+    a.guard_volume = volume("guardrail", p.guardrail)?.unwrap_or(a.guard_volume);
+    a.intro_volume = volume("intro", p.intro)?.unwrap_or(a.intro_volume);
+    a.end_bell_volume = volume("end_bell", p.end_bell)?.unwrap_or(a.end_bell_volume);
+    state.audio = a.sanitized();
+    Ok(volumes(state))
+}
+
+/// `volume.get`: group volumes and per-layer volumes.
+pub fn volumes(state: &AppState) -> Value {
+    let a = &state.audio;
+    let layers: Vec<Value> = state
+        .layers
+        .layers()
+        .iter()
+        .map(|l| {
+            let kind = l.config.kind();
+            json!({ "id": l.id, "kind": kind, "volume": l.config.volume(), "slider_shown": state.layers.shows_volume(kind) })
+        })
+        .collect();
+    json!({
+        "master": a.master, "background": a.background_volume, "feedback": a.feedback,
+        "guardrail": a.guard_volume, "intro": a.intro_volume, "end_bell": a.end_bell_volume,
+        "layers": layers,
+    })
+}
+
 /// What should sound now.
 pub fn cue(state: &AppState) -> Cue {
     let f = &state.feedback;

@@ -19,11 +19,12 @@ const REWARDS: [(RewardOutput, &str, &str); 5] = [
     (RewardOutput::Music, "sound-reward-music", "sound-reward-music-about"),
     (RewardOutput::None, "sound-reward-none", "sound-reward-none-about"),
 ];
-const BACKGROUNDS: [(Background, &str); 5] = [
+const BACKGROUNDS: [(Background, &str); 6] = [
     (Background::Drone, "sound-bg-drone"),
     (Background::DroneLoop, "sound-bg-drone-loop"),
     (Background::Rain, "sound-bg-rain"),
     (Background::Binaural, "sound-bg-binaural"),
+    (Background::Music, "sound-bg-music"),
     (Background::None, "sound-bg-none"),
 ];
 const GUARDS: [(GuardSound, &str); 5] = [

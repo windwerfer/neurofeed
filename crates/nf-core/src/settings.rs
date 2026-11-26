@@ -275,6 +275,9 @@ pub struct Persisted {
     pub movement_range: crate::monitor::MoveRange,
     #[serde(default)]
     pub overview: std::collections::BTreeMap<crate::monitor::MonitorId, bool>,
+    /// Recently started protocols, newest first.
+    #[serde(default)]
+    pub recent_protocols: Vec<String>,
 }
 
 impl Default for Persisted {
@@ -309,6 +312,7 @@ impl Persisted {
             heart: s.monitors.heart.clone(),
             movement_range: s.monitors.movement.range,
             overview: s.monitors.overview.clone(),
+            recent_protocols: s.recent_protocols.clone(),
         }
     }
 
@@ -341,6 +345,8 @@ impl Persisted {
         s.monitors.spectrogram.db_lock = self.spectrogram.db_lock.filter(|(a, b)| crate::monitor::db_range_ok(*a, *b));
         s.monitors.movement.range = self.movement_range;
         s.monitors.overview = self.overview.into_iter().filter(|(k, _)| k.overview().is_some()).collect();
+        s.recent_protocols = self.recent_protocols.into_iter().take(crate::layers::RECENT_KEPT).collect();
+        s.reseed_layers();
     }
 }
 
